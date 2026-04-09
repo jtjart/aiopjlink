@@ -132,18 +132,6 @@ class PJLink:
     async def wait_for_notification(self):
         raise NotImplementedError('class 2 method not supported')
 
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc_value, exc_tb):
-        """ Close an open connection to the projector. """
-        try:
-            if self._writer is not None:
-                self._writer.close()
-        finally:
-            self._reader = None
-            self._writer = None
-
     async def _read_next(self):
         """ Read data until the next terminator (CR) and return the
         message (including CR) as a decoded string."""
@@ -199,7 +187,9 @@ class PJLink:
             else:
                 # Connection requires auth: `PJLINK 1 <token>`.
                 if auth_enabled != '1' and auth_close != ' ':
-                    raise PJLinkProtocolError('unexpected opening security message from projector - unrecognised auth method')
+                    raise PJLinkProtocolError(
+                        'unexpected opening security message from projector - unrecognised auth method'
+                    )
 
                 # Check we have a password specified.
                 if self._password is None:

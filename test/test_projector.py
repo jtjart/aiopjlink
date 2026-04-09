@@ -205,8 +205,8 @@ async def mock_tcp_pjlink(host='127.0.0.1', port=4352, password=None):
 async def mock_client_server_noauth():
     async with mock_tcp_pjlink() as server:
         server.open_and_send(b'PJLINK 0\r')
-        async with aiopjlink.PJLink(address='127.0.0.1', password=None) as client:
-            yield server, client
+        client = aiopjlink.PJLink(address='127.0.0.1', password=None)
+        yield server, client
 
 
 class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
@@ -254,9 +254,8 @@ class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
                 async with server.when(expected_cmd, respond_with=b'%1POWR=0\r'):
 
                     # Give a junk password to trigger the UnexpectedClientMessage.
-                    async with aiopjlink.PJLink(address='127.0.0.1', password='INCORRECT') as link:
-                        await link.power.get()
-                        pass
+                    link = aiopjlink.PJLink(address='127.0.0.1', password='INCORRECT')
+                    await link.power.get()
 
     async def test_mock_unexpectedresponse_after_connection(self):
         """
@@ -269,22 +268,22 @@ class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
         # Open a connection successfully with no auth.
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b'PJLINK 0\r')
-            async with aiopjlink.PJLink(address='127.0.0.1', password=None) as client:
+            client = aiopjlink.PJLink(address='127.0.0.1', password=None)
 
-                # Check that the test framework recieves the expected message.
-                async with server.when(b'%1POWR ?\r', respond_with=b'%1POWR=0\r'):
-                    value = await client.transmit('POWR', '?', pjclass=aiopjlink.PJClass.ONE)
-                    self.assertEqual(value, '0')
+            # Check that the test framework recieves the expected message.
+            async with server.when(b'%1POWR ?\r', respond_with=b'%1POWR=0\r'):
+                value = await client.transmit('POWR', '?', pjclass=aiopjlink.PJClass.ONE)
+                self.assertEqual(value, '0')
 
-                # Check that the test framework recieves the expected message - 2nd time.
-                async with server.when(b'%1POWR ?\r', respond_with=b'%1POWR=0\r'):
-                    value = await client.transmit('POWR', '?', pjclass=aiopjlink.PJClass.ONE)
-                    self.assertEqual(value, '0')
+            # Check that the test framework recieves the expected message - 2nd time.
+            async with server.when(b'%1POWR ?\r', respond_with=b'%1POWR=0\r'):
+                value = await client.transmit('POWR', '?', pjclass=aiopjlink.PJClass.ONE)
+                self.assertEqual(value, '0')
 
-                # Check that the test framework handles the mistake in the test code.
-                with self.assertRaises(UnexpectedClientMessage):
-                    async with server.when(b'SOME_MESSAGE\r', respond_with=b'%1POWR=0\r'):
-                        await client.transmit('POWR', '?', pjclass=aiopjlink.PJClass.ONE)
+            # Check that the test framework handles the mistake in the test code.
+            with self.assertRaises(UnexpectedClientMessage):
+                async with server.when(b'SOME_MESSAGE\r', respond_with=b'%1POWR=0\r'):
+                    await client.transmit('POWR', '?', pjclass=aiopjlink.PJClass.ONE)
 
     async def test_mock_response_stacking(self):
         """ The test framework allows expected responses to be queued.
@@ -324,9 +323,9 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             async with server.when(b'%1POWR ?\r', respond_with=b'%1POWR=0\r'):
 
                 # Send the power request and check the response is expected.
-                async with aiopjlink.PJLink(address='127.0.0.1', password=None) as client:
-                    value = await client.transmit('POWR', '?', pjclass='1')
-                    self.assertEqual(value, '0')
+                client = aiopjlink.PJLink(address='127.0.0.1', password=None)
+                value = await client.transmit('POWR', '?', pjclass='1')
+                self.assertEqual(value, '0')
 
     async def test_auth_malformed(self):
         """ Tests the projector sending back a malformed welcome message generates a `PJLinkProtocolError`. """
@@ -337,9 +336,8 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
 
             # Expect to see a protocol error when we connect.
             with self.assertRaises(aiopjlink.PJLinkProtocolError):
-                async with aiopjlink.PJLink(address='127.0.0.1', password=None) as link:
-                    await link.power.get()
-                    pass
+                link = aiopjlink.PJLink(address='127.0.0.1', password=None)
+                await link.power.get()
 
     async def test_auth_no_welcome(self):
         """ Tests the projector not sending a welcome message generates a `PJLinkProtocolError` """
@@ -352,18 +350,16 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
 
             # Expect to see a protocol error when we connect.
             with self.assertRaises(aiopjlink.PJLinkProtocolError):
-                async with aiopjlink.PJLink(address='127.0.0.1', password=None, timeout=0.5) as link:
-                    await link.power.get()
-                    pass
+                link = aiopjlink.PJLink(address='127.0.0.1', password=None, timeout=0.5)
+                await link.power.get()
 
     async def test_auth_no_server(self):
         """ Tests that the client honours the timeout if no server responds to the connection. """
 
         # CONDITION 1: The host can be reached by the OS but no response (aiotimeout).
         with self.assertRaises(aiopjlink.PJLinkNoConnection) as err:
-            async with aiopjlink.PJLink(address='127.0.0.1', password=None, timeout=0.5) as link:
-                await link.power.get()
-                pass
+            link = aiopjlink.PJLink(address='127.0.0.1', password=None, timeout=0.5)
+            await link.power.get()
         # Accept either error message for compatibility
         self.assertTrue(
             str(err.exception).startswith('timeout - projector did not accept the connection in time')
@@ -373,9 +369,8 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
 
         # CONDITION 2: The host cannot be reached by the OS.
         with self.assertRaises(aiopjlink.PJLinkNoConnection) as err:
-            async with aiopjlink.PJLink(address='0.0.0.0', password=None, timeout=0.5) as link:
-                await link.power.get()
-                pass
+            link = aiopjlink.PJLink(address='0.0.0.0', password=None, timeout=0.5)
+            await link.power.get()
         self.assertIn('os timeout', str(err.exception))
 
     async def test_auth_valid_pw(self):
@@ -393,9 +388,8 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             async with server.when(cmd, respond_with=b'%1POWR=0\r'):
 
                 # Send the power request and check the response is expected.
-                async with aiopjlink.PJLink(address='127.0.0.1', password='abc123') as link:
-                    await link.power.get()
-                    pass
+                link = aiopjlink.PJLink(address='127.0.0.1', password='abc123')
+                await link.power.get()
 
     async def test_auth_invalid_pw(self):
         """ Tests a connection with invalid authentication. """
@@ -411,9 +405,8 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
 
                 # Send the power request and check the response is expected.
                 with self.assertRaises(aiopjlink.PJLinkPassword):
-                    async with aiopjlink.PJLink(address='127.0.0.1', password='INVALIDPW') as link:
-                        await link.power.get()
-                        pass
+                    link = aiopjlink.PJLink(address='127.0.0.1', password='INVALIDPW')
+                    await link.power.get()
 
 
 class ProtocolTests(unittest.IsolatedAsyncioTestCase):
@@ -425,12 +418,12 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         # Start server with no auth.
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b'PJLINK 0\r')
-            async with aiopjlink.PJLink(address='127.0.0.1', password=None) as client:
+            client = aiopjlink.PJLink(address='127.0.0.1', password=None)
 
-                # Unxpected command sent as a result of a request.
-                async with server.when(b'%1POWR ?\r', respond_with=b'%1ROWP=A\r'):
-                    with self.assertRaises(aiopjlink.PJLinkProtocolError):
-                        await client.power.get()
+            # Unxpected command sent as a result of a request.
+            async with server.when(b'%1POWR ?\r', respond_with=b'%1ROWP=A\r'):
+                with self.assertRaises(aiopjlink.PJLinkProtocolError):
+                    await client.power.get()
 
     async def test_command_construction(self):
         """ Test that command formatting accepts valid values and raises errors if out of spec. """
@@ -601,17 +594,17 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
         # Start server with no auth.
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b'PJLINK 0\r')
-            async with aiopjlink.PJLink(address='127.0.0.1', password=None) as client:
+            client = aiopjlink.PJLink(address='127.0.0.1', password=None)
 
-                # Power off.
-                async with server.when(b'%1POWR ?\r', respond_with=b'%1POWR=0\r'):
-                    status = await client.power.get()
-                    self.assertEqual(status, aiopjlink.Power.OFF)
+            # Power off.
+            async with server.when(b'%1POWR ?\r', respond_with=b'%1POWR=0\r'):
+                status = await client.power.get()
+                self.assertEqual(status, aiopjlink.Power.OFF)
 
-                # Power on.
-                async with server.when(b'%1POWR ?\r', respond_with=b'%1POWR=1\r'):
-                    status = await client.power.get()
-                    self.assertEqual(status, aiopjlink.Power.ON)
+            # Power on.
+            async with server.when(b'%1POWR ?\r', respond_with=b'%1POWR=1\r'):
+                status = await client.power.get()
+                self.assertEqual(status, aiopjlink.Power.ON)
 
                 # Power cooling.
                 async with server.when(b'%1POWR ?\r', respond_with=b'%1POWR=2\r'):
@@ -634,67 +627,67 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
         # Start server with no auth.
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b'PJLINK 0\r')
-            async with aiopjlink.PJLink(address='127.0.0.1', password=None) as client:
+            client = aiopjlink.PJLink(address='127.0.0.1', password=None)
 
-                # Power ON
-                async with server.when(b'%1POWR 1\r', respond_with=b'%1POWR=OK\r'):
-                    await client.power.set(aiopjlink.Power.ON)
+            # Power ON
+            async with server.when(b'%1POWR 1\r', respond_with=b'%1POWR=OK\r'):
+                await client.power.set(aiopjlink.Power.ON)
 
-                # Power OFF
-                async with server.when(b'%1POWR 0\r', respond_with=b'%1POWR=OK\r'):
+            # Power OFF
+            async with server.when(b'%1POWR 0\r', respond_with=b'%1POWR=OK\r'):
+                await client.power.set(aiopjlink.Power.OFF)
+
+            # Power ON
+            async with server.when(b'%2POWR 1\r', respond_with=b'%2POWR=OK\r'):
+                await client.power.set(aiopjlink.Power.ON, pjclass=aiopjlink.PJLink.C2)
+
+            # Power OFF
+            async with server.when(b'%2POWR 0\r', respond_with=b'%2POWR=OK\r'):
+                await client.power.set(aiopjlink.Power.OFF, pjclass=aiopjlink.PJLink.C2)
+
+            # Power set out of parameter (test duplicated in test_response_parsing)
+            with self.assertRaises(aiopjlink.PJLinkERR2) as err:
+                async with server.when(b'%1POWR 3\r', respond_with=b'%1POWR=ERR2\r'):
+                    await client.transmit('POWR', '3', pjclass=aiopjlink.PJLink.C1)
+            self.assertEqual(str(err.exception), 'out of parameter')
+
+            # Power set unavailable (test duplicated in test_response_parsing)
+            with self.assertRaises(aiopjlink.PJLinkERR3) as err:
+                async with server.when(b'%1POWR 0\r', respond_with=b'%1POWR=ERR3\r'):
+                    await client.power.set(client.power.OFF)
+            self.assertEqual(str(err.exception), 'unavailable in the current state')
+
+            # Power set not possible (test duplicated in test_response_parsing)
+            with self.assertRaises(aiopjlink.PJLinkERR4) as err:
+                async with server.when(b'%1POWR 0\r', respond_with=b'%1POWR=ERR4\r'):
+                    await client.power.set(client.power.OFF)
+            self.assertEqual(str(err.exception), 'projector or display failure')
+
+            # Unexpected projector reply to a sensible message.
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+                async with server.when(b'%1POWR 0\r', respond_with=b'%1POWR=UGH\r'):
                     await client.power.set(aiopjlink.Power.OFF)
+            self.assertEqual(str(err.exception), 'expected OK response')
 
-                # Power ON
-                async with server.when(b'%2POWR 1\r', respond_with=b'%2POWR=OK\r'):
-                    await client.power.set(aiopjlink.Power.ON, pjclass=aiopjlink.PJLink.C2)
+            # Expect enums.
+            with self.assertRaises(ValueError) as err:
+                async with server.when(b'%1POWR 1\r', respond_with=b'%1POWR=OK\r'):
+                    await client.power.set(True)
+            self.assertEqual(str(err.exception), 'True is not a valid Power.State')
 
-                # Power OFF
-                async with server.when(b'%2POWR 0\r', respond_with=b'%2POWR=OK\r'):
-                    await client.power.set(aiopjlink.Power.OFF, pjclass=aiopjlink.PJLink.C2)
-
-                # Power set out of parameter (test duplicated in test_response_parsing)
-                with self.assertRaises(aiopjlink.PJLinkERR2) as err:
-                    async with server.when(b'%1POWR 3\r', respond_with=b'%1POWR=ERR2\r'):
-                        await client.transmit('POWR', '3', pjclass=aiopjlink.PJLink.C1)
-                self.assertEqual(str(err.exception), 'out of parameter')
-
-                # Power set unavailable (test duplicated in test_response_parsing)
-                with self.assertRaises(aiopjlink.PJLinkERR3) as err:
-                    async with server.when(b'%1POWR 0\r', respond_with=b'%1POWR=ERR3\r'):
-                        await client.power.set(client.power.OFF)
-                self.assertEqual(str(err.exception), 'unavailable in the current state')
-
-                # Power set not possible (test duplicated in test_response_parsing)
-                with self.assertRaises(aiopjlink.PJLinkERR4) as err:
-                    async with server.when(b'%1POWR 0\r', respond_with=b'%1POWR=ERR4\r'):
-                        await client.power.set(client.power.OFF)
-                self.assertEqual(str(err.exception), 'projector or display failure')
-
-                # Unexpected projector reply to a sensible message.
-                with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
-                    async with server.when(b'%1POWR 0\r', respond_with=b'%1POWR=UGH\r'):
-                        await client.power.set(aiopjlink.Power.OFF)
-                self.assertEqual(str(err.exception), 'expected OK response')
-
-                # Expect enums.
-                with self.assertRaises(ValueError) as err:
-                    async with server.when(b'%1POWR 1\r', respond_with=b'%1POWR=OK\r'):
-                        await client.power.set(True)
-                self.assertEqual(str(err.exception), 'True is not a valid Power.State')
-
-                with self.assertRaises(ValueError) as err:
-                    async with server.when(b'%1POWR 0\r', respond_with=b'%1POWR=OK\r'):
-                        await client.power.set('off')
-                self.assertEqual(str(err.exception), '\'off\' is not a valid Power.State')
-
-                with self.assertRaises(ValueError) as err:
-                    async with server.when(b'%1POWR 0\r', respond_with=b'%1POWR=OK\r'):
-                        await client.power.set(aiopjlink.Power.State.COOLING)
-                self.assertEqual(str(err.exception), 'expected Power.State.ON or Power.State.OFF')
-
-                # Accept PJLink strings as enum values.
+            with self.assertRaises(ValueError) as err:
                 async with server.when(b'%1POWR 0\r', respond_with=b'%1POWR=OK\r'):
-                    await client.power.set('0')
+                    await client.power.set('off')
+            self.assertEqual(str(err.exception), '\'off\' is not a valid Power.State')
+
+            with self.assertRaises(ValueError) as err:
+                async with server.when(b'%1POWR 0\r', respond_with=b'%1POWR=OK\r'):
+                    await client.power.set(aiopjlink.Power.State.COOLING)
+            self.assertEqual(str(err.exception), 'expected Power.State.ON or Power.State.OFF')
+
+            # Accept PJLink strings as enum values.
+            async with server.when(b'%1POWR 0\r', respond_with=b'%1POWR=OK\r'):
+                await client.power.set('0')
 
     async def test_power_shortcuts(self):
         """ Set power status. """
@@ -702,15 +695,15 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
         # Start server with no auth.
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b'PJLINK 0\r')
-            async with aiopjlink.PJLink(address='127.0.0.1', password=None) as client:
+            client = aiopjlink.PJLink(address='127.0.0.1', password=None)
 
-                # Power ON
-                async with server.when(b'%1POWR 1\r', respond_with=b'%1POWR=OK\r'):
-                    await client.power.turn_on()
+            # Power ON
+            async with server.when(b'%1POWR 1\r', respond_with=b'%1POWR=OK\r'):
+                await client.power.turn_on()
 
-                # Power OFF
-                async with server.when(b'%1POWR 0\r', respond_with=b'%1POWR=OK\r'):
-                    await client.power.turn_off()
+            # Power OFF
+            async with server.when(b'%1POWR 0\r', respond_with=b'%1POWR=OK\r'):
+                await client.power.turn_off()
 
 
 class SourcesGroup(unittest.IsolatedAsyncioTestCase):
