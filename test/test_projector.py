@@ -209,6 +209,20 @@ async def mock_client_server_noauth():
         yield server, client
 
 
+@contextlib.asynccontextmanager
+async def raw_tcp_server(handler, host='127.0.0.1', port=4352):
+    """ A bare-bones server for misbehaviour the mock projector can't simulate
+    (e.g. hanging up in the middle of a command). `handler(reader, writer)` is
+    called for every connection.
+    """
+    server = await asyncio.start_server(handler, host, port)
+    try:
+        yield server
+    finally:
+        server.close()
+        await server.wait_closed()
+
+
 class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
     """ Validate the test case framework. """
 
@@ -339,6 +353,18 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
                 link = aiopjlink.PJLink(address='127.0.0.1', password=None)
                 await link.power.get()
 
+    async def test_auth_malformed_security_message(self):
+        """ Auth is announced (`1`) but the token is not separated by a space: `PJLinkProtocolError`. """
+
+        async with mock_tcp_pjlink() as server:
+            server.open_and_send(b'PJLINK 1X21d0e96e\r')
+
+            # Rejected before any command (or password hash) is sent.
+            with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
+                link = aiopjlink.PJLink(address='127.0.0.1', password='abc123')
+                await link.power.get()
+            self.assertIn('unrecognised auth method', str(err.exception))
+
     async def test_auth_no_welcome(self):
         """ Tests the projector not sending a welcome message generates a `PJLinkProtocolError` """
 
@@ -408,6 +434,17 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
                     link = aiopjlink.PJLink(address='127.0.0.1', password='INVALIDPW')
                     await link.power.get()
 
+    async def test_auth_missing_pw(self):
+        """ Tests a projector that wants a password when none was given. """
+
+        async with mock_tcp_pjlink() as server:
+            server.open_and_send(b'PJLINK 1 21d0e96e\r')
+
+            with self.assertRaises(aiopjlink.PJLinkPassword) as err:
+                link = aiopjlink.PJLink(address='127.0.0.1', password=None)
+                await link.power.get()
+            self.assertEqual(str(err.exception), 'password required')
+
 
 class ProtocolTests(unittest.IsolatedAsyncioTestCase):
     """ PJLink protocol managment behaves as expected. """
@@ -458,6 +495,16 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             result = aiopjlink.PJLink._format_command('ABCD', '?', pjclass='3')
         self.assertEqual(str(err.exception), '\'3\' is not a valid PJClass')
 
+    async def test_bad_command_rejected_before_connecting(self):
+        """ A malformed command fails fast, without touching the network. """
+
+        # No server is running: if the library tried to connect first,
+        # this would be a `PJLinkNoConnection` instead.
+        link = aiopjlink.PJLink(address='127.0.0.1', password=None, timeout=0.5)
+        with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
+            await link.transmit('abcd', '?', pjclass='1')
+        self.assertEqual(str(err.exception), 'command is not uppercase')
+
     async def test_response_parsing(self):
         """ Ensure that errors generate the correct responses. """
 
@@ -469,6 +516,15 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(command, 'ABCD')
         self.assertEqual(parameter, '5')
 
+        # Response too short to be a PJLink response.
+        for data in ('', '\r', '%\r', '%1ABCD\r'):
+            with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
+                aiopjlink.PJLink._parse_response(
+                    data=data,
+                    expect_command='ABCD',
+                    expect_pjclass='1')
+            self.assertEqual(str(err.exception), 'unexpected response - too short')
+
         # Bad response header.
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
             aiopjlink.PJLink._parse_response(
@@ -476,14 +532,6 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
                 expect_command='ABCD',
                 expect_pjclass='1')
         self.assertEqual(str(err.exception), 'unexpected response header')
-
-        # Bad class version.
-        with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
-            aiopjlink.PJLink._parse_response(
-                data='%2ABCD=5\r',
-                expect_command='ABCD',
-                expect_pjclass='1')
-        self.assertEqual(str(err.exception), 'unexpected response protocol class')
 
         # Bad class version.
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
@@ -509,7 +557,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
                 expect_pjclass='1')
         self.assertEqual(str(err.exception), 'unexpected response separator')
 
-        # Bad command length.
+        # Unexpected command (not the one that was asked for).
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
             aiopjlink.PJLink._parse_response(
                 data='%1ABCD=5\r',
@@ -533,7 +581,6 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
                 expect_pjclass='1')
         self.assertEqual(str(err.exception), 'out of parameter')
 
-        # NOTE: The following are interpreted as `PJLinkProjectorError`
         # ERR3 - unavailable in the current state
         with self.assertRaises(aiopjlink.PJLinkERR3) as err:
             aiopjlink.PJLink._parse_response(
@@ -567,6 +614,85 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             expect_pjclass='1')
         self.assertEqual(command, 'INF2')
         self.assertEqual(param, '')
+
+    async def test_response_too_short(self):
+        """ A truncated response is a protocol error, not an `IndexError`. """
+        async with mock_client_server_noauth() as (server, client):
+            async with server.when(b'%1POWR ?\r', respond_with=b'%\r'):
+                with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
+                    await client.power.get()
+            self.assertEqual(str(err.exception), 'unexpected response - too short')
+
+    async def test_response_timeout(self):
+        """ A projector that accepts the connection but never answers the command is a `PJLinkNoConnection`. """
+        async with mock_tcp_pjlink() as server:
+            server.open_and_send(b'PJLINK 0\r')
+            client = aiopjlink.PJLink(address='127.0.0.1', password=None, timeout=0.5)
+
+            # The mock reads the command but sends nothing back.
+            async with server.when(b'%1POWR ?\r', respond_with=b''):
+                with self.assertRaises(aiopjlink.PJLinkNoConnection) as err:
+                    await client.power.get()
+            self.assertIn('did not respond in time', str(err.exception))
+
+    async def test_connection_closed_before_response(self):
+        """ A projector that hangs up in the middle of a command is a `PJLinkConnectionClosed`. """
+
+        async def hang_up(reader, writer):
+            writer.write(b'PJLINK 0\r')
+            await writer.drain()
+            await reader.readuntil(b'\r')
+            writer.close()
+
+        async with raw_tcp_server(hang_up):
+            client = aiopjlink.PJLink(address='127.0.0.1', password=None, timeout=0.5)
+            with self.assertRaises(aiopjlink.PJLinkConnectionClosed):
+                await client.power.get()
+
+    async def test_undecodable_response(self):
+        """ A response that is not valid text is a `PJLinkProtocolError`, not a `UnicodeDecodeError`. """
+
+        async def send_garbage(reader, writer):
+            writer.write(b'PJLINK 0\r')
+            await writer.drain()
+            await reader.readuntil(b'\r')
+            writer.write(b'\xff\xfe\xfd\r')
+            await writer.drain()
+            writer.close()
+
+        async with raw_tcp_server(send_garbage):
+            client = aiopjlink.PJLink(address='127.0.0.1', password=None, timeout=0.5)
+            with self.assertRaises(aiopjlink.PJLinkProtocolError):
+                await client.power.get()
+
+
+class ConcurrencyTests(unittest.IsolatedAsyncioTestCase):
+    """ One `PJLink` object can be shared between tasks. """
+
+    async def test_concurrent_commands_are_serialised(self):
+        """ Two commands issued at the same time use one connection after the other. """
+        async with mock_client_server_noauth() as (server, client):
+            async with server.when(b'%1POWR ?\r', respond_with=b'%1POWR=1\r'):
+                async with server.when(b'%1CLSS ?\r', respond_with=b'%1CLSS=2\r'):
+                    power, pjclass = await asyncio.gather(
+                        client.power.get(),
+                        client.info.pjlink_class(),
+                    )
+            self.assertEqual(power, aiopjlink.Power.State.ON)
+            self.assertEqual(pjclass, aiopjlink.PJClass.TWO)
+
+    async def test_lock_released_after_error(self):
+        """ A failed command does not block the commands that follow it. """
+        async with mock_client_server_noauth() as (server, client):
+
+            # First command fails (projector reports ERR3).
+            with self.assertRaises(aiopjlink.PJLinkERR3):
+                async with server.when(b'%1POWR ?\r', respond_with=b'%1POWR=ERR3\r'):
+                    await client.power.get()
+
+            # The next one still works.
+            async with server.when(b'%1POWR ?\r', respond_with=b'%1POWR=0\r'):
+                self.assertEqual(await client.power.get(), aiopjlink.Power.State.OFF)
 
 
 class PowerGroup(unittest.IsolatedAsyncioTestCase):
@@ -606,20 +732,21 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
                 status = await client.power.get()
                 self.assertEqual(status, aiopjlink.Power.ON)
 
-                # Power cooling.
-                async with server.when(b'%1POWR ?\r', respond_with=b'%1POWR=2\r'):
-                    status = await client.power.get()
-                    self.assertEqual(status, aiopjlink.Power.State.COOLING)
+            # Power cooling.
+            async with server.when(b'%1POWR ?\r', respond_with=b'%1POWR=2\r'):
+                status = await client.power.get()
+                self.assertEqual(status, aiopjlink.Power.State.COOLING)
 
-                # Power warming.
-                async with server.when(b'%1POWR ?\r', respond_with=b'%1POWR=3\r'):
-                    status = await client.power.get()
-                    self.assertEqual(status, aiopjlink.Power.State.WARMING)
+            # Power warming.
+            async with server.when(b'%1POWR ?\r', respond_with=b'%1POWR=3\r'):
+                status = await client.power.get()
+                self.assertEqual(status, aiopjlink.Power.State.WARMING)
 
-                # Unxpected power result.
+            # Unxpected power result.
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
                 async with server.when(b'%1POWR ?\r', respond_with=b'%1POWR=A\r'):
-                    with self.assertRaises(ValueError):
-                        await client.power.get()
+                    await client.power.get()
+            self.assertEqual(str(err.exception), 'unexpected power state')
 
     async def test_power_set(self):
         """ Set power status. """
@@ -732,6 +859,18 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
             async with server.when(b'%1INPT 21\r', respond_with=b'%1INPT=OK\r'):
                 await client.sources.set(aiopjlink.Sources.Mode.VIDEO, '1')
 
+            # Bad response: wrong length.
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+                async with server.when(b'%1INPT ?\r', respond_with=b'%1INPT=311\r'):
+                    await client.sources.get()
+            self.assertEqual(str(err.exception), 'expected 2 INPT response characters')
+
+            # Bad response: unknown input mode.
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+                async with server.when(b'%1INPT ?\r', respond_with=b'%1INPT=91\r'):
+                    await client.sources.get()
+            self.assertEqual(str(err.exception), 'unexpected input source mode')
+
     async def test_inst_class1(self):
         """ Test that available sources can be enumerated. """
         async with mock_client_server_noauth() as (server, client):
@@ -772,6 +911,13 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
                 mode, index = sources[5]
                 self.assertEqual(mode, aiopjlink.Sources.Mode.NETWORK)
                 self.assertEqual(index, '6')
+
+            # Unparsable list from the projector.
+            for response in (b'%1INST=\r', b'%1INST=91\r', b'%1INST=111\r'):
+                with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+                    async with server.when(b'%1INST ?\r', respond_with=response):
+                        await client.sources.available()
+                self.assertEqual(str(err.exception), 'unable to parse available sources')
 
     async def test_inst_innm_class2(self):
         """ Test that available sources and their names can be enumerated. """
@@ -1020,6 +1166,12 @@ class FilterGroup(unittest.IsolatedAsyncioTestCase):
                     hours = await client.filter.hours()
             self.assertEqual(str(err.exception), 'no filter')
 
+            # Unparsable usage time.
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+                async with server.when(b'%2FILT ?\r', respond_with=b'%2FILT=abc\r'):
+                    hours = await client.filter.hours()
+            self.assertEqual(str(err.exception), 'filter usage not parsable')
+
     async def test_replacement_model(self):
         """ Get a list of replacement filter models. """
         async with mock_client_server_noauth() as (server, client):
@@ -1239,6 +1391,12 @@ class InfoGroup(unittest.IsolatedAsyncioTestCase):
             async with server.when(b'%2CLSS ?\r', respond_with=b'%2CLSS=2\r'):
                 response = await client.info.pjlink_class(pjclass=aiopjlink.PJClass.TWO)
                 self.assertEqual(response, aiopjlink.PJClass.TWO)
+
+            # Unexpected class.
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+                async with server.when(b'%1CLSS ?\r', respond_with=b'%1CLSS=9\r'):
+                    await client.info.pjlink_class()
+            self.assertEqual(str(err.exception), 'unexpected PJLink class')
 
     async def test_info_other(self):
         """ Query the "other" info. """

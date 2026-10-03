@@ -5,7 +5,23 @@ The `PJLink` class is a connection to a projector using the PJLink protocol.
 To provide a "pythonic" API for the different PJLink commands, the
 class `CommandGroup` is overriden and groups together related commands.
 
-No state is kept inside the classes.
+No state is kept inside the classes (apart from the lock that serialises
+the commands sent through one `PJLink` object).
+
+Error handling
+--------------
+Everything that can go wrong while talking to the projector is raised as a
+subclass of `PJLinkException`, so callers only need to catch that one class:
+
+    * `PJLinkNoConnection`: could not connect, or the projector did not answer in time.
+    * `PJLinkConnectionClosed`: the connection was closed or reset mid-command.
+    * `PJLinkPassword`: password missing or wrong.
+    * `PJLinkProtocolError`: the projector sent something that is not valid PJLink.
+    * `PJLinkUnexpectedResponseParameter`: valid PJLink, but an unexpected value.
+    * `PJLinkERR1` ... `PJLinkERR4`, `PJLinkProjectorError`: the projector reported an error.
+
+`ValueError` is still raised for invalid arguments passed in by the caller
+(e.g. an unknown `Power.State`), because that is a programming error.
 """
 
 import os
@@ -25,7 +41,7 @@ class PJLinkException(Exception):
 
 
 class PJLinkNoConnection(PJLinkException):
-    """ Projector did not respond to the connection request. """
+    """ Projector did not respond to the connection request (or to a command, in time). """
     pass
 
 
@@ -96,12 +112,16 @@ class PJClass(Enum):
 class PJLink:
     """ Manages a PJLink connection to a projector.
 
+    Every command opens its own short-lived connection, so there is nothing to
+    open or close. One object can safely be shared between several tasks:
+    commands are sent one after the other.
+
     Usage:
 
-        >>> async with PJLink(address='192.168.100.100', password='secret') as link:
-        >>>     await link.power.turn_off()
-        >>>     time.sleep(4)
-        >>>     await link.power.turn_on()
+        >>> link = PJLink(address='192.168.100.100', password='secret')
+        >>> await link.power.turn_off()
+        >>> await asyncio.sleep(4)
+        >>> await link.power.turn_on()
 
     """
 
@@ -109,13 +129,14 @@ class PJLink:
     C2 = PJClass.TWO
 
     def __init__(self, address, port=4352, password=None, timeout=4, encoding='utf-8'):
-        self._reader = None
-        self._writer = None
         self._address = address
         self._port = port
         self._encoding = encoding
         self._timeout = timeout
         self._password = password
+
+        # One command at a time: many projectors only accept a single connection.
+        self._lock = asyncio.Lock()
 
         # Add the different API namespaces.
         self.info = Information(self)
@@ -132,31 +153,64 @@ class PJLink:
     async def wait_for_notification(self):
         raise NotImplementedError('class 2 method not supported')
 
-    async def _read_next(self):
+    async def _read_next(self, reader: asyncio.StreamReader) -> str:
         """ Read data until the next terminator (CR) and return the
-        message (including CR) as a decoded string."""
+        message (including CR) as a decoded string.
+
+        Raises `asyncio.TimeoutError` if nothing arrives in time, so that the caller
+        can decide what a timeout means at that point of the conversation.
+        """
         try:
-            raw = await asyncio.wait_for(self._reader.readuntil(b'\r'), self._timeout)
+            raw = await asyncio.wait_for(reader.readuntil(b'\r'), self._timeout)
         except asyncio.IncompleteReadError as err:
             raise PJLinkConnectionClosed('projector closed the connection') from err
-        return raw.decode(self._encoding)
+        except asyncio.LimitOverrunError as err:
+            raise PJLinkProtocolError('response from projector is too long') from err
+        except asyncio.TimeoutError:
+            raise
+        except OSError as err:
+            raise PJLinkConnectionClosed(f'connection error - {err}') from err
+
+        try:
+            return raw.decode(self._encoding)
+        except UnicodeDecodeError as err:
+            raise PJLinkProtocolError('response from projector could not be decoded') from err
 
     async def transmit(self, command, param, pjclass: PJClass):
-        """Open connection, authenticate, send command, get response, close connection."""
+        """Open connection, authenticate, send command, get response, close connection.
 
-        self._reader = None
-        self._writer = None
+        Calls on the same `PJLink` object are serialised, so this can be called
+        from several tasks at once.
+
+        Raises a subclass of `PJLinkException` for anything that goes wrong
+        while talking to the projector (see the module documentation).
+        """
+
+        # Reject malformed commands before touching the network.
+        cstring = self._format_command(command, param, pjclass)
+
+        async with self._lock:
+            return await self._transmit(command, cstring, pjclass)
+
+    async def _transmit(self, command, cstring, pjclass):
+        """ Does the actual work of `transmit`. Must only be called with the lock held. """
+
+        # The connection lives in local variables, not on the object,
+        # so nothing is shared between calls.
+        writer = None
         try:
             # 1. Open connection
             try:
-                self._reader, self._writer = await asyncio.wait_for(
+                reader, writer = await asyncio.wait_for(
                     asyncio.open_connection(self._address, self._port),
                     timeout=self._timeout
                 )
-            except asyncio.exceptions.TimeoutError:
-                raise PJLinkNoConnection("timeout - projector did not accept the connection in time")
+            except asyncio.TimeoutError as err:
+                raise PJLinkNoConnection(
+                    "timeout - projector did not accept the connection in time"
+                ) from err
             except OSError as err:
-                raise PJLinkNoConnection(f"os timeout - {str(err)}")
+                raise PJLinkNoConnection(f"os timeout - {str(err)}") from err
 
             # An authentication procedure should be executed once after each establishment of TCP/IP connection.
             # But for some reason this does not work with AWOL projector - 1 command = 1 connection
@@ -165,13 +219,12 @@ class PJLink:
 
             # 2. Read welcome/auth message
             # Projector sends first message to identify itself as PJLINK.
-            # data = await self._raw_read(n_bytes=9)
             try:
-                data = await self._read_next()
+                data = await self._read_next(reader)
                 if PRINT_DEBUG_COMMS:
                     print('➡️ ', data)
-            except asyncio.exceptions.TimeoutError:
-                raise PJLinkProtocolError('projector did not send a welcome message')
+            except asyncio.TimeoutError as err:
+                raise PJLinkProtocolError('projector did not send a welcome message') from err
             if len(data) < 9:
                 raise PJLinkProtocolError('unexpected opening header message from projector - too short')
 
@@ -180,13 +233,12 @@ class PJLink:
                 raise PJLinkProtocolError('unexpected opening header message from projector - not PJLink')
 
             # 3. Authenticate if needed and send command
-            cstring = self._format_command(command, param, pjclass)
             if auth_enabled == '0':
                 # No authentication required
                 cbytes = bytearray(cstring, self._encoding)
             else:
                 # Connection requires auth: `PJLINK 1 <token>`.
-                if auth_enabled != '1' and auth_close != ' ':
+                if auth_enabled != '1' or auth_close != ' ':
                     raise PJLinkProtocolError(
                         'unexpected opening security message from projector - unrecognised auth method'
                     )
@@ -203,13 +255,19 @@ class PJLink:
 
             if PRINT_DEBUG_COMMS:
                 print("🚢", cbytes)
-            self._writer.write(cbytes)
-            await self._writer.drain()
+            try:
+                writer.write(cbytes)
+                await writer.drain()
+            except OSError as err:
+                raise PJLinkConnectionClosed(f'connection error - {err}') from err
 
             # 4. Read response
             # Read the first few bytes of the response - check for failed auth.
             # ERRA represents ERR or authorization.
-            response = await self._read_next()
+            try:
+                response = await self._read_next(reader)
+            except asyncio.TimeoutError as err:
+                raise PJLinkNoConnection('timeout - projector did not respond in time') from err
             if response.upper() == 'PJLINK ERRA\r':
                 raise PJLinkPassword('authentication failed')
 
@@ -218,11 +276,12 @@ class PJLink:
             return param
 
         finally:
-            if self._writer is not None:
+            if writer is not None:
                 try:
-                    self._writer.close()
-                    await self._writer.wait_closed()
+                    writer.close()
+                    await writer.wait_closed()
                 except Exception:
+                    # Best effort: the command has already succeeded or failed by now.
                     pass
 
     @staticmethod
@@ -243,6 +302,10 @@ class PJLink:
         if PRINT_DEBUG_COMMS:
             print('➡️ ', data)
         expect_pjclass = PJClass(expect_pjclass)
+
+        # Shortest valid response: header, class, 4 command characters, separator, CR (e.g. `%1INF2=\r`).
+        if len(data) < 8:
+            raise PJLinkProtocolError('unexpected response - too short')
 
         # Check header and class version.
         header, version = data[0], data[1]
@@ -316,7 +379,11 @@ class Power(CommandGroup):
 
     async def get(self, pjclass=PJClass.ONE):
         """ Request the power status of the projector. """
-        return Power.State(await self._link.transmit('POWR', '?', pjclass=pjclass))
+        response = await self._link.transmit('POWR', '?', pjclass=pjclass)
+        try:
+            return Power.State(response)
+        except ValueError as err:
+            raise PJLinkUnexpectedResponseParameter('unexpected power state') from err
 
     async def turn_on(self):
         """ Power the projector on. """
@@ -341,7 +408,7 @@ class Sources(CommandGroup):
         """ Class 2 only. """
 
     async def set(self, mode, index, pjclass=PJClass.ONE):
-        """ Get the current source input selection (§4.3).
+        """ Set the current source input selection (§4.3).
         """
         mode, index = self._check_mode_index(mode, index)
         return await self._transmit_ok(command='INPT', param=f'{mode.value}{index}', pjclass=pjclass)
@@ -352,7 +419,10 @@ class Sources(CommandGroup):
         values = await self._link.transmit(command='INPT', param='?', pjclass=pjclass)
         if len(values) != 2:
             raise PJLinkUnexpectedResponseParameter('expected 2 INPT response characters')
-        return Sources.Mode(values[0]), values[1]
+        try:
+            return Sources.Mode(values[0]), values[1]
+        except ValueError as err:
+            raise PJLinkUnexpectedResponseParameter('unexpected input source mode') from err
 
     def _check_mode_index(self, mode, index):
         """ Ensure a mode and index pair are valid. """
@@ -369,9 +439,11 @@ class Sources(CommandGroup):
             A list of available input sources in the format: (Sources.Mode, index str).  For example:
                 [(<Mode.RGB: '1'>, '1'), (<Mode.DIGITAL: '3'>, '1'), ...]
         """
-        sources = await self._link.transmit('INST', '?', pjclass)
-        sources = sources.split(' ')
-        return [(Sources.Mode(first), second) for first, second in sources]
+        response = await self._link.transmit('INST', '?', pjclass)
+        try:
+            return [(Sources.Mode(first), second) for first, second in response.split(' ')]
+        except ValueError as err:
+            raise PJLinkUnexpectedResponseParameter('unable to parse available sources') from err
 
     async def get_source_name(self, mode, index):
         """ Get the name of a given input source (§4.17).
@@ -413,8 +485,8 @@ class Sources(CommandGroup):
         try:
             resolution = [int(dim) for dim in re.split('x', response, flags=re.IGNORECASE)]
             return tuple(resolution)
-        except ValueError:
-            raise PJLinkUnexpectedResponseParameter('unable to parse resolution')
+        except ValueError as err:
+            raise PJLinkUnexpectedResponseParameter('unable to parse resolution') from err
 
     async def recommended_resolution(self):
         """ Get the current recommended resolution (§4.19)
@@ -425,8 +497,8 @@ class Sources(CommandGroup):
         try:
             resolution = [int(dim) for dim in re.split('x', response, flags=re.IGNORECASE)]
             return tuple(resolution)
-        except ValueError:
-            raise PJLinkUnexpectedResponseParameter('unable to parse resolution')
+        except ValueError as err:
+            raise PJLinkUnexpectedResponseParameter('unable to parse resolution') from err
 
 
 class Mute(CommandGroup):
@@ -520,8 +592,8 @@ class Errors(CommandGroup):
         errors = await self._link.transmit('ERST', '?', pjclass=PJClass.ONE)
         try:
             fan, lamp, temp, cover, filt, other = errors
-        except ValueError:
-            raise PJLinkUnexpectedResponseParameter('unexpected number of error types reported')
+        except ValueError as err:
+            raise PJLinkUnexpectedResponseParameter('unexpected number of error types reported') from err
         try:
             return {
                 Errors.Category.FAN: Errors.Level(fan),
@@ -555,8 +627,8 @@ class Lamp(CommandGroup):
         # Express a special meaning for ERR1 (§4.8).
         try:
             response = await self._link.transmit('LAMP', '?', pjclass=PJClass.ONE)
-        except PJLinkERR1:
-            raise PJLinkERR1('no lamp')
+        except PJLinkERR1 as err:
+            raise PJLinkERR1('no lamp') from err
 
         # Split the response by " " and then pair up all the numbers from
         # the list in groups of 2.  If there are any remainders, raise an error.
@@ -609,12 +681,12 @@ class Filter(CommandGroup):
             return int(await self._link.transmit('FILT', '?', pjclass=PJClass.TWO))
 
         # Express a special meaning for ERR1 (§4.20).
-        except PJLinkERR1:
-            raise PJLinkERR1('no filter')
+        except PJLinkERR1 as err:
+            raise PJLinkERR1('no filter') from err
 
         # Parse issue.
-        except ValueError:
-            raise PJLinkUnexpectedResponseParameter('filter usage not parsable')
+        except ValueError as err:
+            raise PJLinkUnexpectedResponseParameter('filter usage not parsable') from err
 
     async def replacement_models(self):
         """ Get the filter replacement models listed in the projector (§4.22).
