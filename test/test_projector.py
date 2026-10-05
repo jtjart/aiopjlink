@@ -886,12 +886,15 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
                 name = await client.sources.get_source_name(aiopjlink.Sources.Mode.DIGITAL, 1)
                 self.assertEqual(name, "DVI-D")
 
-            # Reject long numbers (before hitting the server).
-            with self.assertRaises(ValueError) as err:
+            # Integers above 9 are converted to letters: 11 is "B".
+            async with server.when(b"%2INNM ?3B\r", respond_with=b"%2INNM=HDMI\r"):
                 name = await client.sources.get_source_name(aiopjlink.Sources.Mode.DIGITAL, 11)
-            self.assertEqual(
-                str(err.exception), "index must be a single character (1-9 for Class 1, and 1-9A-Z for Class 2)"
-            )
+                self.assertEqual(name, "HDMI")
+
+            # Reject invalid indexes (before hitting the server).
+            for bad_index in ("11", 0, 36):
+                with self.assertRaises(ValueError):
+                    await client.sources.get_source_name(aiopjlink.Sources.Mode.DIGITAL, bad_index)
 
             # Get the names of available.
             async with server.when(b"%2INST ?\r", respond_with=b"%2INST=11\r"):
@@ -902,6 +905,31 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(mode, aiopjlink.Sources.Mode.RGB)
                     self.assertEqual(index, "1")
                     self.assertEqual(name, "Computer")
+
+    async def test_inpt_index_forms(self):
+        """Setting a source accepts digits, letters (any case) and integers."""
+        async with mock_client_server_noauth() as (server, client):
+            mode = aiopjlink.Sources.Mode.VIDEO
+
+            # Digit as string and as int.
+            async with server.when(b"%1INPT 21\r", respond_with=b"%1INPT=OK\r"):
+                await client.sources.set(mode, "1")
+            async with server.when(b"%1INPT 21\r", respond_with=b"%1INPT=OK\r"):
+                await client.sources.set(mode, 1)
+
+            # Lower case is converted to upper case (Class 2 sources).
+            async with server.when(b"%2INPT 2A\r", respond_with=b"%2INPT=OK\r"):
+                await client.sources.set(mode, "a", pjclass=aiopjlink.PJClass.TWO)
+
+            # Integers above 9 are converted to letters.
+            async with server.when(b"%2INPT 2B\r", respond_with=b"%2INPT=OK\r"):
+                await client.sources.set(mode, 11, pjclass=aiopjlink.PJClass.TWO)
+
+            # Invalid indexes are rejected before anything is sent.
+            with self.assertRaises(ValueError):
+                await client.sources.set(mode, "11")
+            with self.assertRaises(ValueError):
+                await client.sources.set(mode, 0)
 
     async def test_ires(self):
         """Test that the resolution of the current input can be recieved."""
