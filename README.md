@@ -2,7 +2,7 @@
 
 # aiopjlink2
 
-A modern Python asyncio PJLink library (Class I and Class II). 
+A modern Python asyncio PJLink library (Class I and Class II).
 This is a fork from HEInventions/aiopjlink and Kwull/aiopjlink.
 
 [![PyPI](https://img.shields.io/pypi/v/aiopjlink2?logo=python&logoColor=%23cccccc)](https://pypi.org/project/aiopjlink2)
@@ -38,7 +38,7 @@ It has these advantages:
 * ✅ High level API abstraction (eg. `lamp.hours`)
 * ✅ Pure Python 3 implementation (no dependencies)
 * ✅ Full suite of test cases
-* ❌ Context managers for keeping track of connections and resources 
+* ❌ Context managers for keeping track of connections and resources
 * ✅ High quality error handling
 
 

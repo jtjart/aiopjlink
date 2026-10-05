@@ -1,4 +1,4 @@
-""" projector.py
+"""projector.py
 
 The `PJLink` class is a connection to a projector using the PJLink protocol.
 
@@ -24,76 +24,62 @@ subclass of `PJLinkException`, so callers only need to catch that one class:
 (e.g. an unknown `Power.State`), because that is a programming error.
 """
 
-import os
-import re
 import asyncio
 import hashlib
+import os
+import re
 from enum import Enum
-
 
 """ Print out messages that are sent and recieved for debugging. """
 PRINT_DEBUG_COMMS = bool(os.environ.get("AIOPJLINK_PRINT_DEBUG_COMMS", False))
 
 
 class PJLinkException(Exception):
-    """ Base exception for PJLink library issues. """
-    pass
+    """Base exception for PJLink library issues."""
 
 
 class PJLinkNoConnection(PJLinkException):
-    """ Projector did not respond to the connection request (or to a command, in time). """
-    pass
+    """Projector did not respond to the connection request (or to a command, in time)."""
 
 
 class PJLinkConnectionClosed(PJLinkException):
-    """ Projector closed the connection. """
-    pass
+    """Projector closed the connection."""
 
 
 class PJLinkProtocolError(PJLinkException):
-    """ Unexpected communication to or from the projector. """
-    pass
+    """Unexpected communication to or from the projector."""
 
 
 class PJLinkUnexpectedResponseParameter(PJLinkException):
-    """ Unable to parse a response parameter. """
-    pass
+    """Unable to parse a response parameter."""
 
 
 class PJLinkPassword(PJLinkException):
-    """ Invalid or absent password. """
-    pass
+    """Invalid or absent password."""
 
 
 class PJLinkProjectorError(PJLinkException):
-    """ Projector raised an error when handling a command. """
-    pass
+    """Projector raised an error when handling a command."""
 
 
 class PJLinkERR1(PJLinkProtocolError):
-    """ ERR 1, undefined command, as specified in (§2.2)
-    """
-    pass
+    """ERR 1, undefined command, as specified in (§2.2)"""
 
 
 class PJLinkERR2(PJLinkException):
-    """ ERR 2, out of parameter, as specified in (§2.2)
-    """
-    pass
+    """ERR 2, out of parameter, as specified in (§2.2)"""
 
 
 class PJLinkERR3(PJLinkException):
-    """ ERR 3, unavailable at the current time or in the current projector state, as specified in (§2.2) """
-    pass
+    """ERR 3, unavailable at the current time or in the current projector state, as specified in (§2.2)"""
 
 
 class PJLinkERR4(PJLinkException):
-    """ ERR 4, projector or display failure, as specified in (§2.2) """
-    pass
+    """ERR 4, projector or display failure, as specified in (§2.2)"""
 
 
 class PJClass(Enum):
-    """ Communication protocol message version.
+    """Communication protocol message version.
 
     Class 1 is the most common type of PJLink, and is used for basic commands such as
     power on/off, input selection, and adjusting volume.
@@ -102,15 +88,15 @@ class PJClass(Enum):
     as opening and closing the projector's lens cover, and is typically used by more sophisticated devices.
     """
 
-    ONE = '1'
+    ONE = "1"
     """ PJLink Class 1 command. """
 
-    TWO = '2'
+    TWO = "2"
     """ PJLink Class 2 command. """
 
 
 class PJLink:
-    """ Manages a PJLink connection to a projector.
+    """Manages a PJLink connection to a projector.
 
     Every command opens its own short-lived connection, so there is nothing to
     open or close. One object can safely be shared between several tasks:
@@ -128,7 +114,7 @@ class PJLink:
     C1 = PJClass.ONE
     C2 = PJClass.TWO
 
-    def __init__(self, address, port=4352, password=None, timeout=4, encoding='utf-8'):
+    def __init__(self, address, port=4352, password=None, timeout=4, encoding="utf-8"):
         self._address = address
         self._port = port
         self._encoding = encoding
@@ -147,34 +133,34 @@ class PJLink:
         self.lamps = Lamp(self)
         self.filter = Filter(self)
         self.freeze = Freeze(self)
-        self.microphone = Volume(self, 'MVOL')
-        self.speaker = Volume(self, 'SVOL')
+        self.microphone = Volume(self, "MVOL")
+        self.speaker = Volume(self, "SVOL")
 
     async def wait_for_notification(self):
-        raise NotImplementedError('class 2 method not supported')
+        raise NotImplementedError("class 2 method not supported")
 
     async def _read_next(self, reader: asyncio.StreamReader) -> str:
-        """ Read data until the next terminator (CR) and return the
+        """Read data until the next terminator (CR) and return the
         message (including CR) as a decoded string.
 
         Raises `asyncio.TimeoutError` if nothing arrives in time, so that the caller
         can decide what a timeout means at that point of the conversation.
         """
         try:
-            raw = await asyncio.wait_for(reader.readuntil(b'\r'), self._timeout)
+            raw = await asyncio.wait_for(reader.readuntil(b"\r"), self._timeout)
         except asyncio.IncompleteReadError as err:
-            raise PJLinkConnectionClosed('projector closed the connection') from err
+            raise PJLinkConnectionClosed("projector closed the connection") from err
         except asyncio.LimitOverrunError as err:
-            raise PJLinkProtocolError('response from projector is too long') from err
-        except asyncio.TimeoutError:
+            raise PJLinkProtocolError("response from projector is too long") from err
+        except TimeoutError:
             raise
         except OSError as err:
-            raise PJLinkConnectionClosed(f'connection error - {err}') from err
+            raise PJLinkConnectionClosed(f"connection error - {err}") from err
 
         try:
             return raw.decode(self._encoding)
         except UnicodeDecodeError as err:
-            raise PJLinkProtocolError('response from projector could not be decoded') from err
+            raise PJLinkProtocolError("response from projector could not be decoded") from err
 
     async def transmit(self, command, param, pjclass: PJClass):
         """Open connection, authenticate, send command, get response, close connection.
@@ -193,7 +179,7 @@ class PJLink:
             return await self._transmit(command, cstring, pjclass)
 
     async def _transmit(self, command, cstring, pjclass):
-        """ Does the actual work of `transmit`. Must only be called with the lock held. """
+        """Does the actual work of `transmit`. Must only be called with the lock held."""
 
         # The connection lives in local variables, not on the object,
         # so nothing is shared between calls.
@@ -202,15 +188,12 @@ class PJLink:
             # 1. Open connection
             try:
                 reader, writer = await asyncio.wait_for(
-                    asyncio.open_connection(self._address, self._port),
-                    timeout=self._timeout
+                    asyncio.open_connection(self._address, self._port), timeout=self._timeout
                 )
-            except asyncio.TimeoutError as err:
-                raise PJLinkNoConnection(
-                    "timeout - projector did not accept the connection in time"
-                ) from err
+            except TimeoutError as err:
+                raise PJLinkNoConnection("timeout - projector did not accept the connection in time") from err
             except OSError as err:
-                raise PJLinkNoConnection(f"os timeout - {str(err)}") from err
+                raise PJLinkNoConnection(f"os timeout - {err!s}") from err
 
             # An authentication procedure should be executed once after each establishment of TCP/IP connection.
             # But for some reason this does not work with AWOL projector - 1 command = 1 connection
@@ -222,34 +205,34 @@ class PJLink:
             try:
                 data = await self._read_next(reader)
                 if PRINT_DEBUG_COMMS:
-                    print('➡️ ', data)
-            except asyncio.TimeoutError as err:
-                raise PJLinkProtocolError('projector did not send a welcome message') from err
+                    print("➡️ ", data)
+            except TimeoutError as err:
+                raise PJLinkProtocolError("projector did not send a welcome message") from err
             if len(data) < 9:
-                raise PJLinkProtocolError('unexpected opening header message from projector - too short')
+                raise PJLinkProtocolError("unexpected opening header message from projector - too short")
 
             auth_header, auth_enabled, auth_close = data[:7], data[7], data[8]
-            if auth_header.upper() != 'PJLINK ':
-                raise PJLinkProtocolError('unexpected opening header message from projector - not PJLink')
+            if auth_header.upper() != "PJLINK ":
+                raise PJLinkProtocolError("unexpected opening header message from projector - not PJLink")
 
             # 3. Authenticate if needed and send command
-            if auth_enabled == '0':
+            if auth_enabled == "0":
                 # No authentication required
                 cbytes = bytearray(cstring, self._encoding)
             else:
                 # Connection requires auth: `PJLINK 1 <token>`.
-                if auth_enabled != '1' or auth_close != ' ':
+                if auth_enabled != "1" or auth_close != " ":
                     raise PJLinkProtocolError(
-                        'unexpected opening security message from projector - unrecognised auth method'
+                        "unexpected opening security message from projector - unrecognised auth method"
                     )
 
                 # Check we have a password specified.
                 if self._password is None:
-                    raise PJLinkPassword('password required')
+                    raise PJLinkPassword("password required")
 
                 # Read the random number used to salt the password (excluding the terminating `\r`).
                 token = data[9:-1]
-                passcode = (token + self._password).encode('utf-8')
+                passcode = (token + self._password).encode("utf-8")
                 passcode_md5 = hashlib.md5(passcode).hexdigest()
                 cbytes = bytearray(passcode_md5, self._encoding) + bytearray(cstring, self._encoding)
 
@@ -259,17 +242,17 @@ class PJLink:
                 writer.write(cbytes)
                 await writer.drain()
             except OSError as err:
-                raise PJLinkConnectionClosed(f'connection error - {err}') from err
+                raise PJLinkConnectionClosed(f"connection error - {err}") from err
 
             # 4. Read response
             # Read the first few bytes of the response - check for failed auth.
             # ERRA represents ERR or authorization.
             try:
                 response = await self._read_next(reader)
-            except asyncio.TimeoutError as err:
-                raise PJLinkNoConnection('timeout - projector did not respond in time') from err
-            if response.upper() == 'PJLINK ERRA\r':
-                raise PJLinkPassword('authentication failed')
+            except TimeoutError as err:
+                raise PJLinkNoConnection("timeout - projector did not respond in time") from err
+            if response.upper() == "PJLINK ERRA\r":
+                raise PJLinkPassword("authentication failed")
 
             # 5. Parse response
             _, param = PJLink._parse_response(response, expect_command=command, expect_pjclass=pjclass)
@@ -288,173 +271,172 @@ class PJLink:
     def _format_command(command, param, pjclass: PJClass):
         pjclass = PJClass(pjclass)
         if not command.isupper():
-            raise PJLinkProtocolError('command is not uppercase')
+            raise PJLinkProtocolError("command is not uppercase")
         if len(command) != 4:
-            raise PJLinkProtocolError('command is not 4 bytes')
+            raise PJLinkProtocolError("command is not 4 bytes")
         if len(param) > 128:
-            raise PJLinkProtocolError('command param is larger than 128 bytes')
-        sep = ' '
-        return f'%{pjclass.value}{command}{sep}{param}\r'
+            raise PJLinkProtocolError("command param is larger than 128 bytes")
+        sep = " "
+        return f"%{pjclass.value}{command}{sep}{param}\r"
 
     @staticmethod
     def _parse_response(data, expect_command=None, expect_pjclass=PJClass.ONE):
         # NOTE: Postels robustness principle - be conservative in what you do, be liberal in what you accept from others
         if PRINT_DEBUG_COMMS:
-            print('➡️ ', data)
+            print("➡️ ", data)
         expect_pjclass = PJClass(expect_pjclass)
 
         # Shortest valid response: header, class, 4 command characters, separator, CR (e.g. `%1INF2=\r`).
         if len(data) < 8:
-            raise PJLinkProtocolError('unexpected response - too short')
+            raise PJLinkProtocolError("unexpected response - too short")
 
         # Check header and class version.
         header, version = data[0], data[1]
-        if header != '%':
-            raise PJLinkProtocolError('unexpected response header')
+        if header != "%":
+            raise PJLinkProtocolError("unexpected response header")
         if version != expect_pjclass.value:
-            raise PJLinkProtocolError('unexpected response protocol class')
+            raise PJLinkProtocolError("unexpected response protocol class")
 
         # Grab the command body, separator, and param.
-        command = f'{data[2:6]}'.upper()
+        command = f"{data[2:6]}".upper()
         sep = data[6]
         param = data[7:-1]
 
         # Check them for correctness.
-        if sep != '=':
-            raise PJLinkProtocolError('unexpected response separator')
+        if sep != "=":
+            raise PJLinkProtocolError("unexpected response separator")
         if expect_command is not None and command != expect_command:
-            raise PJLinkProtocolError('unexpected response command')
+            raise PJLinkProtocolError("unexpected response command")
 
         # Handle for protocol and projector errors.
         param_u = param.upper()
-        if param_u == 'ERR1':
-            raise PJLinkERR1('unsupported command')
-        elif param_u == 'ERR2':
-            raise PJLinkERR2('out of parameter')
-        elif param_u == 'ERR3':
-            raise PJLinkERR3('unavailable in the current state')
-        elif param_u == 'ERR4':
-            raise PJLinkERR4('projector or display failure')
+        if param_u == "ERR1":
+            raise PJLinkERR1("unsupported command")
+        if param_u == "ERR2":
+            raise PJLinkERR2("out of parameter")
+        if param_u == "ERR3":
+            raise PJLinkERR3("unavailable in the current state")
+        if param_u == "ERR4":
+            raise PJLinkERR4("projector or display failure")
 
         return command, param
 
 
 class CommandGroup:
-    """ Base class for related groups of PJLink functionality.
-    """
+    """Base class for related groups of PJLink functionality."""
 
     def __init__(self, link: PJLink):
         self._link = link
 
     async def _transmit_ok(self, command, param, pjclass):
-        """ Transmit a command and check the response is OK. """
+        """Transmit a command and check the response is OK."""
         response = await self._link.transmit(command, param, pjclass)
-        if response.upper() != 'OK':
-            raise PJLinkUnexpectedResponseParameter('expected OK response')
+        if response.upper() != "OK":
+            raise PJLinkUnexpectedResponseParameter("expected OK response")
 
 
 class Power(CommandGroup):
-    """ Control and query the power state of the projector lamp. """
+    """Control and query the power state of the projector lamp."""
 
     class State(Enum):
-        """ PJLink projector lamp states (combining §4.1 and §4.2). """
-        OFF = '0'
-        ON = '1'
-        COOLING = '2'
-        WARMING = '3'
+        """PJLink projector lamp states (combining §4.1 and §4.2)."""
+
+        OFF = "0"
+        ON = "1"
+        COOLING = "2"
+        WARMING = "3"
 
         def __bool__(self):
-            """ Truthy states for `on` and `warming`, falsy states for `off` and `cooling`. """
+            """Truthy states for `on` and `warming`, falsy states for `off` and `cooling`."""
             return self in (Power.State.ON, Power.State.WARMING)
 
     ON = State.ON
     OFF = State.OFF
 
     async def set(self, state: State, pjclass=PJClass.ONE):
-        """ Send a power control instruction to power the projector lamp on or off. """
+        """Send a power control instruction to power the projector lamp on or off."""
         state = Power.State(state)
         if state in (Power.State.COOLING, Power.State.WARMING):
-            raise ValueError('expected Power.State.ON or Power.State.OFF')
-        await self._transmit_ok('POWR', state.value, pjclass=pjclass)
+            raise ValueError("expected Power.State.ON or Power.State.OFF")
+        await self._transmit_ok("POWR", state.value, pjclass=pjclass)
 
     async def get(self, pjclass=PJClass.ONE):
-        """ Request the power status of the projector. """
-        response = await self._link.transmit('POWR', '?', pjclass=pjclass)
+        """Request the power status of the projector."""
+        response = await self._link.transmit("POWR", "?", pjclass=pjclass)
         try:
             return Power.State(response)
         except ValueError as err:
-            raise PJLinkUnexpectedResponseParameter('unexpected power state') from err
+            raise PJLinkUnexpectedResponseParameter("unexpected power state") from err
 
     async def turn_on(self):
-        """ Power the projector on. """
+        """Power the projector on."""
         await self.set(Power.State.ON)
 
     async def turn_off(self):
-        """ Power the projector off. """
+        """Power the projector off."""
         await self.set(Power.State.OFF)
 
 
 class Sources(CommandGroup):
-    """ Control and query projector input sources. """
+    """Control and query projector input sources."""
 
     class Mode(Enum):
-        """ Display input source modes (§4.3)."""
-        RGB = '1'
-        VIDEO = '2'
-        DIGITAL = '3'
-        STORAGE = '4'
-        NETWORK = '5'
-        INTERNAL = '6'
+        """Display input source modes (§4.3)."""
+
+        RGB = "1"
+        VIDEO = "2"
+        DIGITAL = "3"
+        STORAGE = "4"
+        NETWORK = "5"
+        INTERNAL = "6"
         """ Class 2 only. """
 
     async def set(self, mode, index, pjclass=PJClass.ONE):
-        """ Set the current source input selection (§4.3).
-        """
+        """Set the current source input selection (§4.3)."""
         mode, index = self._check_mode_index(mode, index)
-        return await self._transmit_ok(command='INPT', param=f'{mode.value}{index}', pjclass=pjclass)
+        return await self._transmit_ok(command="INPT", param=f"{mode.value}{index}", pjclass=pjclass)
 
     async def get(self, pjclass=PJClass.ONE):
-        """ Get the current source input selection (§4.4).
-        """
-        values = await self._link.transmit(command='INPT', param='?', pjclass=pjclass)
+        """Get the current source input selection (§4.4)."""
+        values = await self._link.transmit(command="INPT", param="?", pjclass=pjclass)
         if len(values) != 2:
-            raise PJLinkUnexpectedResponseParameter('expected 2 INPT response characters')
+            raise PJLinkUnexpectedResponseParameter("expected 2 INPT response characters")
         try:
             return Sources.Mode(values[0]), values[1]
         except ValueError as err:
-            raise PJLinkUnexpectedResponseParameter('unexpected input source mode') from err
+            raise PJLinkUnexpectedResponseParameter("unexpected input source mode") from err
 
     def _check_mode_index(self, mode, index):
-        """ Ensure a mode and index pair are valid. """
+        """Ensure a mode and index pair are valid."""
         mode = Sources.Mode(mode)
-        index = f'{index}'
+        index = f"{index}"
         if len(index) != 1:
-            raise ValueError('index must be a single character (1-9 for Class 1, and 1-9A-Z for Class 2)')
+            raise ValueError("index must be a single character (1-9 for Class 1, and 1-9A-Z for Class 2)")
         return mode, index
 
     async def available(self, pjclass=PJClass.ONE):
-        """ List all the available input sources (§4.9).
+        """List all the available input sources (§4.9).
 
         Returns:
             A list of available input sources in the format: (Sources.Mode, index str).  For example:
                 [(<Mode.RGB: '1'>, '1'), (<Mode.DIGITAL: '3'>, '1'), ...]
         """
-        response = await self._link.transmit('INST', '?', pjclass)
+        response = await self._link.transmit("INST", "?", pjclass)
         try:
-            return [(Sources.Mode(first), second) for first, second in response.split(' ')]
+            return [(Sources.Mode(first), second) for first, second in response.split(" ")]
         except ValueError as err:
-            raise PJLinkUnexpectedResponseParameter('unable to parse available sources') from err
+            raise PJLinkUnexpectedResponseParameter("unable to parse available sources") from err
 
     async def get_source_name(self, mode, index):
-        """ Get the name of a given input source (§4.17).
+        """Get the name of a given input source (§4.17).
         :param mode Sources.Mode: The input mode to select.
         :param index str: A single character.
         """
         mode, index = self._check_mode_index(mode, index)
-        return await self._link.transmit(command='INNM', param=f'?{mode.value}{index}', pjclass='2')
+        return await self._link.transmit(command="INNM", param=f"?{mode.value}{index}", pjclass=PJClass.TWO)
 
     async def available_with_names(self):
-        """ List all the available input sources with names (§4.17).
+        """List all the available input sources with names (§4.17).
         Returns:
             A list of available input sources in the format (Source.Mode, index str, name str).
             For example:
@@ -471,78 +453,77 @@ class Sources(CommandGroup):
         return output
 
     async def resolution(self):
-        """ Get the current projector resolution (§4.18)
+        """Get the current projector resolution (§4.18)
         Returns:
             (x:int, y:int) tuple: Horizontal and vertical resolutions of input signal respectively.
         """
-        response = await self._link.transmit('IRES', '?', PJClass.TWO)
-        if response == '-':
-            raise PJLinkProjectorError('no signal input')
-        if response == '*':
-            raise PJLinkProjectorError('unknown signal')
+        response = await self._link.transmit("IRES", "?", PJClass.TWO)
+        if response == "-":
+            raise PJLinkProjectorError("no signal input")
+        if response == "*":
+            raise PJLinkProjectorError("unknown signal")
 
         # Convert each axis to an integer.
         try:
-            resolution = [int(dim) for dim in re.split('x', response, flags=re.IGNORECASE)]
+            resolution = [int(dim) for dim in re.split("x", response, flags=re.IGNORECASE)]
             return tuple(resolution)
         except ValueError as err:
-            raise PJLinkUnexpectedResponseParameter('unable to parse resolution') from err
+            raise PJLinkUnexpectedResponseParameter("unable to parse resolution") from err
 
     async def recommended_resolution(self):
-        """ Get the current recommended resolution (§4.19)
+        """Get the current recommended resolution (§4.19)
         Returns:
             (x, y) tuple: Horizontal and vertical resolutions of input signal respectively.
         """
-        response = await self._link.transmit('RRES', '?', PJClass.TWO)
+        response = await self._link.transmit("RRES", "?", PJClass.TWO)
         try:
-            resolution = [int(dim) for dim in re.split('x', response, flags=re.IGNORECASE)]
+            resolution = [int(dim) for dim in re.split("x", response, flags=re.IGNORECASE)]
             return tuple(resolution)
         except ValueError as err:
-            raise PJLinkUnexpectedResponseParameter('unable to parse resolution') from err
+            raise PJLinkUnexpectedResponseParameter("unable to parse resolution") from err
 
 
 class Mute(CommandGroup):
-    """ Control audio and visual track mute status (§4.5, §4.6).
+    """Control audio and visual track mute status (§4.5, §4.6).
 
     If the mute function is individually executed or cancelled for the models
     that do not have audio or video mute functions, "ERR 2" (out of parameter range) is returned.
     """
 
     async def status(self):
-        """ Current (video, audio) track mute status returned as two booleans (§4.6).
+        """Current (video, audio) track mute status returned as two booleans (§4.6).
 
         Returns:
             tuple(video: bool, audio: bool): True if the track is muted.  False if not.
         """
-        status = await self._link.transmit('AVMT', '?', pjclass=PJClass.ONE)
-        if status == '11':
+        status = await self._link.transmit("AVMT", "?", pjclass=PJClass.ONE)
+        if status == "11":
             return True, False
-        elif status == '21':
+        if status == "21":
             return False, True
-        elif status == '31':
+        if status == "31":
             return True, True
-        elif status == '30':
+        if status == "30":
             return False, False
-        else:
-            raise PJLinkUnexpectedResponseParameter('unexpected mute response')
+        raise PJLinkUnexpectedResponseParameter("unexpected mute response")
 
     async def video(self, muted: bool):
-        """ Set if the video track should be muted (True to mute, False to unmute). """
-        cmd = '1' if muted is True else '0'
-        await self._transmit_ok('AVMT', f'1{cmd}', pjclass=PJClass.ONE)
+        """Set if the video track should be muted (True to mute, False to unmute)."""
+        cmd = "1" if muted is True else "0"
+        await self._transmit_ok("AVMT", f"1{cmd}", pjclass=PJClass.ONE)
 
     async def audio(self, muted: bool):
-        """ Set if the audio track should be muted (True to mute, False to unmute). """
-        cmd = '1' if muted is True else '0'
-        await self._transmit_ok('AVMT', f'2{cmd}', pjclass=PJClass.ONE)
+        """Set if the audio track should be muted (True to mute, False to unmute)."""
+        cmd = "1" if muted is True else "0"
+        await self._transmit_ok("AVMT", f"2{cmd}", pjclass=PJClass.ONE)
 
     async def both(self, muted: bool):
-        """ Set if the AV tracks should be muted (True to mute, False to unmute). """
-        cmd = '1' if muted is True else '0'
-        await self._transmit_ok('AVMT', f'3{cmd}', pjclass=PJClass.ONE)
+        """Set if the AV tracks should be muted (True to mute, False to unmute)."""
+        cmd = "1" if muted is True else "0"
+        await self._transmit_ok("AVMT", f"3{cmd}", pjclass=PJClass.ONE)
 
-    async def set(self, video: bool, audio: bool):
-        """ Enable or disable mute for each track (call mirrors output of `status`).
+    async def set(self, video: bool | None, audio: bool | None):
+        """Enable or disable mute for each track (call mirrors output of `status`).
         :param video (bool): True to mute. False to unmute. None to skip.
         :param audio (bool): True to mute. False to unmutes. None to skip.
         """
@@ -565,35 +546,37 @@ class Mute(CommandGroup):
 
 
 class Errors(CommandGroup):
-    """ Provide information about errors occuring within the projector (§4.7).
-    """
+    """Provide information about errors occuring within the projector (§4.7)."""
+
     class Category(Enum):
-        """ The different types of error returned according to (§4.7). """
-        FAN = 'fan'
-        LAMP = 'lamp'
-        TEMP = 'temperature'
-        COVER = 'cover'
-        FILTER = 'filter'
-        OTHER = 'other'
+        """The different types of error returned according to (§4.7)."""
+
+        FAN = "fan"
+        LAMP = "lamp"
+        TEMP = "temperature"
+        COVER = "cover"
+        FILTER = "filter"
+        OTHER = "other"
 
     class Level(Enum):
-        """ Error level for each `Category` (§4.7). """
-        OK = '0'
-        WARN = '1'
-        ERROR = '2'
+        """Error level for each `Category` (§4.7)."""
+
+        OK = "0"
+        WARN = "1"
+        ERROR = "2"
 
     async def query(self):
-        """ Query the projecteor for the latest error status
+        """Query the projecteor for the latest error status
         information for each of the error categories (§4.7).
 
         Returns:
             dict[Category]: Level: Table of error categories to states.
         """
-        errors = await self._link.transmit('ERST', '?', pjclass=PJClass.ONE)
+        errors = await self._link.transmit("ERST", "?", pjclass=PJClass.ONE)
         try:
             fan, lamp, temp, cover, filt, other = errors
         except ValueError as err:
-            raise PJLinkUnexpectedResponseParameter('unexpected number of error types reported') from err
+            raise PJLinkUnexpectedResponseParameter("unexpected number of error types reported") from err
         try:
             return {
                 Errors.Category.FAN: Errors.Level(fan),
@@ -604,21 +587,22 @@ class Errors(CommandGroup):
                 Errors.Category.OTHER: Errors.Level(other),
             }
         except ValueError as err:
-            raise PJLinkUnexpectedResponseParameter('unknown error level') from err
+            raise PJLinkUnexpectedResponseParameter("unknown error level") from err
 
 
 class Lamp(CommandGroup):
-    """ Status information about the projector light sources (§4.8).
+    """Status information about the projector light sources (§4.8).
 
-        According to the spec the "usage time of lamp is always 0 when it is
-        not counted by the projector."
+    According to the spec the "usage time of lamp is always 0 when it is
+    not counted by the projector."
     """
+
     class State(Enum):
-        OFF = '0'
-        ON = '1'
+        OFF = "0"
+        ON = "1"
 
     async def status(self):
-        """ Query the current lamp hours and lamp statuses.
+        """Query the current lamp hours and lamp statuses.
         There may be more than one lamp in some projectors, so this is returned
         as a list.
         Returns:
@@ -626,9 +610,9 @@ class Lamp(CommandGroup):
         """
         # Express a special meaning for ERR1 (§4.8).
         try:
-            response = await self._link.transmit('LAMP', '?', pjclass=PJClass.ONE)
+            response = await self._link.transmit("LAMP", "?", pjclass=PJClass.ONE)
         except PJLinkERR1 as err:
-            raise PJLinkERR1('no lamp') from err
+            raise PJLinkERR1("no lamp") from err
 
         # Split the response by " " and then pair up all the numbers from
         # the list in groups of 2.  If there are any remainders, raise an error.
@@ -639,9 +623,9 @@ class Lamp(CommandGroup):
         try:
             # Python 3.9 solution.
             pairs = []
-            numbers = response.split(' ')
+            numbers = response.split(" ")
             for i in range(0, len(numbers), 2):
-                pairs.append(numbers[i:i + 2])
+                pairs.append(numbers[i : i + 2])
 
             # Python 3.10 solution.
             # pairs = zip(*[iter(response.split(' '))] * 2, strict=True)
@@ -650,10 +634,10 @@ class Lamp(CommandGroup):
             # Remap the statuses to integers and our lamp state enum.
             return [(int(hours), Lamp.State(state)) for hours, state in pairs]
         except ValueError as err:
-            raise PJLinkUnexpectedResponseParameter('unparsable lamp status') from err
+            raise PJLinkUnexpectedResponseParameter("unparsable lamp status") from err
 
     async def hours(self):
-        """ How long has the first lamp been on (hour, integer).
+        """How long has the first lamp been on (hour, integer).
 
         According to the spec (§4.8) the "usage time of lamp is always 0 when it is
         not counted by the projector."
@@ -661,63 +645,60 @@ class Lamp(CommandGroup):
         return (await self.status())[0][0]
 
     async def replacement_models(self):
-        """ Get the lamp replacement models listed in the projector.
+        """Get the lamp replacement models listed in the projector.
         There may be more than one model number, so they are returned in a list.
         """
-        models = await self._link.transmit('RLMP', '?', pjclass=PJClass.TWO)
-        return [m for m in models.split(' ') if m]
+        models = await self._link.transmit("RLMP", "?", pjclass=PJClass.TWO)
+        return [m for m in models.split(" ") if m]
 
 
 class Filter(CommandGroup):
-    """ Status information about the projector filters (§4.20, §4.22).
-    """
+    """Status information about the projector filters (§4.20, §4.22)."""
 
     async def hours(self):
-        """ Query the filter usage time (§4.20).
+        """Query the filter usage time (§4.20).
         Filter usage time is always 0 when it is not counted by the projector.
         """
         # Request the value.
         try:
-            return int(await self._link.transmit('FILT', '?', pjclass=PJClass.TWO))
+            return int(await self._link.transmit("FILT", "?", pjclass=PJClass.TWO))
 
         # Express a special meaning for ERR1 (§4.20).
         except PJLinkERR1 as err:
-            raise PJLinkERR1('no filter') from err
+            raise PJLinkERR1("no filter") from err
 
         # Parse issue.
         except ValueError as err:
-            raise PJLinkUnexpectedResponseParameter('filter usage not parsable') from err
+            raise PJLinkUnexpectedResponseParameter("filter usage not parsable") from err
 
     async def replacement_models(self):
-        """ Get the filter replacement models listed in the projector (§4.22).
+        """Get the filter replacement models listed in the projector (§4.22).
         There may be more than one model number, so they are returned in a list.
         """
-        models = await self._link.transmit('RFIL', '?', pjclass=PJClass.TWO)
-        return [m for m in models.split(' ') if m]
+        models = await self._link.transmit("RFIL", "?", pjclass=PJClass.TWO)
+        return [m for m in models.split(" ") if m]
 
 
 class Freeze(CommandGroup):
-    """ Controls freezing and unfreezing the current frame (§4.25, §4.26).
-    """
+    """Controls freezing and unfreezing the current frame (§4.25, §4.26)."""
 
     async def set(self, freeze: bool):
-        """ Freeze or unfreeze the screen (§4.25). """
-        cmd = '1' if bool(freeze) else '0'
-        await self._transmit_ok('FREZ', cmd, pjclass=PJClass.TWO)
+        """Freeze or unfreeze the screen (§4.25)."""
+        cmd = "1" if bool(freeze) else "0"
+        await self._transmit_ok("FREZ", cmd, pjclass=PJClass.TWO)
 
     async def get(self):
-        """ Returns True if the screen is currently frozen, and False if not §4.26. """
-        response = await self._link.transmit('FREZ', '?', pjclass=PJClass.TWO)
-        if response == '0':
+        """Returns True if the screen is currently frozen, and False if not §4.26."""
+        response = await self._link.transmit("FREZ", "?", pjclass=PJClass.TWO)
+        if response == "0":
             return False
-        elif response == '1':
+        if response == "1":
             return True
-        else:
-            raise PJLinkUnexpectedResponseParameter('unexpected freeze state')
+        raise PJLinkUnexpectedResponseParameter("unexpected freeze state")
 
 
 class Volume(CommandGroup):
-    """ Controls a xVOL style command (e.g. for speakers and microphones) as
+    """Controls a xVOL style command (e.g. for speakers and microphones) as
     defined in (§4.23, §4.24).
 
     According to the spec:
@@ -738,20 +719,19 @@ class Volume(CommandGroup):
         self.instruction = instruction
 
     async def turn_up(self):
-        """ Increase the volume by one unit. """
-        await self._transmit_ok(self.instruction, '1', pjclass=PJClass.TWO)
+        """Increase the volume by one unit."""
+        await self._transmit_ok(self.instruction, "1", pjclass=PJClass.TWO)
 
     async def turn_down(self):
-        """ Decrease the volume by one unit. """
-        await self._transmit_ok(self.instruction, '0', pjclass=PJClass.TWO)
+        """Decrease the volume by one unit."""
+        await self._transmit_ok(self.instruction, "0", pjclass=PJClass.TWO)
 
 
 class Information(CommandGroup):
-    """ Gathers information about the projector.
-    """
+    """Gathers information about the projector."""
 
     async def table(self):
-        """ Collect a table of all the different information available
+        """Collect a table of all the different information available
         from this projector.  If the projector responds, an empty string is
         returned, but if it throws an error, `None` is returned.
 
@@ -777,56 +757,56 @@ class Information(CommandGroup):
         }
 
     async def software_version(self):
-        """ Request software version of the projector (§4.16).
+        """Request software version of the projector (§4.16).
         The version information of the software defined by the manufacturer is indicated.
         Version information can be expressed in any way.
 
         Returns:
             str: The version string.
         """
-        return await self._link.transmit('SVER', '?', PJClass.TWO)
+        return await self._link.transmit("SVER", "?", PJClass.TWO)
 
     async def serial_number(self):
-        """ Request the projector serial number (§4.15).
+        """Request the projector serial number (§4.15).
         The serial number information defined by the manufacturer is indicated.
 
         Returns:
             str: The serial number string.
         """
-        return await self._link.transmit('SNUM', '?', PJClass.TWO)
+        return await self._link.transmit("SNUM", "?", PJClass.TWO)
 
     async def pjlink_class(self, pjclass=PJClass.ONE):
-        """ Get projectors PJLink class number as a `PJClass` enumeration (§4.14) """
+        """Get projectors PJLink class number as a `PJClass` enumeration (§4.14)"""
         try:
-            return PJClass(await self._link.transmit('CLSS', '?', pjclass=pjclass))
+            return PJClass(await self._link.transmit("CLSS", "?", pjclass=pjclass))
         except ValueError as err:
-            raise PJLinkUnexpectedResponseParameter('unexpected PJLink class') from err
+            raise PJLinkUnexpectedResponseParameter("unexpected PJLink class") from err
 
     async def other(self):
-        """ Query the projector for other information about the projector/display
+        """Query the projector for other information about the projector/display
         described by the manufacture. Defined as in (§4.13).
 
         If there is no other information, this returns an empty string.
         """
-        return await self._link.transmit('INFO', '?', PJClass.ONE)
+        return await self._link.transmit("INFO", "?", PJClass.ONE)
 
     async def product_name(self):
-        """ Get product name information string (e.g. EPSON PU1007B/PU1007W) as in (§4.12).
+        """Get product name information string (e.g. EPSON PU1007B/PU1007W) as in (§4.12).
 
         If there is no information, this returns an empty string.
         """
-        return await self._link.transmit('INF2', '?', PJClass.ONE)
+        return await self._link.transmit("INF2", "?", PJClass.ONE)
 
     async def manufacturer_name(self):
-        """ Get manufacturer name information string (e.g. EPSON) as in (§4.11).
+        """Get manufacturer name information string (e.g. EPSON) as in (§4.11).
 
         If there is no information, this returns an empty string.
         """
-        return await self._link.transmit('INF1', '?', PJClass.ONE)
+        return await self._link.transmit("INF1", "?", PJClass.ONE)
 
     async def projector_name(self):
-        """ Get projector name information string (e.g. EBB13648) as in (§4.10).
+        """Get projector name information string (e.g. EBB13648) as in (§4.10).
 
         If there is no information, this returns an empty string.
         """
-        return await self._link.transmit('NAME', '?', PJClass.ONE)
+        return await self._link.transmit("NAME", "?", PJClass.ONE)
