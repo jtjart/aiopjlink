@@ -1,0 +1,8 @@
+# Enforce LF for all text files globally
+* text=auto eol=lf
+
+# Explicitly mark binaries so Git does not modify them
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
