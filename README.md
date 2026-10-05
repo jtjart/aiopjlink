@@ -2,7 +2,7 @@
 
 # aiopjlink2
 
-A modern Python asyncio PJLink library (Class I and Class II).
+A modern Python asyncio PJLink library (Class 1 and Class 2).
 This is a fork from HEInventions/aiopjlink and Kwull/aiopjlink.
 
 [![PyPI](https://img.shields.io/pypi/v/aiopjlink2?logo=python&logoColor=%23cccccc)](https://pypi.org/project/aiopjlink2)
@@ -16,73 +16,91 @@ This is a fork from HEInventions/aiopjlink and Kwull/aiopjlink.
 
 ## What is PJLink?
 
-Most projectors that have RJ45 ports on the back can be controlled via [PJLink](https://pjlink.jbmia.or.jp/english/).
+Many projectors with an RJ45 connection can be controlled using [PJLink](https://pjlink.jbmia.or.jp/english/).
 
-PJLink is a communication protocol and unified standard for operating and controlling data projectors via `TCP/IP`, regardless of manufacturer.
+PJLink is a communication protocol and unified standard for operating and controlling data projectors over `TCP/IP`, regardless of manufacturer.
 
-PJLink consists of [Class 1](https://pjlink.jbmia.or.jp/english/data/5-1_PJLink_eng_20131210.pdf) commands and queries, as well as [Class 2](https://pjlink.jbmia.or.jp/english/data_cl2/PJLink_5-1.pdf) notifications and extensions.
+It supports both [Class 1](https://pjlink.jbmia.or.jp/english/data/5-1_PJLink_eng_20131210.pdf) commands and [Class 2](https://pjlink.jbmia.or.jp/english/data_cl2/PJLink_5-1.pdf) notifications and extensions.
 
-* Class 1 is the most common type of PJLink, and is used for basic commands such as power on/off, input selection, and adjusting volume.
-* Class 2 is an extended version of the protocol that supports additional commands such as opening and closing the projector's lens cover, and is typically used by more sophisticated devices.
+* Class 1 covers basic commands such as power on/off, input selection, and volume control.
+* Class 2 adds extended functionality such as lens control and projector-specific notifications.
 
-## What is aiopjlink?
+## What is aiopjlink2?
 
-A Python library that uses [asyncio](https://docs.python.org/3/library/asyncio.html) to talk to one or more projectors connected to a network using the PJLink protocol.
+`aiopjlink2` is a typed, asyncio-based Python library for controlling PJLink-compatible projectors.
 
-The main difference from the HEInventions/aiopjlink implementation is that in aiopjlink-kw, each PJLink command is executed over a new TCP/IP connection, including authentication if required. This approach was taken due to the specific PJLink implementation used by AWOL projectors.
-The additional changes made by aiopjlink2 is the exclusion of the test folder from the package that is published to PyPI. Additionally the context manager has been removed from PJLink because it brings no benefit anymore now, that each command is executed over a new connection.
+The library keeps the ergonomic API of the earlier forks while modernizing the project around the current Python tooling ecosystem:
 
-It has these advantages:
+* ✅ Modern asyncio API with high-level command groups
+* ✅ Fully typed public API (`py.typed` package)
+* ✅ Pure Python implementation with no runtime dependency beyond the PJLink transport stack
+* ✅ Cross-platform CI for Python 3.11–3.13
+* ✅ Development container and `uv`-based tooling
+* ✅ One connection per command, with no connection manager to keep around
 
-* ✅ Clean modern asyncio API
-* ✅ High level API abstraction (eg. `lamp.hours`)
-* ✅ Pure Python 3 implementation (no dependencies)
-* ✅ Full suite of test cases
-* ❌ Context managers for keeping track of connections and resources
-* ✅ High quality error handling
+## Installation
 
+```bash
+pip install aiopjlink2
+```
 
 ## Usage
 
-Each command sent to a projector is creating a new connection. The projector can be initialized with a `PJLink` instance. Once this is created, you access the different functions through a high level API (e.g. `conn.power.turn_off()`, `conn.lamps.hours()`, `conn.errors.query()`, etc).
-
-For example, create a `PJLink` instance of the projector and issue commands:
+Each PJLink command opens a short-lived TCP connection, sends the request, and closes the socket again. You create one `PJLink` instance and then call the high-level API on it.
 
 ```python
-link = PJLink(address="192.168.1.120", password="secretpassword")
+import asyncio
 
-# Turn on the projector.
-await link.power.turn_on()
+from aiopjlink import PJLink
 
-# Wait a few seconds, then print out all the error information.
-await asyncio.sleep(5)
-print("errors = ", await link.errors.query())
 
-# Then wait a few seconds, then turn the projector off.
-await asyncio.sleep(5)
-await link.power.turn_off()
+async def main() -> None:
+    link = PJLink(address="192.168.1.120", password="secret")
+
+    await link.power.turn_on()
+    await asyncio.sleep(5)
+    print("errors =", await link.errors.query())
+    await asyncio.sleep(5)
+    await link.power.turn_off()
+
+
+asyncio.run(main())
 ```
+
+The library exposes command groups such as `power`, `sources`, `mute`, `lamps`, `errors`, and `info` on the `PJLink` object.
 
 ## Development
 
-We use the [PDM package manager](https://pdm.fming.dev/latest/).
+The project uses [uv](https://docs.astral.sh/uv/) for dependency management and development tasks, with Hatchling for packaging and Ruff, Mypy, and Pyright for quality checks.
 
 ```bash
-pdm install --dev  # install all deps required to run and test the code
+uv sync --group dev
 
-pdm run lint  # check code quality
-pdm run test  # check all test cases run OK
-
-pdm publish  # Publish the project to PyPI
+uv run pytest
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy src
+uv run pyright
 ```
 
-Other notes:
-* There are more "pdm scripts" in the `.toml` file.
-* Set the env variable `AIOPJLINK_PRINT_DEBUG_COMMS` to print debug comms to the console.
+The repository also includes a [dev container](.devcontainer/devcontainer.json) configured for Python 3.13 and the `uv` toolchain, along with recommended VS Code extensions for Python, Pylance, Ruff, and TOML support.
+
+Set the environment variable `AIOPJLINK_PRINT_DEBUG_COMMS` to print PJLink traffic to the console for debugging.
+
+## Project automation
+
+This repository includes GitHub Actions workflows for:
+
+* linting and static analysis
+* tests on Linux, macOS, and Windows
+* Python 3.11, 3.12, and 3.13 coverage
+* build verification and PyPI release publishing
+
+The package is published from the `src` layout and is versioned via git metadata.
 
 ## Roadmap
 
 Pull requests with test cases are welcome. There are still some things to finish, including:
 
 * [ ] Search Protocol (§3.2)
-* [ ] Status Notification Prototol (§3.3)
+* [ ] Status Notification Protocol (§3.3)
