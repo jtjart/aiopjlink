@@ -2,5 +2,6 @@
 
 from .base import CommandGroup
 from .power import Power
+from .sources import Sources
 
-__all__ = ["CommandGroup", "Power"]
+__all__ = ["CommandGroup", "Power", "Sources"]

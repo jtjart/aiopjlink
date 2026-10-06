@@ -6,6 +6,7 @@ from ._version import __version__
 from .commands import (
     CommandGroup,
     Power,
+    Sources,
 )
 from .enums import PJClass
 from .exceptions import (
@@ -29,7 +30,6 @@ from .projector import (
     Lamp,
     Mute,
     PJLink,
-    Sources,
     Volume,
 )
 
