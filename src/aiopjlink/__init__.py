@@ -6,6 +6,7 @@ from ._version import __version__
 from .commands import (
     CommandGroup,
     Errors,
+    Lamp,
     Mute,
     Power,
     Sources,
@@ -28,7 +29,6 @@ from .projector import (
     Filter,
     Freeze,
     Information,
-    Lamp,
     PJLink,
     Volume,
 )
