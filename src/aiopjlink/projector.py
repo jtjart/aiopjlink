@@ -15,27 +15,23 @@ See `aiopjlink.exceptions`: everything raised here is a subclass of `PJLinkExcep
 
 import asyncio
 import hashlib
-import os
 import re
 from collections.abc import Awaitable, Callable
 from enum import Enum
 
+from ._debug import PRINT_DEBUG_COMMS
+from ._protocol import format_command, parse_response
 from .enums import PJClass
 from .exceptions import (
     PJLinkConnectionClosed,
     PJLinkERR1,
     PJLinkERR2,
-    PJLinkERR3,
-    PJLinkERR4,
     PJLinkNoConnection,
     PJLinkPassword,
     PJLinkProjectorError,
     PJLinkProtocolError,
     PJLinkUnexpectedResponseParameter,
 )
-
-""" Print out messages that are sent and recieved for debugging. """
-PRINT_DEBUG_COMMS = bool(os.environ.get("AIOPJLINK_PRINT_DEBUG_COMMS", False))
 
 
 class PJLink:
@@ -123,7 +119,7 @@ class PJLink:
         """
 
         # Reject malformed commands before touching the network.
-        cstring = self._format_command(command, param, pjclass)
+        cstring = format_command(command, param, pjclass)
 
         async with self._lock:
             return await self._transmit(command, cstring, pjclass)
@@ -205,7 +201,7 @@ class PJLink:
                 raise PJLinkPassword("authentication failed")
 
             # 5. Parse response
-            _, param = PJLink._parse_response(response, expect_command=command, expect_pjclass=pjclass)
+            _, param = parse_response(response, expect_command=command, expect_pjclass=pjclass)
             return param
 
         finally:
@@ -216,62 +212,6 @@ class PJLink:
                 except Exception:
                     # Best effort: the command has already succeeded or failed by now.
                     pass
-
-    @staticmethod
-    def _format_command(command: str, param: str, pjclass: PJClass) -> str:
-        pjclass = PJClass(pjclass)
-        if not command.isupper():
-            raise PJLinkProtocolError("command is not uppercase")
-        if len(command) != 4:
-            raise PJLinkProtocolError("command is not 4 bytes")
-        if len(param) > 128:
-            raise PJLinkProtocolError("command param is larger than 128 bytes")
-        sep = " "
-        return f"%{pjclass.value}{command}{sep}{param}\r"
-
-    @staticmethod
-    def _parse_response(
-        data: str, expect_command: str | None = None, expect_pjclass: PJClass = PJClass.ONE
-    ) -> tuple[str, str]:
-        # NOTE: Postels robustness principle - be conservative in what you do, be liberal in what you accept from others
-        if PRINT_DEBUG_COMMS:
-            print("➡️ ", data)
-        expect_pjclass = PJClass(expect_pjclass)
-
-        # Shortest valid response: header, class, 4 command characters, separator, CR (e.g. `%1INF2=\r`).
-        if len(data) < 8:
-            raise PJLinkProtocolError("unexpected response - too short")
-
-        # Check header and class version.
-        header, version = data[0], data[1]
-        if header != "%":
-            raise PJLinkProtocolError("unexpected response header")
-        if version != expect_pjclass.value:
-            raise PJLinkProtocolError("unexpected response protocol class")
-
-        # Grab the command body, separator, and param.
-        command = f"{data[2:6]}".upper()
-        sep = data[6]
-        param = data[7:-1]
-
-        # Check them for correctness.
-        if sep != "=":
-            raise PJLinkProtocolError("unexpected response separator")
-        if expect_command is not None and command != expect_command:
-            raise PJLinkProtocolError("unexpected response command")
-
-        # Handle for protocol and projector errors.
-        param_u = param.upper()
-        if param_u == "ERR1":
-            raise PJLinkERR1("unsupported command")
-        if param_u == "ERR2":
-            raise PJLinkERR2("out of parameter")
-        if param_u == "ERR3":
-            raise PJLinkERR3("unavailable in the current state")
-        if param_u == "ERR4":
-            raise PJLinkERR4("projector or display failure")
-
-        return command, param
 
 
 class CommandGroup:
