@@ -7,9 +7,7 @@ Information queries (§4.10 NAME ?, §4.11 INF1 ?, §4.12 INF2 ?, §4.13 INFO ?,
 from collections.abc import Awaitable, Callable
 
 from ..enums import PJClass
-from ..exceptions import (
-    PJLinkUnexpectedResponseParameter,
-)
+from ..exceptions import PJLinkUnexpectedResponseParameter
 from .base import CommandGroup
 
 

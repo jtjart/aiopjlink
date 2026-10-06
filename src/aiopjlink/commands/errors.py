@@ -6,9 +6,7 @@ Error status (§4.7 ERST ?).
 from enum import Enum
 
 from ..enums import PJClass
-from ..exceptions import (
-    PJLinkUnexpectedResponseParameter,
-)
+from ..exceptions import PJLinkUnexpectedResponseParameter
 from .base import CommandGroup
 
 

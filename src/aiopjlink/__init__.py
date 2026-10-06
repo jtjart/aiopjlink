@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ._version import __version__
+from .client import PJLink
 from .commands import (
     CommandGroup,
     Errors,
@@ -28,9 +29,6 @@ from .exceptions import (
     PJLinkProjectorError,
     PJLinkProtocolError,
     PJLinkUnexpectedResponseParameter,
-)
-from .projector import (
-    PJLink,
 )
 
 __all__ = [

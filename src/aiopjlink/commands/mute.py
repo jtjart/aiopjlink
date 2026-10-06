@@ -4,9 +4,7 @@ Audio and video mute (§4.5 AVMT, §4.6 AVMT ?).
 """
 
 from ..enums import PJClass
-from ..exceptions import (
-    PJLinkUnexpectedResponseParameter,
-)
+from ..exceptions import PJLinkUnexpectedResponseParameter
 from .base import CommandGroup
 
 

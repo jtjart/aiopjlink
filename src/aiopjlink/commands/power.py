@@ -6,9 +6,7 @@ Control and query the projector's power state (§4.1 POWR, §4.2 POWR ?).
 from enum import Enum
 
 from ..enums import PJClass
-from ..exceptions import (
-    PJLinkUnexpectedResponseParameter,
-)
+from ..exceptions import PJLinkUnexpectedResponseParameter
 from .base import CommandGroup
 
 

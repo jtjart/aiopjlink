@@ -1,9 +1,9 @@
-"""projector.py
+"""client.py
 
 The `PJLink` class is a connection to a projector using the PJLink protocol.
 
-To provide a "pythonic" API for the different PJLink commands, the
-class `CommandGroup` is overriden and groups together related commands.
+To provide a "pythonic" API for the different PJLink commands, the groups of
+related commands in `aiopjlink.commands` build on `CommandGroup`.
 
 No state is kept inside the classes (apart from the lock that serialises
 the commands sent through one `PJLink` object).
@@ -16,15 +16,7 @@ See `aiopjlink.exceptions`: everything raised here is a subclass of `PJLinkExcep
 import asyncio
 
 from ._transport import Transport
-from .commands.errors import Errors
-from .commands.filter import Filter
-from .commands.freeze import Freeze
-from .commands.information import Information
-from .commands.lamp import Lamp
-from .commands.mute import Mute
-from .commands.power import Power
-from .commands.sources import Sources
-from .commands.volume import Volume
+from .commands import Errors, Filter, Freeze, Information, Lamp, Mute, Power, Sources, Volume
 from .enums import PJClass
 
 
