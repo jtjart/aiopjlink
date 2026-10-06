@@ -14,11 +14,11 @@ See `aiopjlink.exceptions`: everything raised here is a subclass of `PJLinkExcep
 """
 
 import asyncio
-import hashlib
 import re
 from collections.abc import Awaitable, Callable
 from enum import Enum
 
+from ._auth import build_request
 from ._debug import PRINT_DEBUG_COMMS
 from ._protocol import format_command, parse_response
 from .enums import PJClass
@@ -154,33 +154,8 @@ class PJLink:
                     print("➡️ ", data)
             except TimeoutError as err:
                 raise PJLinkProtocolError("projector did not send a welcome message") from err
-            if len(data) < 9:
-                raise PJLinkProtocolError("unexpected opening header message from projector - too short")
-
-            auth_header, auth_enabled, auth_close = data[:7], data[7], data[8]
-            if auth_header.upper() != "PJLINK ":
-                raise PJLinkProtocolError("unexpected opening header message from projector - not PJLink")
-
             # 3. Authenticate if needed and send command
-            if auth_enabled == "0":
-                # No authentication required
-                cbytes = bytearray(cstring, self._encoding)
-            else:
-                # Connection requires auth: `PJLINK 1 <token>`.
-                if auth_enabled != "1" or auth_close != " ":
-                    raise PJLinkProtocolError(
-                        "unexpected opening security message from projector - unrecognised auth method"
-                    )
-
-                # Check we have a password specified.
-                if self._password is None:
-                    raise PJLinkPassword("password required")
-
-                # Read the random number used to salt the password (excluding the terminating `\r`).
-                token = data[9:-1]
-                passcode = (token + self._password).encode("utf-8")
-                passcode_md5 = hashlib.md5(passcode).hexdigest()
-                cbytes = bytearray(passcode_md5, self._encoding) + bytearray(cstring, self._encoding)
+            cbytes = build_request(data, cstring, self._password, self._encoding)
 
             if PRINT_DEBUG_COMMS:
                 print("🚢", cbytes)
