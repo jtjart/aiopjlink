@@ -4,7 +4,7 @@ import hashlib
 import platform
 import unittest
 
-import aiopjlink.projector as aiopjlink
+import aiopjlink
 
 # Allow the loop to close cleanly on Windows.
 if platform.system() == "Windows":
