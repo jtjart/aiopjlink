@@ -5,6 +5,7 @@ from __future__ import annotations
 from ._version import __version__
 from .commands import (
     CommandGroup,
+    Errors,
     Mute,
     Power,
     Sources,
@@ -24,7 +25,6 @@ from .exceptions import (
     PJLinkUnexpectedResponseParameter,
 )
 from .projector import (
-    Errors,
     Filter,
     Freeze,
     Information,
