@@ -20,6 +20,7 @@ import re
 from collections.abc import Awaitable, Callable
 from enum import Enum
 
+from .enums import PJClass
 from .exceptions import (
     PJLinkConnectionClosed,
     PJLinkERR1,
@@ -35,23 +36,6 @@ from .exceptions import (
 
 """ Print out messages that are sent and recieved for debugging. """
 PRINT_DEBUG_COMMS = bool(os.environ.get("AIOPJLINK_PRINT_DEBUG_COMMS", False))
-
-
-class PJClass(Enum):
-    """Communication protocol message version.
-
-    Class 1 is the most common type of PJLink, and is used for basic commands such as
-    power on/off, input selection, and adjusting volume.
-
-    Class 2 is an extended version of the protocol that supports additional commands such
-    as opening and closing the projector's lens cover, and is typically used by more sophisticated devices.
-    """
-
-    ONE = "1"
-    """ PJLink Class 1 command. """
-
-    TWO = "2"
-    """ PJLink Class 2 command. """
 
 
 class PJLink:
