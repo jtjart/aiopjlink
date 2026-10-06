@@ -69,6 +69,34 @@ asyncio.run(main())
 
 The library exposes command groups such as `power`, `sources`, `mute`, `lamps`, `errors`, and `info` on the `PJLink` object.
 
+## Project layout
+
+```
+src/aiopjlink/
+├── __init__.py       public API (everything in __all__)
+├── client.py         PJLink: the entry point, wires the command groups onto a Transport
+├── _transport.py     Transport: connection, lock, transmit()
+├── exceptions.py     PJLinkException and its subclasses
+├── enums.py          PJClass
+├── _protocol.py      command / response line format (spec §2)
+├── _auth.py          opening handshake and password hashing (spec §5)
+├── _debug.py         AIOPJLINK_PRINT_DEBUG_COMMS switch
+├── projector.py      backwards-compatible re-exports of the old module
+└── commands/         one module per feature, spec chapter 4
+    ├── base.py       CommandGroup
+    ├── power.py      §4.1, §4.2
+    ├── sources.py    §4.3, §4.4, §4.9, §4.17 - §4.19
+    ├── mute.py       §4.5, §4.6
+    ├── errors.py     §4.7
+    ├── lamp.py       §4.8, §4.21
+    ├── filter.py     §4.20, §4.22
+    ├── freeze.py     §4.25, §4.26
+    ├── volume.py     §4.23, §4.24
+    └── information.py  §4.10 - §4.16
+```
+
+Modules are grouped by feature, not by spec chapter, so related commands (for example `LAMP` and `RLMP`) live together. Each module docstring lists the spec sections it implements. Modules starting with an underscore are internal; only the names exported from `aiopjlink` are public API.
+
 ## Development
 
 The project uses [uv](https://docs.astral.sh/uv/) for dependency management and development tasks, with Hatchling for packaging and Ruff, Mypy, and Pyright for quality checks.
