@@ -4,9 +4,7 @@ Freeze the picture (§4.25 FREZ, §4.26 FREZ ?).
 """
 
 from ..enums import PJClass
-from ..exceptions import (
-    PJLinkUnexpectedResponseParameter,
-)
+from ..exceptions import PJLinkUnexpectedResponseParameter
 from .base import CommandGroup
 
 
