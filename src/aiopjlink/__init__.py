@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ._version import __version__
+from .enums import PJClass
 from .exceptions import (
     PJLinkConnectionClosed,
     PJLinkERR1,
@@ -24,7 +25,6 @@ from .projector import (
     Information,
     Lamp,
     Mute,
-    PJClass,
     PJLink,
     Power,
     Sources,
