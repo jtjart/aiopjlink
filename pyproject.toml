@@ -59,6 +59,7 @@ dev = [
 [tool.ruff]
 line-length = 120
 target-version = "py311"
+src = ["src", "test"]
 
 [tool.ruff.lint]
 select = [
@@ -125,7 +126,7 @@ reportMissingImports = "error"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-pythonpath = ["src"]
+pythonpath = ["src", "test"]
 testpaths = ["test"]
 
 
