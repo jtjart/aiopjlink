@@ -5,6 +5,7 @@ from __future__ import annotations
 from ._version import __version__
 from .commands import (
     CommandGroup,
+    Mute,
     Power,
     Sources,
 )
@@ -28,7 +29,6 @@ from .projector import (
     Freeze,
     Information,
     Lamp,
-    Mute,
     PJLink,
     Volume,
 )
