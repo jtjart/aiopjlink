@@ -3,16 +3,7 @@
 from __future__ import annotations
 
 from ._version import __version__
-from .projector import (
-    CommandGroup,
-    Errors,
-    Filter,
-    Freeze,
-    Information,
-    Lamp,
-    Mute,
-    PJClass,
-    PJLink,
+from .exceptions import (
     PJLinkConnectionClosed,
     PJLinkERR1,
     PJLinkERR2,
@@ -24,6 +15,17 @@ from .projector import (
     PJLinkProjectorError,
     PJLinkProtocolError,
     PJLinkUnexpectedResponseParameter,
+)
+from .projector import (
+    CommandGroup,
+    Errors,
+    Filter,
+    Freeze,
+    Information,
+    Lamp,
+    Mute,
+    PJClass,
+    PJLink,
     Power,
     Sources,
     Volume,
