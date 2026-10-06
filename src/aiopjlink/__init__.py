@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from ._version import __version__
-from .commands import CommandGroup
+from .commands import (
+    CommandGroup,
+    Power,
+)
 from .enums import PJClass
 from .exceptions import (
     PJLinkConnectionClosed,
@@ -26,7 +29,6 @@ from .projector import (
     Lamp,
     Mute,
     PJLink,
-    Power,
     Sources,
     Volume,
 )
