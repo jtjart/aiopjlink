@@ -12,6 +12,7 @@ from .commands import (
     Mute,
     Power,
     Sources,
+    Volume,
 )
 from .enums import PJClass
 from .exceptions import (
@@ -30,7 +31,6 @@ from .exceptions import (
 from .projector import (
     Information,
     PJLink,
-    Volume,
 )
 
 __all__ = [
