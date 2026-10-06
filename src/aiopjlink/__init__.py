@@ -6,6 +6,7 @@ from ._version import __version__
 from .commands import (
     CommandGroup,
     Errors,
+    Filter,
     Lamp,
     Mute,
     Power,
@@ -26,7 +27,6 @@ from .exceptions import (
     PJLinkUnexpectedResponseParameter,
 )
 from .projector import (
-    Filter,
     Freeze,
     Information,
     PJLink,
