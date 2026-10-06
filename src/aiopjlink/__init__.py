@@ -8,6 +8,7 @@ from .commands import (
     Errors,
     Filter,
     Freeze,
+    Information,
     Lamp,
     Mute,
     Power,
@@ -29,7 +30,6 @@ from .exceptions import (
     PJLinkUnexpectedResponseParameter,
 )
 from .projector import (
-    Information,
     PJLink,
 )
 
