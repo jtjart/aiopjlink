@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ._version import __version__
+from .commands import CommandGroup
 from .enums import PJClass
 from .exceptions import (
     PJLinkConnectionClosed,
@@ -18,7 +19,6 @@ from .exceptions import (
     PJLinkUnexpectedResponseParameter,
 )
 from .projector import (
-    CommandGroup,
     Errors,
     Filter,
     Freeze,
