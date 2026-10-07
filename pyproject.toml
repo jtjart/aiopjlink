@@ -23,7 +23,7 @@ classifiers = [
     "Framework :: AsyncIO",
     "Typing :: Typed",
 ]
-dependencies = ["pyserial-asyncio-fast>=0.14"]
+dependencies = []
 
 [project.urls]
 Repository = "https://github.com/jtjart/aiopjlink"

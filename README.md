@@ -33,7 +33,6 @@ The library keeps the ergonomic API of the earlier forks while modernizing the p
 
 * ✅ Modern asyncio API with high-level command groups
 * ✅ Fully typed public API (`py.typed` package)
-* ✅ Pure Python implementation with no runtime dependency beyond the PJLink transport stack
 * ✅ Cross-platform CI for Python 3.11–3.13
 * ✅ Development container and `uv`-based tooling
 * ✅ One connection per command, with no connection manager to keep around
