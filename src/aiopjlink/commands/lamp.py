@@ -26,10 +26,11 @@ class Lamp(CommandGroup):
 
     async def status(self) -> list[tuple[int, State]]:
         """Query the current lamp hours and lamp statuses.
-        There may be more than one lamp in some projectors, so this is returned
-        as a list.
+
+        There may be more than one lamp in some projectors, so this is returned as a list.
+
         Returns:
-            [(hours:int, state:Lamp.State)]: List of lamp hours and states for each lamp.
+            A list of ``(hours, state)`` tuples for each lamp.
         """
         # Express a special meaning for ERR1 (§4.8).
         try:
@@ -37,24 +38,11 @@ class Lamp(CommandGroup):
         except PJLinkERR1 as err:
             raise PJLinkERR1("no lamp") from err
 
-        # Split the response by " " and then pair up all the numbers from
-        # the list in groups of 2.  If there are any remainders, raise an error.
-        # See: https://docs.python.org/3/library/itertools.html (grouper)
-        # This takes a line like: "1000 1 50 0" and breaks it into pairs:
-        #   (1000, 1), (50, 0)
-        # Such that these can then be remapped into our high level interface.
         try:
-            # Python 3.9 solution.
-            pairs = []
-            numbers = response.split(" ")
-            for i in range(0, len(numbers), 2):
-                pairs.append(numbers[i : i + 2])
-
-            # Python 3.10 solution.
-            # pairs = zip(*[iter(response.split(' '))] * 2, strict=True)
-            # pairs = [pair for pair in pairs]#
-
-            # Remap the statuses to integers and our lamp state enum.
+            values = response.split()
+            if not values:
+                raise ValueError("empty lamp status")
+            pairs = zip(values[::2], values[1::2], strict=True)
             return [(int(hours), Lamp.State(state)) for hours, state in pairs]
         except ValueError as err:
             raise PJLinkUnexpectedResponseParameter("unparsable lamp status") from err
