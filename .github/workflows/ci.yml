@@ -24,7 +24,7 @@ jobs:
           enable-cache: true
 
       - name: Install Python
-        run: uv python install 3.13
+        run: uv python install 3.14
 
       - name: Install dependencies
         run: uv sync --locked --group dev
@@ -45,7 +45,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
 
     runs-on: ${{ matrix.os }}
 
@@ -67,7 +67,7 @@ jobs:
 
       - name: Upload coverage report
         uses: codecov/codecov-action@v4
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.14'
         with:
           files: coverage.xml
         continue-on-error: true
@@ -86,9 +86,9 @@ jobs:
           enable-cache: true
 
       - name: Install Python
-        run: uv python install 3.13
+        run: uv python install 3.14
       - name: Install dependencies
-        run: uv sync --group dev --python 3.13
+        run: uv sync --group dev --python 3.14
 
       - name: Run type checker
         run: uv run pyright
@@ -107,9 +107,9 @@ jobs:
           enable-cache: true
 
       - name: Install Python
-        run: uv python install 3.13
+        run: uv python install 3.14
       - name: Install dependencies
-        run: uv sync --group dev --python 3.13
+        run: uv sync --group dev --python 3.14
 
       - name: Build package
         run: uv build
