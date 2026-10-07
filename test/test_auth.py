@@ -5,6 +5,16 @@ import aiopjlink
 from mock_projector import mock_tcp_pjlink
 
 
+class DebugLoggingTests(unittest.TestCase):
+    """The redaction helper hides the one-time auth token in debug logs."""
+
+    def test_debug_redaction(self):
+        from aiopjlink._debug import redact_debug_payload
+
+        self.assertEqual(redact_debug_payload("PJLINK 1 123456"), "PJLINK 1 <redacted>")
+        self.assertEqual(redact_debug_payload("PJLINK 0\r"), "PJLINK 0\r")
+
+
 class AuthTests(unittest.IsolatedAsyncioTestCase):
     """PJLink authentication behaves as expected."""
 

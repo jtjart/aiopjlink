@@ -79,7 +79,7 @@ src/aiopjlink/
 ├── enums.py          PJClass
 ├── _protocol.py      command / response line format (spec §2)
 ├── _auth.py          opening handshake and password hashing (spec §5)
-├── _debug.py         AIOPJLINK_PRINT_DEBUG_COMMS switch
+├── _debug.py         shared logging helpers for debug output
 ├── projector.py      backwards-compatible re-exports of the old module
 └── commands/         one module per feature, spec chapter 4
     ├── base.py       CommandGroup
@@ -112,7 +112,13 @@ uv run pyright
 
 The repository also includes a [dev container](.devcontainer/devcontainer.json) configured for Python 3.13 and the `uv` toolchain, along with recommended VS Code extensions for Python, Pylance, Ruff, and TOML support.
 
-Set the environment variable `AIOPJLINK_PRINT_DEBUG_COMMS` to print PJLink traffic to the console for debugging.
+Enable PJLink traffic logging via Python's standard `logging` config. The library emits debug messages through the `aiopjlink` logger, so you can route them to the console or a file as needed.
+
+```python
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+```
 
 ## Project automation
 
