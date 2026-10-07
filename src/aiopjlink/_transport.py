@@ -10,7 +10,7 @@ about individual commands. The groups in `aiopjlink.commands` depend on it, and
 import asyncio
 
 from ._auth import build_request
-from ._debug import PRINT_DEBUG_COMMS
+from ._debug import LOGGER
 from ._protocol import format_command, parse_response
 from .enums import PJClass
 from .exceptions import (
@@ -111,15 +111,13 @@ class Transport:
             # Projector sends first message to identify itself as PJLINK.
             try:
                 data = await self._read_next(reader)
-                if PRINT_DEBUG_COMMS:
-                    print("➡️ ", data)
+                LOGGER.debug("received welcome/authentication message")
             except TimeoutError as err:
                 raise PJLinkProtocolError("projector did not send a welcome message") from err
             # 3. Authenticate if needed and send command
             cbytes = build_request(data, cstring, self._password, self._encoding)
 
-            if PRINT_DEBUG_COMMS:
-                print("🚢", cbytes)
+            LOGGER.debug("sending command: %s", cstring.strip())
             try:
                 writer.write(cbytes)
                 await writer.drain()

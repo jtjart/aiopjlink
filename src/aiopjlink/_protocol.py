@@ -5,7 +5,7 @@ The wire format of PJLink command and response lines (§2).
 Pure functions only: nothing here touches the network.
 """
 
-from ._debug import PRINT_DEBUG_COMMS
+from ._debug import LOGGER, redact_debug_payload
 from .enums import PJClass
 from .exceptions import PJLinkERR1, PJLinkERR2, PJLinkERR3, PJLinkERR4, PJLinkProtocolError
 
@@ -36,8 +36,7 @@ def parse_response(
     and `PJLinkProtocolError` if the line is not a valid response to `expect_command`.
     """
     # NOTE: Postels robustness principle - be conservative in what you do, be liberal in what you accept from others
-    if PRINT_DEBUG_COMMS:
-        print("➡️ ", data)
+    LOGGER.debug("received response: %s", redact_debug_payload(data.strip()))
     expect_pjclass = PJClass(expect_pjclass)
 
     # Shortest valid response: header, class, 4 command characters, separator, CR (e.g. `%1INF2=\r`).
