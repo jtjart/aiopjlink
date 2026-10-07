@@ -33,7 +33,7 @@ The library keeps the ergonomic API of the earlier forks while modernizing the p
 
 * ✅ Modern asyncio API with high-level command groups
 * ✅ Fully typed public API (`py.typed` package)
-* ✅ Cross-platform CI for Python 3.11–3.13
+* ✅ Cross-platform CI for Python 3.11–3.14
 * ✅ Development container and `uv`-based tooling
 * ✅ One connection per command, with no connection manager to keep around
 
@@ -110,7 +110,7 @@ uv run mypy src
 uv run pyright
 ```
 
-The repository also includes a [dev container](.devcontainer/devcontainer.json) configured for Python 3.13 and the `uv` toolchain, along with recommended VS Code extensions for Python, Pylance, Ruff, and TOML support.
+The repository also includes a [dev container](.devcontainer/devcontainer.json) configured for Python 3.14 and the `uv` toolchain, along with recommended VS Code extensions for Python, Pylance, Ruff, and TOML support.
 
 Enable PJLink traffic logging via Python's standard `logging` config. The library emits debug messages through the `aiopjlink` logger, so you can route them to the console or a file as needed.
 
@@ -126,7 +126,7 @@ This repository includes GitHub Actions workflows for:
 
 * linting and static analysis
 * tests on Linux, macOS, and Windows
-* Python 3.11, 3.12, and 3.13 coverage
+* Python 3.11, 3.12, 3.13 and 3.14 coverage
 * build verification and PyPI release publishing
 
 The package is published from the `src` layout and is versioned via git metadata.
