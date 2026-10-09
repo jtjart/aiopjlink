@@ -9,7 +9,7 @@ from enum import Enum
 
 from ..enums import PJClass
 from ..exceptions import (
-    PJLinkERR2,
+    PJLinkInvalidParameter,
     PJLinkProjectorError,
     PJLinkUnexpectedResponseParameter,
 )
@@ -36,7 +36,7 @@ class Sources(CommandGroup):
 
     async def get(self, pjclass: PJClass = PJClass.ONE) -> tuple[Mode, str]:
         """Get the current source input selection (§4.4)."""
-        values = await self._link.transmit(command="INPT", param="?", pjclass=pjclass)
+        values = await self._transmit_state("INPT", pjclass)
         if len(values) != 2:
             raise PJLinkUnexpectedResponseParameter("expected 2 INPT response characters")
         try:
@@ -69,7 +69,7 @@ class Sources(CommandGroup):
             A list of available input sources in the format: (Sources.Mode, index str).  For example:
                 [(<Mode.RGB: '1'>, '1'), (<Mode.DIGITAL: '3'>, '1'), ...]
         """
-        response = await self._link.transmit("INST", "?", pjclass)
+        response = await self._transmit_state("INST", pjclass)
         try:
             sources = response.split()
             if not sources or any(len(source) != 2 for source in sources):
@@ -99,7 +99,7 @@ class Sources(CommandGroup):
         for mode, index in sources:
             try:
                 name = await self.get_source_name(mode, index)
-            except PJLinkERR2:
+            except PJLinkInvalidParameter:
                 name = None
             output.append((mode, index, name))
         return output
@@ -109,7 +109,7 @@ class Sources(CommandGroup):
         Returns:
             (x:int, y:int) tuple: Horizontal and vertical resolutions of input signal respectively.
         """
-        response = await self._link.transmit("IRES", "?", PJClass.TWO)
+        response = await self._transmit_state("IRES", PJClass.TWO)
         if response == "-":
             raise PJLinkProjectorError("no signal input")
         if response == "*":
@@ -127,7 +127,7 @@ class Sources(CommandGroup):
         Returns:
             (x, y) tuple: Horizontal and vertical resolutions of input signal respectively.
         """
-        response = await self._link.transmit("RRES", "?", PJClass.TWO)
+        response = await self._transmit_state("RRES", PJClass.TWO)
         try:
             resolution = [int(dim) for dim in re.split("x", response, flags=re.IGNORECASE)]
             return tuple(resolution)

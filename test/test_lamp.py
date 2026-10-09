@@ -32,7 +32,7 @@ class LampGroup(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(state, aiopjlink.Lamp.State.OFF)
 
             # No lamps in the projector.
-            with self.assertRaises(aiopjlink.PJLinkERR1):
+            with self.assertRaises(aiopjlink.PJLinkNotSupported):
                 async with server.when(b"%1LAMP ?\r", respond_with=b"%1LAMP=ERR1\r"):
                     lamps = await client.lamps.status()
 

@@ -37,7 +37,7 @@ class Errors(CommandGroup):
         Returns:
             dict[Category]: Level: Table of error categories to states.
         """
-        errors = await self._link.transmit("ERST", "?", pjclass=PJClass.ONE)
+        errors = await self._transmit_state("ERST", PJClass.ONE)
         if len(errors) != 6:
             raise PJLinkUnexpectedResponseParameter("unexpected number of error types reported")
         try:

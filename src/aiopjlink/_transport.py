@@ -113,7 +113,7 @@ class Transport:
                 data = await self._read_next(reader)
                 LOGGER.debug("received welcome/authentication message")
             except TimeoutError as err:
-                raise PJLinkProtocolError("projector did not send a welcome message") from err
+                raise PJLinkNoConnection("timeout - projector did not send a welcome message") from err
             # 3. Authenticate if needed and send command
             cbytes = build_request(data, cstring, self._password, self._encoding)
 

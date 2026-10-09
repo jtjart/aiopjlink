@@ -96,6 +96,42 @@ src/aiopjlink/
 
 Modules are grouped by feature, not by spec chapter, so related commands (for example `LAMP` and `RLMP`) live together. Each module docstring lists the spec sections it implements. Modules starting with an underscore are internal; only the names exported from `aiopjlink` are public API.
 
+## Error handling
+
+Everything the library raises while talking to a projector derives from `PJLinkException`:
+
+```
+PJLinkException
+├── PJLinkConnectionError               projector unreachable or not talking
+│   ├── PJLinkNoConnection              refused / no greeting / no response in time
+│   └── PJLinkConnectionClosed          closed or reset by the projector
+├── PJLinkPassword                      password missing or wrong
+├── PJLinkProtocolError                 what the projector sent is not valid PJLink
+├── PJLinkUnexpectedResponseParameter   valid PJLink, but a value the library does not know
+└── PJLinkProjectorError                the projector answered with an error
+    ├── PJLinkNotSupported      ERR1    not supported (see `err.command` and the message: "no lamp", "no speaker installed", ...)
+    ├── PJLinkInvalidParameter  ERR2    parameter out of range
+    ├── PJLinkNotReady          ERR3    unavailable right now (standby, warming up, or an `OK` answer to a status query)
+    └── PJLinkDeviceFailure     ERR4    projector or display failure
+```
+
+A typical caller only needs a few clauses:
+
+```python
+try:
+    state = await link.power.get()
+except PJLinkNotReady:
+    state = Power.State.OFF  # standby or not ready
+except PJLinkConnectionError:
+    ...  # unavailable, try again later
+except PJLinkPassword:
+    ...  # ask for a (new) password
+except PJLinkException:
+    ...  # anything else the projector or library reported
+```
+
+`ValueError` is raised for invalid arguments (a programming error). See `aiopjlink/exceptions.py` for the full table of which situation raises what.
+
 ## Development
 
 The project uses [uv](https://docs.astral.sh/uv/) for dependency management and development tasks, with Hatchling for packaging and Ruff, Mypy, and Pyright for quality checks.

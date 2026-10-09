@@ -16,7 +16,7 @@ class FilterGroup(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(hours, 100)
 
             # No filter handled correctly.
-            with self.assertRaises(aiopjlink.PJLinkERR1) as err:
+            with self.assertRaises(aiopjlink.PJLinkNotSupported) as err:
                 async with server.when(b"%2FILT ?\r", respond_with=b"%2FILT=ERR1\r"):
                     hours = await client.filter.hours()
             self.assertEqual(str(err.exception), "no filter")

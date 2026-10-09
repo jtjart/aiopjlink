@@ -21,7 +21,7 @@ class Mute(CommandGroup):
         Returns:
             tuple(video: bool, audio: bool): True if the track is muted.  False if not.
         """
-        status = await self._link.transmit("AVMT", "?", pjclass=PJClass.ONE)
+        status = await self._transmit_state("AVMT", PJClass.ONE)
         if status == "11":
             return True, False
         if status == "21":
@@ -29,6 +29,9 @@ class Mute(CommandGroup):
         if status == "31":
             return True, True
         if status == "30":
+            return False, False
+        # Not defined as a query response (§4.6), but some projectors report "not muted" like this
+        if status in ("10", "20"):
             return False, False
         raise PJLinkUnexpectedResponseParameter("unexpected mute response")
 

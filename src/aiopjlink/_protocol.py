@@ -7,7 +7,13 @@ Pure functions only: nothing here touches the network.
 
 from ._debug import LOGGER, redact_debug_payload
 from .enums import PJClass
-from .exceptions import PJLinkERR1, PJLinkERR2, PJLinkERR3, PJLinkERR4, PJLinkProtocolError
+from .exceptions import (
+    PJLinkDeviceFailure,
+    PJLinkInvalidParameter,
+    PJLinkNotReady,
+    PJLinkNotSupported,
+    PJLinkProtocolError,
+)
 
 
 def format_command(command: str, param: str, pjclass: PJClass) -> str:
@@ -32,8 +38,9 @@ def parse_response(
 ) -> tuple[str, str]:
     """Split a response line into `(COMMAND, parameter)` (§2.2).
 
-    Raises the matching `PJLinkERRn` exception if the projector answered with an error code,
-    and `PJLinkProtocolError` if the line is not a valid response to `expect_command`.
+    Raises the matching exception (`PJLinkNotSupported` ... `PJLinkDeviceFailure`) if the projector
+    answered with `ERR1` ... `ERR4`, and `PJLinkProtocolError` if the line is not a valid response to
+    `expect_command`.
     """
     # NOTE: Postels robustness principle - be conservative in what you do, be liberal in what you accept from others
     LOGGER.debug("received response: %s", redact_debug_payload(data.strip()))
@@ -64,12 +71,12 @@ def parse_response(
     # Handle for protocol and projector errors.
     param_u = param.upper()
     if param_u == "ERR1":
-        raise PJLinkERR1("unsupported command")
+        raise PJLinkNotSupported("unsupported command", command=command)
     if param_u == "ERR2":
-        raise PJLinkERR2("out of parameter")
+        raise PJLinkInvalidParameter("out of parameter", command=command)
     if param_u == "ERR3":
-        raise PJLinkERR3("unavailable in the current state")
+        raise PJLinkNotReady("unavailable in the current state", command=command)
     if param_u == "ERR4":
-        raise PJLinkERR4("projector or display failure")
+        raise PJLinkDeviceFailure("projector or display failure", command=command)
 
     return command, param

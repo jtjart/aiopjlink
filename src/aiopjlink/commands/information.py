@@ -62,7 +62,7 @@ class Information(CommandGroup):
     async def pjlink_class(self, pjclass: PJClass = PJClass.ONE) -> PJClass:
         """Get projectors PJLink class number as a `PJClass` enumeration (§4.14)"""
         try:
-            return PJClass(await self._link.transmit("CLSS", "?", pjclass=pjclass))
+            return PJClass(await self._transmit_state("CLSS", pjclass))
         except ValueError as err:
             raise PJLinkUnexpectedResponseParameter("unexpected PJLink class") from err
 

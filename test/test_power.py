@@ -82,19 +82,19 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
                 await client.power.set(aiopjlink.Power.OFF, pjclass=aiopjlink.PJLink.C2)
 
             # Power set out of parameter (test duplicated in test_response_parsing)
-            with self.assertRaises(aiopjlink.PJLinkERR2) as err:
+            with self.assertRaises(aiopjlink.PJLinkInvalidParameter) as err:
                 async with server.when(b"%1POWR 3\r", respond_with=b"%1POWR=ERR2\r"):
                     await client.transmit("POWR", "3", pjclass=aiopjlink.PJLink.C1)
             self.assertEqual(str(err.exception), "out of parameter")
 
             # Power set unavailable (test duplicated in test_response_parsing)
-            with self.assertRaises(aiopjlink.PJLinkERR3) as err:
+            with self.assertRaises(aiopjlink.PJLinkNotReady) as err:
                 async with server.when(b"%1POWR 0\r", respond_with=b"%1POWR=ERR3\r"):
                     await client.power.set(client.power.OFF)
             self.assertEqual(str(err.exception), "unavailable in the current state")
 
             # Power set not possible (test duplicated in test_response_parsing)
-            with self.assertRaises(aiopjlink.PJLinkERR4) as err:
+            with self.assertRaises(aiopjlink.PJLinkDeviceFailure) as err:
                 async with server.when(b"%1POWR 0\r", respond_with=b"%1POWR=ERR4\r"):
                     await client.power.set(client.power.OFF)
             self.assertEqual(str(err.exception), "projector or display failure")
