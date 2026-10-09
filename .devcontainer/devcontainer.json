@@ -24,7 +24,7 @@
         },
         "python.testing.pytestEnabled": true,
         "python.testing.pytestArgs": [
-          "test"
+          "tests"
         ],
         "python.analysis.typeCheckingMode": "strict",
         "[toml]": {

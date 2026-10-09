@@ -60,7 +60,7 @@ dev = [
 [tool.ruff]
 line-length = 120
 target-version = "py311"
-src = ["src", "test"]
+src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = [
@@ -79,7 +79,7 @@ select = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"test/**" = ["SIM117"]
+"tests/**" = ["SIM117"]
 
 [tool.ruff.format]
 quote-style = "preserve"
@@ -127,8 +127,8 @@ reportMissingImports = "error"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-pythonpath = ["src", "test"]
-testpaths = ["test"]
+pythonpath = ["src", "tests"]
+testpaths = ["tests"]
 
 
 # ---------------------------------------------------------------------------
