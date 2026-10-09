@@ -57,17 +57,19 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("unrecognised auth method", str(err.exception))
 
     async def test_auth_no_welcome(self):
-        """Tests the projector not sending a welcome message generates a `PJLinkProtocolError`"""
+        """A projector that accepts the connection but sends no welcome message is a `PJLinkNoConnection`."""
 
         # Start server with no auth.
         async with mock_tcp_pjlink():
             # Do not send a message (i.e. the one commented out below).
             # server.open_and_send(b'PJLINK XXX\r')
 
-            # Expect to see a protocol error when we connect.
-            with self.assertRaises(aiopjlink.PJLinkProtocolError):
+            # Expect the same error as for a missing response to a command.
+            with self.assertRaises(aiopjlink.PJLinkNoConnection) as err:
                 link = aiopjlink.PJLink(address="127.0.0.1", password=None, timeout=0.5)
                 await link.power.get()
+
+            self.assertIn("welcome message", str(err.exception))
 
     async def test_auth_no_server(self):
         """Tests that the client honours the timeout if no server responds to the connection."""

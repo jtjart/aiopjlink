@@ -37,7 +37,7 @@ class Power(CommandGroup):
 
     async def get(self, pjclass: PJClass = PJClass.ONE) -> State:
         """Request the power status of the projector."""
-        response = await self._link.transmit("POWR", "?", pjclass=pjclass)
+        response = await self._transmit_state("POWR", pjclass)
         try:
             return Power.State(response)
         except ValueError as err:

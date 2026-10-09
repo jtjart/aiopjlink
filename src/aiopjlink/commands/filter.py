@@ -4,10 +4,7 @@ Filter usage and replacement models (§4.20 FILT ?, §4.22 RFIL ?).
 """
 
 from ..enums import PJClass
-from ..exceptions import (
-    PJLinkERR1,
-    PJLinkUnexpectedResponseParameter,
-)
+from ..exceptions import PJLinkUnexpectedResponseParameter
 from .base import CommandGroup
 
 
@@ -18,15 +15,8 @@ class Filter(CommandGroup):
         """Query the filter usage time (§4.20).
         Filter usage time is always 0 when it is not counted by the projector.
         """
-        # Request the value.
         try:
-            return int(await self._link.transmit("FILT", "?", pjclass=PJClass.TWO))
-
-        # Express a special meaning for ERR1 (§4.20).
-        except PJLinkERR1 as err:
-            raise PJLinkERR1("no filter") from err
-
-        # Parse issue.
+            return int(await self._transmit_state("FILT", PJClass.TWO, err1="no filter"))
         except ValueError as err:
             raise PJLinkUnexpectedResponseParameter("filter usage not parsable") from err
 

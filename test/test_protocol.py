@@ -108,28 +108,28 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(str(err.exception), "unexpected response command")
 
         # ERR1 - unsupported command
-        with self.assertRaises(aiopjlink.PJLinkERR1) as err:
+        with self.assertRaises(aiopjlink.PJLinkNotSupported) as err:
             parse_response(data="%1ABCD=ERR1\r", expect_command="ABCD", expect_pjclass="1")
         self.assertEqual(str(err.exception), "unsupported command")
 
         # ERR2 - out of parameter
-        with self.assertRaises(aiopjlink.PJLinkERR2) as err:
+        with self.assertRaises(aiopjlink.PJLinkInvalidParameter) as err:
             parse_response(data="%1ABCD=ERR2\r", expect_command="ABCD", expect_pjclass="1")
         self.assertEqual(str(err.exception), "out of parameter")
 
         # ERR3 - unavailable in the current state
-        with self.assertRaises(aiopjlink.PJLinkERR3) as err:
+        with self.assertRaises(aiopjlink.PJLinkNotReady) as err:
             parse_response(data="%1ABCD=ERR3\r", expect_command="ABCD", expect_pjclass="1")
         self.assertEqual(str(err.exception), "unavailable in the current state")
 
         # ERR4 - projector or display failure
-        with self.assertRaises(aiopjlink.PJLinkERR4) as err:
+        with self.assertRaises(aiopjlink.PJLinkDeviceFailure) as err:
             parse_response(data="%1ABCD=ERR4\r", expect_command="ABCD", expect_pjclass="1")
         self.assertEqual(str(err.exception), "projector or display failure")
 
         # Check error parsing is case insensitive (from projector) and error
         # parsing is handled in the same way too (Postel's law).
-        with self.assertRaises(aiopjlink.PJLinkERR4) as err:
+        with self.assertRaises(aiopjlink.PJLinkDeviceFailure) as err:
             parse_response(data="%1abcd=err4\r", expect_command="ABCD", expect_pjclass="1")
         self.assertEqual(str(err.exception), "projector or display failure")
 

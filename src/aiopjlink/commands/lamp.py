@@ -6,10 +6,7 @@ Lamp status and replacement models (§4.8 LAMP ?, §4.21 RLMP ?).
 from enum import Enum
 
 from ..enums import PJClass
-from ..exceptions import (
-    PJLinkERR1,
-    PJLinkUnexpectedResponseParameter,
-)
+from ..exceptions import PJLinkUnexpectedResponseParameter
 from .base import CommandGroup
 
 
@@ -32,11 +29,7 @@ class Lamp(CommandGroup):
         Returns:
             A list of ``(hours, state)`` tuples for each lamp.
         """
-        # Express a special meaning for ERR1 (§4.8).
-        try:
-            response = await self._link.transmit("LAMP", "?", pjclass=PJClass.ONE)
-        except PJLinkERR1 as err:
-            raise PJLinkERR1("no lamp") from err
+        response = await self._transmit_state("LAMP", PJClass.ONE, err1="no lamp")
 
         try:
             values = response.split()
