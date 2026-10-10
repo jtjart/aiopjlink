@@ -8,6 +8,7 @@ about individual commands. The groups in `aiopjlink.commands` depend on it, and
 """
 
 import asyncio
+import contextlib
 
 from ._auth import build_request
 from ._debug import LOGGER
@@ -19,6 +20,13 @@ from .exceptions import (
     PJLinkPassword,
     PJLinkProtocolError,
 )
+
+_TIMEOUT_ERRORS: dict[str, str] = {
+    "connect": "timeout - projector did not accept the connection in time",
+    "greeting": "timeout - projector did not send a welcome message in time",
+    "send": "timeout - projector did not accept the command in time",
+    "response": "timeout - projector did not respond in time",
+}
 
 
 class Transport:
@@ -88,61 +96,54 @@ class Transport:
     async def _transmit(self, command: str, cstring: str, pjclass: PJClass) -> str:
         """Does the actual work of `transmit`. Must only be called with the lock held."""
 
-        # The connection lives in local variables, not on the object,
-        # so nothing is shared between calls.
+        # The connection lives in local variables, not on the object, so nothing is shared between calls.
         writer = None
         try:
-            # 1. Open connection
-            try:
-                reader, writer = await asyncio.wait_for(
-                    asyncio.open_connection(self._address, self._port), timeout=self._timeout
-                )
-            except TimeoutError as err:
-                raise PJLinkNoConnection("timeout - projector did not accept the connection in time") from err
-            except OSError as err:
-                raise PJLinkNoConnection(f"os timeout - {err!s}") from err
+            async with asyncio.timeout(self._timeout):
+                # 1. Open connection
+                phase = "connect"
+                try:
+                    reader, writer = await asyncio.open_connection(self._address, self._port)
+                except OSError as err:
+                    raise PJLinkNoConnection("connection failed") from err
 
-            # An authentication procedure should be executed once after each establishment of TCP/IP connection.
-            # But for some reason this does not work with AWOL projector - 1 command = 1 connection
-            # The authentication procedure involves a password verification process.
-            # See https://pjlink.jbmia.or.jp/english/data_cl2/PJLink_5-1.pdf SECTION 5
+                # An authentication procedure should be executed once after each establishment of TCP/IP connection.
+                # But for some reason this does not work with AWOL projector - 1 command = 1 connection
+                # The authentication procedure involves a password verification process.
+                # See https://pjlink.jbmia.or.jp/english/data_cl2/PJLink_5-1.pdf SECTION 5
 
-            # 2. Read welcome/auth message
-            # Projector sends first message to identify itself as PJLINK.
-            try:
+                # 2. Read welcome/auth message
+                # Projector sends first message to identify itself as PJLINK.
+                phase = "greeting"
                 data = await self._read_next(reader)
                 LOGGER.debug("received welcome/authentication message")
-            except TimeoutError as err:
-                raise PJLinkNoConnection("timeout - projector did not send a welcome message") from err
-            # 3. Authenticate if needed and send command
-            cbytes = build_request(data, cstring, self._password, self._encoding)
 
-            LOGGER.debug("sending command: %s", cstring.strip())
-            try:
-                writer.write(cbytes)
-                await writer.drain()
-            except OSError as err:
-                raise PJLinkConnectionClosed(f"connection error - {err}") from err
+                # 3. Authenticate if needed and send command
+                phase = "send"
+                cbytes = build_request(data, cstring, self._password, self._encoding)
+                LOGGER.debug("sending command: %s", cstring.strip())
+                try:
+                    writer.write(cbytes)
+                    await writer.drain()
+                except OSError as err:
+                    raise PJLinkConnectionClosed(f"connection error - {err}") from err
 
-            # 4. Read response
-            # Read the first few bytes of the response - check for failed auth.
-            # ERRA represents ERR or authorization.
-            try:
+                # 4. Read response
+                # Read the first few bytes of the response - check for failed auth.
+                phase = "response"
                 response = await self._read_next(reader)
-            except TimeoutError as err:
-                raise PJLinkNoConnection("timeout - projector did not respond in time") from err
-            if response.upper() == "PJLINK ERRA\r":
-                raise PJLinkPassword("authentication failed")
+                if response.upper() == "PJLINK ERRA\r":
+                    raise PJLinkPassword("authentication failed")
 
-            # 5. Parse response
-            _, param = parse_response(response, expect_command=command, expect_pjclass=pjclass)
-            return param
+                # 5. Parse response
+                _, param = parse_response(response, expect_command=command, expect_pjclass=pjclass)
+                return param
+
+        except TimeoutError as err:
+            raise PJLinkNoConnection(_TIMEOUT_ERRORS[phase]) from err
 
         finally:
             if writer is not None:
-                try:
-                    writer.close()
-                    await writer.wait_closed()
-                except Exception:
-                    # Best effort: the command has already succeeded or failed by now.
-                    pass
+                writer.close()
+                with contextlib.suppress(asyncio.TimeoutError, ConnectionError, OSError):
+                    await asyncio.wait_for(writer.wait_closed(), timeout=1.0)

@@ -218,3 +218,9 @@ async def raw_tcp_server(handler, host="127.0.0.1", port=4352):
     finally:
         server.close()
         await server.wait_closed()
+
+
+async def until_hung_up(reader, writer):
+    """Wait for the client to disconnect, then close our side."""
+    await reader.read()
+    writer.close()
