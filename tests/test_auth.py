@@ -81,7 +81,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
         # Accept either error message for compatibility
         self.assertTrue(
             str(err.exception).startswith("timeout - projector did not accept the connection in time")
-            or str(err.exception).startswith("os timeout"),
+            or str(err.exception).startswith("connection failed"),
             f"Unexpected error message: {err.exception!s}",
         )
 
@@ -89,7 +89,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(aiopjlink.PJLinkNoConnection) as err:
             link = aiopjlink.PJLink(address="0.0.0.0", password=None, timeout=0.5)
             await link.power.get()
-        self.assertIn("os timeout", str(err.exception))
+        self.assertIn("connection failed", str(err.exception))
 
     async def test_auth_valid_pw(self):
         """Tests a connection with valid authentication."""
