@@ -4,8 +4,6 @@ Information queries (§4.10 NAME ?, §4.11 INF1 ?, §4.12 INF2 ?, §4.13 INFO ?,
 §4.14 CLSS ?, §4.15 SNUM ?, §4.16 SVER ?).
 """
 
-from collections.abc import Awaitable, Callable
-
 from ..enums import PJClass
 from ..exceptions import PJLinkUnexpectedResponseParameter
 from .base import CommandGroup
@@ -13,32 +11,6 @@ from .base import CommandGroup
 
 class Information(CommandGroup):
     """Gathers information about the projector."""
-
-    async def table(self) -> dict[str, str | None]:
-        """Collect a table of all the different information available
-        from this projector.  If the projector responds, an empty string is
-        returned, but if it throws an error, `None` is returned.
-
-        See the code for the dictionary entries.
-        """
-
-        # Helper to ensure it is always returned regardless of the exception.
-        async def _safe(method: Callable[[], Awaitable[str | PJClass]]) -> str | None:
-            try:
-                return str(await method())
-            except Exception:
-                return None
-
-        # Table.
-        return {
-            "software_version": await _safe(self.software_version),
-            "serial_number": await _safe(self.serial_number),
-            "pjlink_class": await _safe(self.pjlink_class),
-            "other": await _safe(self.other),
-            "product_name": await _safe(self.product_name),
-            "manufacturer_name": await _safe(self.manufacturer_name),
-            "projector_name": await _safe(self.projector_name),
-        }
 
     async def software_version(self) -> str:
         """Request software version of the projector (§4.16).
