@@ -132,6 +132,14 @@ class PJLinkServerProtocol(asyncio.Protocol):
             yield expected
             await asyncio.wait_for(expected.wait(), timeout=expected.timeout)
 
+            # The projector hangs up on a message it did not expect. A client that reconnects after a
+            # hang-up (see `aiopjlink._transport`) does not see an error, so check the message here as well.
+            if expected.recv_buffer_contents != expected.incoming:
+                raise UnexpectedClientMessage(
+                    f"projector expected {expected.incoming!r} from the client "
+                    f"but got {expected.recv_buffer_contents!r}"
+                )
+
         # Our mock protocol closes the server if it finds an error.
         # This results in the client seeing a disconnection (it doesn't know its mocked)
         # so we check the result of our event.
@@ -199,11 +207,18 @@ async def mock_tcp_pjlink(host="127.0.0.1", port=4352, password=None):
 
 
 @contextlib.asynccontextmanager
-async def mock_client_server_noauth():
+async def mock_client_server_noauth(**client_options):
+    """A mock projector without authentication and a client connected to it.
+
+    `client_options` are passed on to `PJLink` (e.g. `persistent=False`). The client is closed afterwards.
+    """
     async with mock_tcp_pjlink() as server:
         server.open_and_send(b"PJLINK 0\r")
-        client = aiopjlink.PJLink(address="127.0.0.1", password=None)
-        yield server, client
+        client = aiopjlink.PJLink(address="127.0.0.1", password=None, **client_options)
+        try:
+            yield server, client
+        finally:
+            await client.close()
 
 
 @contextlib.asynccontextmanager

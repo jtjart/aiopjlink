@@ -29,6 +29,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r"):
                 # Send the power request and check the response is expected.
                 client = aiopjlink.PJLink(address="127.0.0.1", password=None)
+                self.addAsyncCleanup(client.close)
                 value = await client.transmit("POWR", "?", pjclass="1")
                 self.assertEqual(value, "0")
 
@@ -106,6 +107,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             async with server.when(cmd, respond_with=b"%1POWR=0\r"):
                 # Send the power request and check the response is expected.
                 link = aiopjlink.PJLink(address="127.0.0.1", password="abc123")
+                self.addAsyncCleanup(link.close)
                 await link.power.get()
 
     async def test_auth_invalid_pw(self):

@@ -15,8 +15,8 @@ async def hang(*_args, **_kwargs):
     await asyncio.sleep(3600)
 
 
-def make_client():
-    return aiopjlink.PJLink(address="127.0.0.1", password=None, timeout=TIMEOUT)
+def make_client(**options):
+    return aiopjlink.PJLink(address="127.0.0.1", password=None, timeout=TIMEOUT, **options)
 
 
 class TimeoutTests(unittest.IsolatedAsyncioTestCase):
@@ -80,7 +80,7 @@ class TimeoutTests(unittest.IsolatedAsyncioTestCase):
                 await make_client().power.get()
 
     async def test_close_is_bounded(self):
-        """A connection that never finishes closing does not stall the command."""
+        """A connection that never finishes closing does not stall the command (one connection per command)."""
 
         async def answer(reader, writer):
             writer.write(b"PJLINK 0\r")
@@ -93,7 +93,7 @@ class TimeoutTests(unittest.IsolatedAsyncioTestCase):
         async with raw_tcp_server(answer):
             start = time.monotonic()
             with mock.patch.object(asyncio.StreamWriter, "wait_closed", hang):
-                status = await make_client().power.get()
+                status = await make_client(persistent=False).power.get()
             elapsed = time.monotonic() - start
         self.assertEqual(status, aiopjlink.Power.State.OFF)
         self.assertLess(elapsed, 2)

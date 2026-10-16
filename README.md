@@ -35,7 +35,9 @@ The library keeps the ergonomic API of the earlier forks while modernizing the p
 * ✅ Fully typed public API (`py.typed` package)
 * ✅ Cross-platform CI for Python 3.11–3.14
 * ✅ Development container and `uv`-based tooling
-* ✅ One connection per command, with no connection manager to keep around
+* ✅ One connection reused for follow-up commands, opened lazily and replaced transparently when the projector drops it
+* ✅ One overall deadline per command, whatever stage it is in
+* ✅ A per-command connection mode for projectors that cannot handle anything else
 
 ## Installation
 
@@ -45,7 +47,7 @@ pip install aiopjlink2
 
 ## Usage
 
-Each PJLink command opens a short-lived TCP connection, sends the request, and closes the socket again. You create one `PJLink` instance and then call the high-level API on it.
+You create one `PJLink` instance and call the high-level API on it. The first command connects, the ones after it reuse the connection, and `close()` (or leaving the `async with` block) lets go of it.
 
 ```python
 import asyncio
@@ -54,13 +56,12 @@ from aiopjlink import PJLink
 
 
 async def main() -> None:
-    link = PJLink(address="192.168.1.120", password="secret")
-
-    await link.power.turn_on()
-    await asyncio.sleep(5)
-    print("errors =", await link.errors.query())
-    await asyncio.sleep(5)
-    await link.power.turn_off()
+    async with PJLink(address="192.168.1.120", password="secret") as link:
+        await link.power.turn_on()
+        await asyncio.sleep(5)
+        print("errors =", await link.errors.query())
+        await asyncio.sleep(5)
+        await link.power.turn_off()
 
 
 asyncio.run(main())
@@ -74,7 +75,7 @@ The library exposes command groups such as `power`, `sources`, `mute`, `lamps`, 
 src/aiopjlink/
 ├── __init__.py       public API (everything in __all__)
 ├── client.py         PJLink: the entry point, wires the command groups onto a Transport
-├── _transport.py     Transport: connection, lock, transmit()
+├── _transport.py     Transport: connection, lock, deadline, transmit()
 ├── exceptions.py     PJLinkException and its subclasses
 ├── enums.py          PJClass
 ├── _protocol.py      command / response line format (spec §2)
@@ -95,6 +96,33 @@ src/aiopjlink/
 ```
 
 Modules are grouped by feature, not by spec chapter, so related commands (for example `LAMP` and `RLMP`) live together. Each module docstring lists the spec sections it implements. Modules starting with an underscore are internal; only the names exported from `aiopjlink` are public API.
+
+## Connection handling
+
+```python
+PJLink(address)  # default: reuse the connection, release it after 25 s idle
+PJLink(address, idle_timeout=2)  # one connection per burst of commands (e.g. per poll)
+PJLink(address, persistent=False)  # one connection per command
+```
+
+Pick the mildest mode that works with your projector. For a poll of three commands every ten seconds:
+
+| Mode | Connections and authentication | Use it for |
+|---|---|---|
+| Default (`persistent=True`, `idle_timeout=25`) | One connection is reused across polls; authentication is sent once per connection. | Long-running programs, such as an integration polling every few seconds. |
+| `idle_timeout=2` | One connection per poll; it closes two seconds after the last command. Authentication is sent once per poll. | Releasing the projector between polls while reusing the connection within each poll. |
+| `persistent=False` | Three connections per poll, one per command; authentication is sent for every command. | Projectors that do not handle multiple commands on one connection, or that must stay free for other controllers. |
+
+With `persistent=True`, `close()` releases the kept connection. With `persistent=False`, each connection is closed before its command completes, so `close()` has nothing to release.
+
+The spec allows both. It lets a controller send any number of commands on one connection as long as each follows the previous answer within 30 seconds (§5.3), and it tells the controller to disconnect once it is done (§5.4). A connection can therefore never be "permanent": the projector drops one that stays silent for 30 seconds (§5.4, §6), and the number of controllers a projector accepts at once depends on the model (§6). So with `persistent=True`:
+
+* **Reconnecting is automatic.** A connection that is gone is replaced by the next command. A projector that hangs up after every answer works too, it just gains nothing from reuse.
+* **A failed command never poisons the next one.** After a timeout, a cancelled command or anything unexpected, the connection is dropped, so a late answer can not be mistaken for the answer to the next command.
+* **Queries are repeated once** if the kept connection turns out to be dead. Commands that change something (power, input, volume, ...) are not: the projector may have carried them out before it hung up, so you get `PJLinkConnectionClosed` and decide.
+* **Idle connections are released** after 25 seconds, so a projector that accepts a single controller is free for others (its own web interface, a remote) when you are not talking to it.
+
+Every command has one deadline, `timeout` (default 4 s), that covers connecting, the greeting, sending and waiting for the answer. A command on an unreachable or silent projector therefore fails after `timeout`, not a multiple of it. Commands share one `PJLink` object in turn, so a command that has to wait behind others waits for each of them, and each is bound by `timeout`. With `persistent=False`, closing the socket after a successful command may take up to one more second.
 
 ## Error handling
 

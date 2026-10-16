@@ -30,6 +30,7 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK 0\r")
             client = aiopjlink.PJLink(address="127.0.0.1", password=None)
+            self.addAsyncCleanup(client.close)
 
             # Power off.
             async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r"):
@@ -64,6 +65,7 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK 0\r")
             client = aiopjlink.PJLink(address="127.0.0.1", password=None)
+            self.addAsyncCleanup(client.close)
 
             # Power ON
             async with server.when(b"%1POWR 1\r", respond_with=b"%1POWR=OK\r"):
@@ -132,6 +134,7 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK 0\r")
             client = aiopjlink.PJLink(address="127.0.0.1", password=None)
+            self.addAsyncCleanup(client.close)
 
             # Power ON
             async with server.when(b"%1POWR 1\r", respond_with=b"%1POWR=OK\r"):
