@@ -1,8 +1,9 @@
 import hashlib
 import unittest
+from unittest.mock import patch
 
 import aiopjlink
-from mock_projector import mock_tcp_pjlink
+from mock_projector import mock_tcp_pjlink, raw_tcp_server
 
 
 class DebugLoggingTests(unittest.TestCase):
@@ -136,3 +137,57 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
                 link = aiopjlink.PJLink(address="127.0.0.1", password=None)
                 await link.power.get()
             self.assertEqual(str(err.exception), "password required")
+
+    async def test_auth_wrong_password_projector_hangs_up(self):
+        """A projector that closes instead of sending ERRA is reported as a password problem."""
+
+        async def hang_up(reader, writer):
+            writer.write(b"PJLINK 1 21d0e96e\r")
+            await writer.drain()
+            await reader.readuntil(b"\r")
+            writer.close()
+
+        async with raw_tcp_server(hang_up):
+            link = aiopjlink.PJLink(address="127.0.0.1", password="wrong", timeout=0.5)
+            with self.assertRaises(aiopjlink.PJLinkPassword):
+                await link.power.get()
+
+    async def test_send_failure_is_not_reported_as_a_password_error(self):
+        """A failure while sending the digest is a connection error, not a rejected password."""
+
+        async def handler(reader, writer):
+            writer.write(b"PJLINK 1 21d0e96e\r")
+            await writer.drain()
+            await reader.read()
+            writer.close()
+
+        async def fail_send(transport, session, cstring):
+            session.digest_sent = True
+            raise aiopjlink.PJLinkConnectionClosed("simulated send failure")
+
+        async with raw_tcp_server(handler):
+            link = aiopjlink.PJLink(address="127.0.0.1", timeout=0.5)
+            with patch.object(aiopjlink._transport.Transport, "_send", fail_send):
+                with self.assertRaises(aiopjlink.PJLinkConnectionClosed):
+                    await link.power.get()
+
+    async def test_hang_up_after_successful_auth_is_a_connection_error(self):
+        """Once the password has worked, a later hang-up is not blamed on the password."""
+        connections = 0
+
+        async def handler(reader, writer):
+            nonlocal connections
+            connections += 1
+            writer.write(b"PJLINK 1 21d0e96e\r")
+            await writer.drain()
+            await reader.readuntil(b"\r")
+            if connections == 1:
+                writer.write(b"%1POWR=1\r")
+                await writer.drain()
+            writer.close()
+
+        async with raw_tcp_server(handler):
+            link = aiopjlink.PJLink(address="127.0.0.1", password="abc123", timeout=0.5, persistent=False)
+            await link.power.get()
+            with self.assertRaises(aiopjlink.PJLinkConnectionClosed):
+                await link.power.get()

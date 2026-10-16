@@ -25,6 +25,7 @@ Which exception for which situation:
     Greeting received, but no response within the timeout  `PJLinkNoConnection`
     Connection closed (FIN) or reset (RST) by the peer     `PJLinkConnectionClosed`
     Password required, rejected (`ERRA`)                   `PJLinkPassword`
+    Hang-up after the first password                       `PJLinkPassword`
     Bytes that are not a valid PJLink line                 `PJLinkProtocolError`
     A valid line with a value the library cannot map       `PJLinkUnexpectedResponseParameter`
     `ERR1` ... `ERR4`                                      `PJLinkNotSupported` ... `PJLinkDeviceFailure`
@@ -81,7 +82,11 @@ class PJLinkUnexpectedResponseParameter(PJLinkException):
 
 
 class PJLinkPassword(PJLinkException):
-    """Invalid or absent password."""
+    """Invalid or absent password.
+
+    Also raised when a projector that has never accepted the password closes the connection right after
+    receiving it (some projectors might do that instead of sending `ERRA`).
+    """
 
 
 class PJLinkProjectorError(PJLinkException):

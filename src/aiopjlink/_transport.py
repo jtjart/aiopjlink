@@ -72,6 +72,9 @@ class _Session:
     greeting: str | None = None
     """The welcome line, kept until the first command has been built from it (§5.1, §5.3)."""
 
+    digest_sent: bool = False
+    """True if the last command went out with authentication data in front of it."""
+
     @property
     def usable(self) -> bool:
         """False once the projector or the network has closed the connection."""
@@ -116,6 +119,9 @@ class Transport:
         # a command takes it for its duration and hands it back (or throws it away) at the end.
         self._session: _Session | None = None
         self._idle_timer: asyncio.TimerHandle | None = None
+
+        # True once the projector has answered a command we sent a password digest with.
+        self._authenticated = False
 
     @property
     def persistent(self) -> bool:
@@ -217,9 +223,20 @@ class Transport:
                         phase = "response"
                         response = await self._read_next(session.reader)
                         break
-                    except PJLinkConnectionClosed:
-                        # A connection that was open for a while may have been closed by the projector
-                        # just now (§5.4), or the projector hangs up after every answer. Connect again, once.
+                    except PJLinkConnectionClosed as err:
+                        # Hung up right after the password went out, and it never worked before: a projector
+                        # that rejects a password by closing instead of sending `ERRA`.
+                        if (
+                            phase == "response"
+                            and session is not None
+                            and session.digest_sent
+                            and not self._authenticated
+                        ):
+                            raise PJLinkPassword(
+                                "projector closed the connection after the password was sent - "
+                                "the password is probably wrong"
+                            ) from err
+                        # A connection that was open for a while may have been closed
                         if session is None or not (reused and retry):
                             raise
                         LOGGER.debug("reused connection was closed by the projector, reconnecting")
@@ -229,6 +246,8 @@ class Transport:
                 # Read the first few bytes of the response - check for failed auth.
                 if response.upper() == "PJLINK ERRA\r":
                     raise PJLinkPassword("authentication failed")
+                if session.digest_sent:
+                    self._authenticated = True  # Any other complete answer means the password was accepted.
 
                 # 5. Parse response
                 try:
@@ -261,12 +280,14 @@ class Transport:
 
     async def _send(self, session: _Session, cstring: str) -> None:
         """Send a command line, with the authentication data in front if this is the first one (§5.1, §5.3)."""
+        plain = cstring.encode(self._encoding)
         if session.greeting is not None:
             cbytes = build_request(session.greeting, cstring, self._password, self._encoding)
             session.greeting = None
         else:
             # Authenticated already: the spec allows the digest to be left out from now on.
-            cbytes = cstring.encode(self._encoding)
+            cbytes = plain
+        session.digest_sent = cbytes != plain
 
         LOGGER.debug("sending command: %s", cstring.strip())
         try:

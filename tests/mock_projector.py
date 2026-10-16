@@ -159,6 +159,16 @@ class PJLinkServerProtocol(asyncio.Protocol):
                     f"but got {expected.recv_buffer_contents!r}"
                 ) from None
 
+        except aiopjlink.PJLinkPassword:
+            # A wrong password makes a projector hang up (or send ERRA). If the message was not the one
+            # the test expected, that is a test bug; otherwise let the test case see the error.
+            if expected.recv_buffer_contents != expected.incoming:
+                raise UnexpectedClientMessage(
+                    f"projector expected {expected.incoming!r} from the client "
+                    f"but got {expected.recv_buffer_contents!r}"
+                ) from None
+            raise
+
         # Ensure the event is removed.
         # Handles the edge case where the client API raises an exception before transmission.
         finally:
