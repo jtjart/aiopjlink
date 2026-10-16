@@ -160,7 +160,7 @@ class Transport:
             raise PJLinkConnectionClosed(f"connection error - {err}") from err
 
         try:
-            return raw.decode(self._encoding)
+            return raw.decode(self._encoding).lstrip("\n")
         except UnicodeDecodeError as err:
             raise PJLinkProtocolError("response from projector could not be decoded") from err
 

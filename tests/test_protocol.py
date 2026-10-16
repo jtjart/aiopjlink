@@ -159,6 +159,18 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
                     await client.power.get()
             self.assertIn("did not respond in time", str(err.exception))
 
+    async def test_response_crlf_is_accepted_across_commands(self):
+        """A projector that sends CRLF keeps the later command from choking on the leftover LF."""
+        async with mock_tcp_pjlink() as server:
+            server.open_and_send(b"PJLINK 0\r\n")
+            client = aiopjlink.PJLink(address="127.0.0.1", timeout=0.5)
+
+            async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=1\r\n"):
+                self.assertTrue(await client.power.get())
+
+            async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r\n"):
+                self.assertFalse(await client.power.get())
+
     async def test_connection_closed_before_response(self):
         """A projector that hangs up in the middle of a command is a `PJLinkConnectionClosed`."""
 
