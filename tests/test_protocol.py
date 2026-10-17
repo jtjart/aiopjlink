@@ -63,7 +63,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
 
         # No server is running: if the library tried to connect first,
         # this would be a `PJLinkNoConnection` instead.
-        link = aiopjlink.PJLink(address="127.0.0.1", password=None, timeout=0.5)
+        link = aiopjlink.PJLink(address="127.0.0.1")
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
             await link.transmit("abcd", "?", pjclass="1")
         self.assertEqual(str(err.exception), "command is not uppercase")
@@ -163,7 +163,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         """A projector that sends CRLF keeps the later command from choking on the leftover LF."""
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK 0\r\n")
-            client = aiopjlink.PJLink(address="127.0.0.1", timeout=0.5)
+            client = aiopjlink.PJLink(address="127.0.0.1")
 
             async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=1\r\n"):
                 self.assertTrue(await client.power.get())
@@ -181,7 +181,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             writer.close()
 
         async with raw_tcp_server(hang_up):
-            client = aiopjlink.PJLink(address="127.0.0.1", password=None, timeout=0.5)
+            client = aiopjlink.PJLink(address="127.0.0.1")
             with self.assertRaises(aiopjlink.PJLinkConnectionClosed):
                 await client.power.get()
 
@@ -197,6 +197,6 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             writer.close()
 
         async with raw_tcp_server(send_garbage):
-            client = aiopjlink.PJLink(address="127.0.0.1", password=None, timeout=0.5)
+            client = aiopjlink.PJLink(address="127.0.0.1")
             with self.assertRaises(aiopjlink.PJLinkProtocolError):
                 await client.power.get()

@@ -148,7 +148,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             writer.close()
 
         async with raw_tcp_server(hang_up):
-            link = aiopjlink.PJLink(address="127.0.0.1", password="wrong", timeout=0.5)
+            link = aiopjlink.PJLink(address="127.0.0.1", password="wrong")
             with self.assertRaises(aiopjlink.PJLinkPassword):
                 await link.power.get()
 
@@ -166,7 +166,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             raise aiopjlink.PJLinkConnectionClosed("simulated send failure")
 
         async with raw_tcp_server(handler):
-            link = aiopjlink.PJLink(address="127.0.0.1", timeout=0.5)
+            link = aiopjlink.PJLink(address="127.0.0.1")
             with patch.object(aiopjlink._transport.Transport, "_send", fail_send):
                 with self.assertRaises(aiopjlink.PJLinkConnectionClosed):
                     await link.power.get()
@@ -187,7 +187,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             writer.close()
 
         async with raw_tcp_server(handler):
-            link = aiopjlink.PJLink(address="127.0.0.1", password="abc123", timeout=0.5, persistent=False)
+            link = aiopjlink.PJLink(address="127.0.0.1", password="abc123", persistent=False)
             await link.power.get()
             with self.assertRaises(aiopjlink.PJLinkConnectionClosed):
                 await link.power.get()
