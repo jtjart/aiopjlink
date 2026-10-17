@@ -9,30 +9,34 @@ permissions:
   contents: read
 
 jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
   build:
     name: Build distribution
+    needs: ci
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           enable-cache: true
-
-      - name: Set up Python
-        run: uv python install 3.14
-
-      - name: Install project
-        run: uv sync --locked
+          python-version: "3.14"
 
       - name: Build package
         run: uv build --no-sources
 
       - name: Check package metadata
-        run: uv run --with twine twine check dist/*
+        run: uvx twine check --strict dist/*
 
       - name: Verify version
         shell: bash
@@ -40,22 +44,25 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           expected_version="${RELEASE_TAG#v}"
-
-          actual_version="$(
-            uv run python -c \
-              'import importlib.metadata; print(importlib.metadata.version("aiopjlink2"))'
-          )"
-
           echo "Expected version: ${expected_version}"
-          echo "Package version:  ${actual_version}"
+          ls -1 dist/
 
-          if [[ "${expected_version}" != "${actual_version}" ]]; then
-            echo "ERROR: GitHub release tag and package version do not match."
+          for file in \
+            "dist/aiopjlink2-${expected_version}.tar.gz" \
+            "dist/aiopjlink2-${expected_version}-py3-none-any.whl"; do
+            if [[ ! -f "${file}" ]]; then
+              echo "ERROR: ${file} not found: the release tag and the built package version do not match."
+              exit 1
+            fi
+          done
+
+          if [[ "$(ls -1 dist | wc -l)" -ne 2 ]]; then
+            echo "ERROR: expected exactly one sdist and one wheel in dist/."
             exit 1
           fi
 
       - name: Upload distribution
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dist
           path: dist/
@@ -64,6 +71,7 @@ jobs:
     name: Publish to PyPI
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     environment:
       name: pypi
@@ -74,7 +82,7 @@ jobs:
 
     steps:
       - name: Download distribution
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: dist
           path: dist/

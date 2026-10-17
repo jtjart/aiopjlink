@@ -4,43 +4,55 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           enable-cache: true
-
-      - name: Install Python
-        run: uv python install 3.14
+          python-version: "3.14"
 
       - name: Install dependencies
         run: uv sync --locked --group dev
 
-      - name: Pre-commit
-        run: uv run pre-commit run --all-files
+      - name: Pre-commit (file hygiene hooks)
+        env:
+          SKIP: ruff,ruff-format,mypy,pyright,pytest
+        run: uv run pre-commit run --all-files --show-diff-on-failure
 
-      - name: Run linters
-        run: |
-          uv run ruff check .
-          uv run ruff format --check .
-          uv run mypy src
-          uv run pyright
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format
+        run: uv run ruff format --check .
+
+      - name: Mypy
+        run: uv run mypy src
+
+      - name: Pyright
+        run: uv run pyright
 
   test:
-    name: Test
+    name: Test (${{ matrix.os }}, py${{ matrix.python-version }})
     strategy:
       fail-fast: false
       matrix:
@@ -48,74 +60,71 @@ jobs:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
       - name: Setup uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           enable-cache: true
+          python-version: ${{ matrix.python-version }}
 
-      - name: Install Python
-        run: uv python install ${{ matrix.python-version }}
       - name: Install dependencies
-        run: uv sync --group dev --python ${{ matrix.python-version }}
+        run: uv sync --locked --group dev
 
       - name: Run tests
         run: uv run pytest --cov=aiopjlink --cov-report=xml
 
       - name: Upload coverage report
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.14'
         with:
           files: coverage.xml
         continue-on-error: true
 
-  type-check-package:
-    name: Type Check
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-
-      - name: Install Python
-        run: uv python install 3.14
-      - name: Install dependencies
-        run: uv sync --group dev --python 3.14
-
-      - name: Run type checker
-        run: uv run pyright
-
   build:
     name: Build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0 # hatch-vcs derives the version from tags and history.
+          persist-credentials: false
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           enable-cache: true
-
-      - name: Install Python
-        run: uv python install 3.14
-      - name: Install dependencies
-        run: uv sync --group dev --python 3.14
+          python-version: "3.14"
 
       - name: Build package
-        run: uv build
+        run: uv build --no-sources
+
+      - name: Check package metadata
+        run: uvx twine check --strict dist/*
+
+      - name: Check wheel contents
+        run: |
+          wheel="$(ls dist/*.whl)"
+          unzip -l "$wheel"
+          unzip -l "$wheel" | grep -q 'aiopjlink/py.typed'
+          unzip -l "$wheel" | grep -q 'aiopjlink/_version.py'
+
+      - name: Smoke test the wheel in a clean environment
+        run: >-
+          uv run --no-project --isolated --with dist/*.whl
+          python -c "import aiopjlink; print(aiopjlink.__version__)"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dist
           path: dist/
