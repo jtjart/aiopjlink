@@ -5,6 +5,7 @@
     "ghcr.io/devcontainers-extra/features/uv:1": {}
   },
   "postCreateCommand": "uv sync --python 3.14 --group dev && uv run pre-commit install",
+  "postStartCommand": "bash .devcontainer/setup-git-signing.sh",
   "customizations": {
     "vscode": {
       "extensions": [
