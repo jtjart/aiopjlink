@@ -128,3 +128,13 @@ jobs:
         with:
           name: dist
           path: dist/
+
+  ci-passed:
+    name: CI passed
+    if: always()
+    needs: [lint, test, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any job failed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
