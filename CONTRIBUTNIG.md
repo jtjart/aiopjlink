@@ -56,7 +56,6 @@ src/aiopjlink/
 ├── _debug.py         logger and redaction of authentication data
 ├── exceptions.py     PJLinkException and its subclasses
 ├── enums.py          PJClass
-├── projector.py      backwards-compatible re-exports of the old module
 └── commands/         one module per feature (spec chapter 4)
     ├── base.py       CommandGroup
     ├── power.py      §4.1, §4.2
@@ -76,7 +75,7 @@ Rules the code follows:
 * Only `Transport` touches sockets. `_protocol` and `_auth` are pure functions.
 * Everything raised while talking to a projector is a `PJLinkException` (see `exceptions.py` for which one when). Invalid arguments are a `ValueError`, raised before anything is sent.
 * Commands that change something are never repeated after a dropped connection; queries may be.
-* New public names must be exported in `__init__.py` and `projector.py` (`tests/test_compat.py` checks this), and new commands added to the README table.
+* New public names must be exported in `__init__.py` and new commands added to the README table.
 
 ## Releases
 
