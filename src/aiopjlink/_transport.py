@@ -274,7 +274,7 @@ class Transport:
         try:
             reader, writer = await asyncio.open_connection(self._address, self._port)
         except OSError as err:
-            raise PJLinkNoConnection("connection failed") from err
+            raise PJLinkNoConnection(f"connection failed - {err}") from err
         LOGGER.debug("connected to %s:%s", self._address, self._port)
         return _Session(reader, writer)
 

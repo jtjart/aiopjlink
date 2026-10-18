@@ -1,8 +1,10 @@
 """Every way the projector can be unreachable or stop talking is a `PJLinkConnectionError`."""
 
+import asyncio
 import socket
 import struct
 import unittest
+from unittest import mock
 
 import aiopjlink
 from mock_projector import mock_tcp_pjlink, raw_tcp_server
@@ -27,6 +29,20 @@ class ConnectionErrorTests(unittest.IsolatedAsyncioTestCase):
     async def test_connect_refused(self):
         """Nothing listens on the port."""
         await self._assert_connection_error(aiopjlink.PJLinkNoConnection)
+
+    async def test_connect_failure_says_why(self):
+        """A refused connection or an unknown host is not called a timeout: the message carries the reason."""
+        # Nothing listens on the port.
+        err = await self._assert_connection_error(aiopjlink.PJLinkNoConnection)
+        self.assertTrue(str(err).startswith("connection failed - "), str(err))
+        self.assertNotIn("timeout", str(err))
+
+        # The host name does not resolve (simulated, so the test does not depend on a DNS server).
+        unresolvable = socket.gaierror(socket.EAI_NONAME, "Name or service not known")
+        with mock.patch.object(asyncio, "open_connection", side_effect=unresolvable):
+            err = await self._assert_connection_error(aiopjlink.PJLinkNoConnection)
+        self.assertIn("Name or service not known", str(err))
+        self.assertNotIn("timeout", str(err))
 
     async def test_no_greeting(self):
         """TCP is accepted, but the projector never says `PJLINK ...`."""
