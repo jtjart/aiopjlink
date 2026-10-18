@@ -210,8 +210,29 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(aiopjlink.PJLinkConnectionClosed):
                 await client.power.get()
 
+    async def test_free_text_in_another_encoding_is_still_returned(self):
+        """The spec says UTF-8, but a Latin-1 projector name must not make `projector_name()` fail."""
+        reply = "%1NAME=Büro Beamer\r".encode("latin-1")
+
+        # Undecodable bytes are replaced ...
+        async with mock_client_server_noauth() as (server, client):
+            async with server.when(b"%1NAME ?\r", respond_with=reply):
+                self.assertEqual(await client.info.projector_name(), "B\ufffdro Beamer")
+
+        # ... and the name is exact if the projector's encoding is given.
+        async with mock_client_server_noauth(encoding="latin-1") as (server, client):
+            async with server.when(b"%1NAME ?\r", respond_with=reply):
+                self.assertEqual(await client.info.projector_name(), "Büro Beamer")
+
+    async def test_garbled_value_is_not_taken_for_a_value(self):
+        """Replacing undecodable bytes must not let garbage pass for a status value."""
+        async with mock_client_server_noauth() as (server, client):
+            async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=\xff\r"):
+                with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter):
+                    await client.power.get()
+
     async def test_undecodable_response(self):
-        """A response that is not valid text is a `PJLinkProtocolError`, not a `UnicodeDecodeError`."""
+        """Bytes that are not text and not PJLink are a `PJLinkProtocolError`, not a `UnicodeDecodeError`."""
 
         async def send_garbage(reader, writer):
             writer.write(b"PJLINK 0\r")

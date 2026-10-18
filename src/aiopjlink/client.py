@@ -37,6 +37,11 @@ class PJLink(Transport):
     `persistent=False` for those: every command then opens its own short-lived
     connection, and there is nothing to close.
 
+    `encoding` is the character encoding of the text exchanged with the projector (names, versions, ...).
+    The spec prescribes UTF-8, the default. Bytes in a response that cannot be decoded are replaced
+    with U+FFFD instead of failing, so a name in another encoding is still readable; pass the projector's
+    encoding (e.g. `"latin-1"`) to get it exactly.
+
     Every command is bound by `timeout` seconds in total, including connecting.
 
     Usage:

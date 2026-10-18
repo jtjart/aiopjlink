@@ -165,10 +165,10 @@ class Transport:
         except OSError as err:
             raise PJLinkConnectionClosed(f"connection error - {err}") from err
 
-        try:
-            return raw.decode(self._encoding).lstrip("\n")
-        except UnicodeDecodeError as err:
-            raise PJLinkProtocolError("response from projector could not be decoded") from err
+        # The spec prescribes UTF-8, but free text (a projector name, say) does turn up in other encodings. That must
+        # not make the whole answer unreadable: undecodable bytes become U+FFFD. The fields that are not free text are
+        # validated by their parsers anyway, so garbage still ends up as an error there.
+        return raw.decode(self._encoding, errors="replace").lstrip("\n")
 
     async def transmit(self, command: str, param: str, pjclass: PJClass) -> str:
         """Send a command, authenticating and connecting first if needed, and return the response parameter.
