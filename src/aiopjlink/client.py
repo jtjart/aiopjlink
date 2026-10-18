@@ -42,7 +42,9 @@ class PJLink(Transport):
     with U+FFFD instead of failing, so a name in another encoding is still readable; pass the projector's
     encoding (e.g. `"latin-1"`) to get it exactly.
 
-    Every command is bound by `timeout` seconds in total, including connecting.
+    Every command is bound by `timeout` seconds in total, including connecting. Keep it above 2 seconds:
+    a projector answers a wrong password only after two seconds (§5.1), so a shorter deadline reports it
+    as `PJLinkNoConnection` instead of `PJLinkPassword`.
 
     Usage:
 

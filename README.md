@@ -90,6 +90,8 @@ The spec allows both styles (§5.3, §5.4). With `persistent=True`:
 
 Every command has a single deadline, `timeout` (default 4 s), covering connect, greeting, send and answer. A command waiting behind others in the queue is bound by `timeout` for each of them.
 
+Keep `timeout` above 2 s: a projector answers a wrong password only after two seconds (§5.1), so a shorter deadline reports it as `PJLinkNoConnection` instead of `PJLinkPassword`.
+
 ## Error handling
 
 Everything the library raises derives from `PJLinkException`:
