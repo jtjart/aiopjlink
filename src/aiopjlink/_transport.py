@@ -338,7 +338,8 @@ class Transport:
         """Close a connection in good order, but wait at most `_CLOSE_TIMEOUT` for the projector to acknowledge."""
         session.writer.close()
         try:
-            await asyncio.wait_for(session.writer.wait_closed(), _CLOSE_TIMEOUT)
+            async with asyncio.timeout(_CLOSE_TIMEOUT):
+                await session.writer.wait_closed()
         except OSError:  # Includes TimeoutError.
             session.writer.transport.abort()
 
