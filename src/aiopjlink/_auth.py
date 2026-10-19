@@ -43,5 +43,6 @@ def build_request(welcome: str, cstring: str, password: str | None, encoding: st
     # Read the random number used to salt the password (excluding the terminating `\r`).
     token = welcome[9:-1]
     passcode = (token + password).encode("utf-8")
-    passcode_md5 = hashlib.md5(passcode).hexdigest()
+    # PJLink authentication is specified as MD5(token + password); keep for protocol compatibility.
+    passcode_md5 = hashlib.md5(passcode, usedforsecurity=False).hexdigest()
     return passcode_md5.encode(encoding) + cstring.encode(encoding)
