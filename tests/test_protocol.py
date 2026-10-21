@@ -58,6 +58,15 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             result = format_command("ABCD", "?", pjclass="3")
         self.assertEqual(str(err.exception), "'3' is not a valid PJClass")
 
+        # The limit is 128 bytes, not 128 characters (§2.1): "é" takes two bytes in UTF-8 ...
+        format_command("ABCD", "é" * 64, pjclass="1")
+        with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
+            format_command("ABCD", "é" * 65, pjclass="1")
+        self.assertEqual(str(err.exception), "command param is larger than 128 bytes")
+
+        # ... and one byte in the encoding the line is actually sent in, if that is Latin-1.
+        format_command("ABCD", "é" * 65, pjclass="1", encoding="latin-1")
+
     async def test_bad_command_rejected_before_connecting(self):
         """A malformed command fails fast, without touching the network."""
 
@@ -67,6 +76,22 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
             await link.transmit("abcd", "?", pjclass="1")
         self.assertEqual(str(err.exception), "command is not uppercase")
+
+    async def test_oversized_or_unencodable_command_rejected_before_connecting(self):
+        """The byte limit is checked in the link's encoding, and bad input never reaches the network."""
+        link = aiopjlink.PJLink(address="127.0.0.1", password=None, timeout=0.5)
+        with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
+            await link.transmit("NAME", "é" * 65, pjclass=aiopjlink.PJClass.ONE)
+        self.assertEqual(str(err.exception), "command param is larger than 128 bytes")
+
+        # A class that is neither 1 nor 2 is a programming error.
+        with self.assertRaises(ValueError):
+            await link.transmit("NAME", "?", pjclass="3")
+
+        # Text the encoding cannot represent is a `ValueError` too (`UnicodeEncodeError` is one).
+        ascii_link = aiopjlink.PJLink(address="127.0.0.1", password=None, timeout=0.5, encoding="ascii")
+        with self.assertRaises(ValueError):
+            await ascii_link.transmit("NAME", "é", pjclass=aiopjlink.PJClass.ONE)
 
     async def test_response_parsing(self):
         """Ensure that errors generate the correct responses."""

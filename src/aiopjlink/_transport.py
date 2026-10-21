@@ -182,7 +182,7 @@ class Transport:
         """
 
         # Reject malformed commands before touching the network.
-        cstring = format_command(command, param, pjclass)
+        cstring = format_command(command, param, pjclass, self._encoding)
 
         async with self._lock:
             # Queries have no side effects, so they may be repeated if a reused connection turns out to be dead.

@@ -16,18 +16,22 @@ from .exceptions import (
 )
 
 
-def format_command(command: str, param: str, pjclass: PJClass) -> str:
+def format_command(command: str, param: str, pjclass: PJClass, encoding: str = "utf-8") -> str:
     """Build a command line: `%<class><COMMAND> <param>\\r` (§2.1).
 
+    The spec limits the command to 4 bytes and the parameter to 128 bytes, so both are measured in
+    bytes of `encoding`, the encoding the line is sent in.
+
     Raises `PJLinkProtocolError` if the command is not four upper-case characters or the
-    parameter exceeds 128 bytes, and `ValueError` if `pjclass` is not a valid `PJClass`.
+    parameter exceeds 128 bytes, and `ValueError` if `pjclass` is not a valid `PJClass`
+    or the text cannot be encoded.
     """
     pjclass = PJClass(pjclass)
     if not command.isupper():
         raise PJLinkProtocolError("command is not uppercase")
-    if len(command) != 4:
+    if len(command.encode(encoding)) != 4:
         raise PJLinkProtocolError("command is not 4 bytes")
-    if len(param) > 128:
+    if len(param.encode(encoding)) > 128:
         raise PJLinkProtocolError("command param is larger than 128 bytes")
     sep = " "
     return f"%{pjclass.value}{command}{sep}{param}\r"
