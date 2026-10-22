@@ -109,7 +109,7 @@ class Sources(CommandGroup):
                 [(<Mode.RGB: '1'>, '1', 'Computer'), (<Mode.DIGITAL: '3'>, '1', 'DVI-D'), ...]
         """
         sources = await self.available(pjclass=PJClass.TWO)
-        output = []
+        output: list[tuple[Sources.Mode, str, str | None]] = []
         for mode, index in sources:
             try:
                 name = await self.get_source_name(mode, index)
