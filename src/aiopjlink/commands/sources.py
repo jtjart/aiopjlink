@@ -15,6 +15,16 @@ from ..exceptions import (
 )
 from .base import CommandGroup
 
+_RESOLUTION = re.compile(r"([0-9]+)x([0-9]+)", re.IGNORECASE)
+
+
+def _parse_resolution(text: str) -> tuple[int, int]:
+    """Parse `<width>x<height>` (§4.18, §4.19) into `(width, height)`."""
+    match = _RESOLUTION.fullmatch(text)
+    if match is None:
+        raise PJLinkUnexpectedResponseParameter(f"unable to parse resolution: {text}")
+    return int(match[1]), int(match[2])
+
 
 class Sources(CommandGroup):
     """Control and query projector input sources."""
@@ -31,8 +41,12 @@ class Sources(CommandGroup):
         """ Class 2 only. """
 
     async def set(self, mode: Mode, index: str | int, pjclass: PJClass = PJClass.ONE) -> None:
-        """Set the current source input selection (§4.3)."""
-        return await self._transmit_ok(command="INPT", param=f"{mode.value}{self._check_index(index)}", pjclass=pjclass)
+        """Set the current source input selection (§4.3).
+
+        `mode` is a `Sources.Mode`
+        `index` is 1-9 for both Class 1 and Class 2 projectors, and A-Z (or the integer 10-35) for a Class 2 projector.
+        """
+        await self._transmit_ok(command="INPT", param=f"{mode.value}{self._check_index(index)}", pjclass=pjclass)
 
     async def get(self, pjclass: PJClass = PJClass.ONE) -> tuple[Mode, str]:
         """Get the current source input selection (§4.4)."""
@@ -104,7 +118,7 @@ class Sources(CommandGroup):
             output.append((mode, index, name))
         return output
 
-    async def resolution(self) -> tuple[int, ...]:
+    async def resolution(self) -> tuple[int, int]:
         """Get the current projector resolution (§4.18)
         Returns:
             (x:int, y:int) tuple: Horizontal and vertical resolutions of input signal respectively.
@@ -114,22 +128,11 @@ class Sources(CommandGroup):
             raise PJLinkProjectorError("no signal input")
         if response == "*":
             raise PJLinkProjectorError("unknown signal")
+        return _parse_resolution(response)
 
-        # Convert each axis to an integer.
-        try:
-            resolution = [int(dim) for dim in re.split("x", response, flags=re.IGNORECASE)]
-            return tuple(resolution)
-        except ValueError as err:
-            raise PJLinkUnexpectedResponseParameter("unable to parse resolution") from err
-
-    async def recommended_resolution(self) -> tuple[int, ...]:
+    async def recommended_resolution(self) -> tuple[int, int]:
         """Get the current recommended resolution (§4.19)
         Returns:
-            (x, y) tuple: Horizontal and vertical resolutions of input signal respectively.
+            (x:int, y:int) tuple: Horizontal and vertical resolutions of input signal respectively.
         """
-        response = await self._transmit_state("RRES", PJClass.TWO)
-        try:
-            resolution = [int(dim) for dim in re.split("x", response, flags=re.IGNORECASE)]
-            return tuple(resolution)
-        except ValueError as err:
-            raise PJLinkUnexpectedResponseParameter("unable to parse resolution") from err
+        return _parse_resolution(await self._transmit_state("RRES", PJClass.TWO))

@@ -176,7 +176,7 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
                 async with server.when(b"%2IRES ?\r", respond_with=b"%2IRES=\r"):
                     x, y = await client.sources.resolution()
-            self.assertEqual(str(err.exception), "unable to parse resolution")
+            self.assertIn("unable to parse resolution", str(err.exception))
 
     async def test_rres(self):
         """Test that the recommended resolution for the current input can be recieved."""
@@ -191,4 +191,17 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
                 async with server.when(b"%2RRES ?\r", respond_with=b"%2RRES=\r"):
                     x, y = await client.sources.recommended_resolution()
-            self.assertEqual(str(err.exception), "unable to parse resolution")
+            self.assertIn("unable to parse resolution", str(err.exception))
+
+    async def test_resolution_is_exactly_two_numbers(self):
+        """A resolution is `<width>x<height>`: more or fewer than two numbers is not a resolution."""
+        async with mock_client_server_noauth() as (server, client):
+            for response in (b"%2IRES=1920\r", b"%2IRES=1920x1080x60\r", b"%2IRES=axb\r", b"%2IRES=1920x\r"):
+                with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+                    async with server.when(b"%2IRES ?\r", respond_with=response):
+                        await client.sources.resolution()
+                self.assertIn("unable to parse resolution", str(err.exception))
+
+            # The separator may be upper case.
+            async with server.when(b"%2RRES ?\r", respond_with=b"%2RRES=1280X720\r"):
+                self.assertEqual(await client.sources.recommended_resolution(), (1280, 720))
