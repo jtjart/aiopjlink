@@ -39,7 +39,7 @@ uv run pyright
 The pre-commit hooks run the same tools, including the full test suite, so a commit takes a moment.
 CI runs them too, with the tests on Linux, macOS and Windows with Python 3.11–3.14.
 
-The mock projector in the tests listens on `127.0.0.1:4352`: do not run the tests in parallel or while a real PJLink service uses that port.
+The mock projectors in the tests listen on ports chosen by the operating system, so the tests neither collide with a real PJLink service on port 4352 nor with each other. They can run in parallel, e.g. `uv run --with pytest-xdist pytest -n auto`.
 
 ## Code layout
 

@@ -18,18 +18,21 @@ repos:
         entry: uv run mypy src
         language: system
         pass_filenames: false
+        files: ^(src|tests)/.*\.py$|^pyproject\.toml$
 
       - id: pyright
         name: pyright
         entry: uv run pyright
         language: system
         pass_filenames: false
+        files: ^(src|tests)/.*\.py$|^pyproject\.toml$
 
       - id: pytest
         name: pytest
-        entry: uv run pytest
+        entry: uv run pytest -n auto
         language: system
         pass_filenames: false
+        files: ^(src|tests)/.*\.py$|^pyproject\.toml$
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0

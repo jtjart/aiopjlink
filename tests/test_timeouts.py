@@ -5,7 +5,7 @@ import unittest
 from unittest import mock
 
 import aiopjlink
-from mock_projector import raw_tcp_server, until_hung_up
+from mock_projector import client_for, raw_tcp_server, until_hung_up, unused_port
 
 TIMEOUT = 0.5
 
@@ -15,29 +15,29 @@ async def hang(*_args, **_kwargs):
     await asyncio.sleep(3600)
 
 
-def make_client(**options):
-    return aiopjlink.PJLink(address="127.0.0.1", password=None, timeout=TIMEOUT, **options)
+def make_client(port, **options):
+    return client_for(port, timeout=TIMEOUT, **options)
 
 
 class TimeoutTests(unittest.IsolatedAsyncioTestCase):
     """One overall deadline per command, and the error names the phase that ran out of time."""
 
-    async def _expect_timeout(self, exc_type=aiopjlink.PJLinkNoConnection):
-        """Run a command, return the exception and check it took about one timeout."""
+    async def _expect_timeout(self, port, exc_type=aiopjlink.PJLinkNoConnection):
+        """Run a command on `port`, return the exception and check it took about one timeout."""
         start = time.monotonic()
         with self.assertRaises(exc_type) as err:
-            await make_client().power.get()
+            await make_client(port).power.get()
         self.assertLess(time.monotonic() - start, TIMEOUT * 2)
         return str(err.exception)
 
     async def test_connect_phase(self):
         with mock.patch.object(asyncio, "open_connection", hang):
-            message = await self._expect_timeout()
+            message = await self._expect_timeout(unused_port())
         self.assertEqual(message, "timeout - projector did not accept the connection in time")
 
     async def test_greeting_phase(self):
-        async with raw_tcp_server(until_hung_up):
-            message = await self._expect_timeout()
+        async with raw_tcp_server(until_hung_up) as server:
+            message = await self._expect_timeout(server.port)
         self.assertEqual(message, "timeout - projector did not send a welcome message in time")
 
     async def test_send_phase(self):
@@ -45,9 +45,9 @@ class TimeoutTests(unittest.IsolatedAsyncioTestCase):
             writer.write(b"PJLINK 0\r")  # No drain(): it is patched out below.
             await until_hung_up(reader, writer)
 
-        async with raw_tcp_server(greet_only):
+        async with raw_tcp_server(greet_only) as server:
             with mock.patch.object(asyncio.StreamWriter, "drain", hang):
-                message = await self._expect_timeout()
+                message = await self._expect_timeout(server.port)
         self.assertEqual(message, "timeout - projector did not accept the command in time")
 
     async def test_response_phase(self):
@@ -57,8 +57,8 @@ class TimeoutTests(unittest.IsolatedAsyncioTestCase):
             await reader.readuntil(b"\r")
             await until_hung_up(reader, writer)
 
-        async with raw_tcp_server(no_answer):
-            message = await self._expect_timeout()
+        async with raw_tcp_server(no_answer) as server:
+            message = await self._expect_timeout(server.port)
         self.assertEqual(message, "timeout - projector did not respond in time")
 
     async def test_deadline_covers_the_whole_command(self):
@@ -75,9 +75,9 @@ class TimeoutTests(unittest.IsolatedAsyncioTestCase):
                 await writer.drain()
             await until_hung_up(reader, writer)
 
-        async with raw_tcp_server(slow):
+        async with raw_tcp_server(slow) as server:
             with self.assertRaises(aiopjlink.PJLinkNoConnection):
-                await make_client().power.get()
+                await make_client(server.port).power.get()
 
     async def test_close_is_bounded(self):
         """A connection that never finishes closing does not stall the command (one connection per command)."""
@@ -90,10 +90,10 @@ class TimeoutTests(unittest.IsolatedAsyncioTestCase):
             await writer.drain()
             await until_hung_up(reader, writer)
 
-        async with raw_tcp_server(answer):
+        async with raw_tcp_server(answer) as server:
             start = time.monotonic()
             with mock.patch.object(asyncio.StreamWriter, "wait_closed", hang):
-                status = await make_client(persistent=False).power.get()
+                status = await make_client(server.port, persistent=False).power.get()
             elapsed = time.monotonic() - start
         self.assertEqual(status, aiopjlink.Power.State.OFF)
         self.assertLess(elapsed, 2)

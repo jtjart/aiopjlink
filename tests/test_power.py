@@ -29,7 +29,7 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
         # Start server with no auth.
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK 0\r")
-            client = aiopjlink.PJLink(address="127.0.0.1", password=None)
+            client = server.client()
             self.addAsyncCleanup(client.close)
 
             # Power off.
@@ -64,7 +64,7 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
         # Start server with no auth.
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK 0\r")
-            client = aiopjlink.PJLink(address="127.0.0.1", password=None)
+            client = server.client()
             self.addAsyncCleanup(client.close)
 
             # Power ON
@@ -133,7 +133,7 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
         # Start server with no auth.
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK 0\r")
-            client = aiopjlink.PJLink(address="127.0.0.1", password=None)
+            client = server.client()
             self.addAsyncCleanup(client.close)
 
             # Power ON

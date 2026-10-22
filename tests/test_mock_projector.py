@@ -53,7 +53,7 @@ class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
                 # a projector and NOT the behaviour of the projector.
                 async with server.when(expected_cmd, respond_with=b"%1POWR=0\r"):
                     # Give a junk password to trigger the UnexpectedClientMessage.
-                    link = aiopjlink.PJLink(address="127.0.0.1", password="INCORRECT")
+                    link = server.client(password="INCORRECT")
                     await link.power.get()
 
     async def test_mock_unexpectedresponse_after_connection(self):
@@ -67,7 +67,7 @@ class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
         # Open a connection successfully with no auth.
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK 0\r")
-            client = aiopjlink.PJLink(address="127.0.0.1", password=None)
+            client = server.client()
             self.addAsyncCleanup(client.close)
 
             # Check that the test framework recieves the expected message.

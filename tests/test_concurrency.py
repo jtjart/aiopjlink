@@ -40,8 +40,8 @@ class ConcurrencyTests(unittest.IsolatedAsyncioTestCase):
         async def silent(reader, writer):
             await until_hung_up(reader, writer)
 
-        async with raw_tcp_server(silent):
-            client = aiopjlink.PJLink(address="127.0.0.1", password=None, timeout=timeout)
+        async with raw_tcp_server(silent) as server:
+            client = server.client(timeout=timeout)
             start = time.monotonic()
             results = await asyncio.gather(client.power.get(), client.power.get(), return_exceptions=True)
             elapsed = time.monotonic() - start

@@ -50,6 +50,7 @@ dev = [
     "pytest-cov>=5.0",
     "pyright[nodejs]",
     "ruff",
+    "pytest-xdist>=3.8.0",
 ]
 
 

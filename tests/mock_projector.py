@@ -6,8 +6,24 @@ including erroneous behaviour. See `PJLinkServerProtocol.when`.
 
 import asyncio
 import contextlib
+import socket
 
 import aiopjlink
+
+LOCALHOST = "127.0.0.1"
+
+
+def client_for(port, **options):
+    """A `PJLink` for the mock projector on `port` (no password unless `options` give one)."""
+    options.setdefault("password", None)
+    return aiopjlink.PJLink(address=LOCALHOST, port=port, **options)
+
+
+def unused_port():
+    """A port nothing listens on: asked from the OS and given back at once."""
+    with socket.socket() as sock:
+        sock.bind((LOCALHOST, 0))
+        return sock.getsockname()[1]
 
 
 class PJLinkTestFrameworkError(Exception):
@@ -52,6 +68,13 @@ class PJLinkServerProtocol(asyncio.Protocol):
 
         # Buffer fore incoming messages until \r.
         self._recv_buffer = b""
+
+        # The port the server listens on (chosen by the OS, set by `mock_tcp_pjlink`).
+        self.port = 0
+
+    def client(self, **options):
+        """A `PJLink` connected to this mock projector. `options` are passed on to `PJLink`."""
+        return client_for(self.port, **options)
 
     def _write(self, data):
         """Send data to the client."""
@@ -205,10 +228,12 @@ class ExpectedEvent(asyncio.Event):
 
 
 @contextlib.asynccontextmanager
-async def mock_tcp_pjlink(host="127.0.0.1", port=4352, password=None):
+async def mock_tcp_pjlink(host=LOCALHOST, port=0, password=None):
+    """A mock projector on a free port (`port=0`: the OS picks one, so tests do not collide with anything)."""
     loop = asyncio.get_running_loop()
     protocol = PJLinkServerProtocol(loop=loop)
     server = await loop.create_server(lambda: protocol, host, port)
+    protocol.port = server.sockets[0].getsockname()[1]
     try:
         server_task = loop.create_task(server.serve_forever())
         yield protocol
@@ -224,22 +249,33 @@ async def mock_client_server_noauth(**client_options):
     """
     async with mock_tcp_pjlink() as server:
         server.open_and_send(b"PJLINK 0\r")
-        client = aiopjlink.PJLink(address="127.0.0.1", password=None, **client_options)
+        client = server.client(**client_options)
         try:
             yield server, client
         finally:
             await client.close()
 
 
+class RawServer:
+    """What `raw_tcp_server` yields: the port it listens on and a client for it."""
+
+    def __init__(self, server):
+        self.port = server.sockets[0].getsockname()[1]
+
+    def client(self, **options):
+        """A `PJLink` connected to this server. `options` are passed on to `PJLink`."""
+        return client_for(self.port, **options)
+
+
 @contextlib.asynccontextmanager
-async def raw_tcp_server(handler, host="127.0.0.1", port=4352):
+async def raw_tcp_server(handler, host=LOCALHOST, port=0):
     """A bare-bones server for misbehaviour the mock projector can't simulate
     (e.g. hanging up in the middle of a command). `handler(reader, writer)` is
-    called for every connection.
+    called for every connection. Like `mock_tcp_pjlink` it listens on a free port.
     """
     server = await asyncio.start_server(handler, host, port)
     try:
-        yield server
+        yield RawServer(server)
     finally:
         server.close()
         await server.wait_closed()
