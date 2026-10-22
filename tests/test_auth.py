@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import patch
 
 import aiopjlink
+from aiopjlink.enums import PJClass
 from mock_projector import client_for, mock_tcp_pjlink, raw_tcp_server, unused_port
 
 
@@ -31,7 +32,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
                 # Send the power request and check the response is expected.
                 client = server.client()
                 self.addAsyncCleanup(client.close)
-                value = await client.transmit("POWR", "?", pjclass="1")
+                value = await client.transmit("POWR", "?", pjclass=PJClass.ONE)
                 self.assertEqual(value, "0")
 
     async def test_auth_malformed(self):

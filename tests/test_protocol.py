@@ -2,6 +2,7 @@ import unittest
 
 import aiopjlink
 from aiopjlink._protocol import format_command, parse_response
+from aiopjlink.enums import PJClass
 from mock_projector import (
     client_for,
     mock_client_server_noauth,
@@ -30,30 +31,30 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
     async def test_command_construction(self):
         """Test that command formatting accepts valid values and raises errors if out of spec."""
         # Normal commands.
-        result = format_command("ABCD", "???", pjclass="1")
+        result = format_command("ABCD", "???", pjclass=PJClass.ONE)
         self.assertEqual(result, "%1ABCD ???\r")
 
-        result = format_command("EFGH", "1", pjclass="1")
+        result = format_command("EFGH", "1", pjclass=PJClass.ONE)
         self.assertEqual(result, "%1EFGH 1\r")
 
-        result = format_command("IJKL", "9999999", pjclass="1")
+        result = format_command("IJKL", "9999999", pjclass=PJClass.ONE)
         self.assertEqual(result, "%1IJKL 9999999\r")
 
-        result = format_command("ABCD", "?", pjclass="2")
+        result = format_command("ABCD", "?", pjclass=PJClass.TWO)
         self.assertEqual(result, "%2ABCD ?\r")
 
         # Bad commands.
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
-            result = format_command("abcd", "?", pjclass="1")
+            result = format_command("abcd", "?", pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "command is not uppercase")
 
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
-            result = format_command("ABCDE", "?", pjclass="1")
+            result = format_command("ABCDE", "?", pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "command is not 4 bytes")
 
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
             large_param = "X" * 129
-            result = format_command("ABCD", large_param, pjclass="1")
+            result = format_command("ABCD", large_param, pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "command param is larger than 128 bytes")
 
         with self.assertRaises(ValueError) as err:
@@ -61,13 +62,13 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(str(err.exception), "'3' is not a valid PJClass")
 
         # The limit is 128 bytes, not 128 characters (§2.1): "é" takes two bytes in UTF-8 ...
-        format_command("ABCD", "é" * 64, pjclass="1")
+        format_command("ABCD", "é" * 64, pjclass=PJClass.ONE)
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
-            format_command("ABCD", "é" * 65, pjclass="1")
+            format_command("ABCD", "é" * 65, pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "command param is larger than 128 bytes")
 
         # ... and one byte in the encoding the line is actually sent in, if that is Latin-1.
-        format_command("ABCD", "é" * 65, pjclass="1", encoding="latin-1")
+        format_command("ABCD", "é" * 65, pjclass=PJClass.ONE, encoding="latin-1")
 
     async def test_bad_command_rejected_before_connecting(self):
         """A malformed command fails fast, without touching the network."""
@@ -76,7 +77,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         # this would be a `PJLinkNoConnection` instead.
         link = client_for(unused_port(), timeout=0.5)
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
-            await link.transmit("abcd", "?", pjclass="1")
+            await link.transmit("abcd", "?", pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "command is not uppercase")
 
     async def test_oversized_or_unencodable_command_rejected_before_connecting(self):
@@ -99,70 +100,70 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         """Ensure that errors generate the correct responses."""
 
         # Valid data.
-        command, parameter = parse_response(data="%1ABCD=5\r", expect_command="ABCD", expect_pjclass="1")
+        command, parameter = parse_response(data="%1ABCD=5\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(command, "ABCD")
         self.assertEqual(parameter, "5")
 
         # Response too short to be a PJLink response.
         for data in ("", "\r", "%\r", "%1ABCD\r"):
             with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
-                parse_response(data=data, expect_command="ABCD", expect_pjclass="1")
+                parse_response(data=data, expect_command="ABCD", expect_pjclass=PJClass.ONE)
             self.assertEqual(str(err.exception), "unexpected response - too short")
 
         # Bad response header.
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
-            parse_response(data="#1ABCD=5\r", expect_command="ABCD", expect_pjclass="1")
+            parse_response(data="#1ABCD=5\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "unexpected response header")
 
         # Bad class version.
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
-            parse_response(data="%2ABCD=5\r", expect_command="ABCD", expect_pjclass="1")
+            parse_response(data="%2ABCD=5\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "unexpected response protocol class")
 
         # Bad separator.
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
-            parse_response(data="%1ABCD/5\r", expect_command="ABCD", expect_pjclass="1")
+            parse_response(data="%1ABCD/5\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "unexpected response separator")
 
         # Bad command length.
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
-            parse_response(data="%1ABCDE/5\r", expect_command="ABCD", expect_pjclass="1")
+            parse_response(data="%1ABCDE/5\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "unexpected response separator")
 
         # Unexpected command (not the one that was asked for).
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
-            parse_response(data="%1ABCD=5\r", expect_command="XXXX", expect_pjclass="1")
+            parse_response(data="%1ABCD=5\r", expect_command="XXXX", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "unexpected response command")
 
         # ERR1 - unsupported command
         with self.assertRaises(aiopjlink.PJLinkNotSupported) as err:
-            parse_response(data="%1ABCD=ERR1\r", expect_command="ABCD", expect_pjclass="1")
+            parse_response(data="%1ABCD=ERR1\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "unsupported command")
 
         # ERR2 - out of parameter
         with self.assertRaises(aiopjlink.PJLinkInvalidParameter) as err:
-            parse_response(data="%1ABCD=ERR2\r", expect_command="ABCD", expect_pjclass="1")
+            parse_response(data="%1ABCD=ERR2\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "out of parameter")
 
         # ERR3 - unavailable in the current state
         with self.assertRaises(aiopjlink.PJLinkNotReady) as err:
-            parse_response(data="%1ABCD=ERR3\r", expect_command="ABCD", expect_pjclass="1")
+            parse_response(data="%1ABCD=ERR3\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "unavailable in the current state")
 
         # ERR4 - projector or display failure
         with self.assertRaises(aiopjlink.PJLinkDeviceFailure) as err:
-            parse_response(data="%1ABCD=ERR4\r", expect_command="ABCD", expect_pjclass="1")
+            parse_response(data="%1ABCD=ERR4\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "projector or display failure")
 
         # Check error parsing is case insensitive (from projector) and error
         # parsing is handled in the same way too (Postel's law).
         with self.assertRaises(aiopjlink.PJLinkDeviceFailure) as err:
-            parse_response(data="%1abcd=err4\r", expect_command="ABCD", expect_pjclass="1")
+            parse_response(data="%1abcd=err4\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "projector or display failure")
 
         # Check that a respone does not fail if there is a CR right after
         # an equals (e.g. §4.12 of the spec)
-        command, param = parse_response(data="%1INF2=\r", expect_command="INF2", expect_pjclass="1")
+        command, param = parse_response(data="%1INF2=\r", expect_command="INF2", expect_pjclass=PJClass.ONE)
         self.assertEqual(command, "INF2")
         self.assertEqual(param, "")
 
