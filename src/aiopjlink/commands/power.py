@@ -25,12 +25,8 @@ class Power(CommandGroup):
             """Truthy states for `on` and `warming`, falsy states for `off` and `cooling`."""
             return self in (Power.State.ON, Power.State.WARMING)
 
-    ON = State.ON
-    OFF = State.OFF
-
     async def set(self, state: State, pjclass: PJClass = PJClass.ONE) -> None:
         """Send a power control instruction to power the projector lamp on or off."""
-        state = Power.State(state)
         if state in (Power.State.COOLING, Power.State.WARMING):
             raise ValueError("expected Power.State.ON or Power.State.OFF")
         await self._transmit_ok("POWR", state.value, pjclass=pjclass)
