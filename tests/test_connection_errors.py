@@ -34,9 +34,13 @@ class ConnectionErrorTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_connect_failure_says_why(self):
         """A refused connection or an unknown host is not called a timeout: the message carries the reason."""
-        # Nothing listens on the port.
-        err = await self._assert_connection_error(aiopjlink.PJLinkNoConnection)
+        # Simulate the OS refusing the connection: some environments silently drop loopback
+        # SYNs to unused ports instead, which correctly produces a connection timeout.
+        refused = ConnectionRefusedError("actively refused")
+        with mock.patch.object(asyncio, "open_connection", side_effect=refused):
+            err = await self._assert_connection_error(aiopjlink.PJLinkNoConnection)
         self.assertTrue(str(err).startswith("connection failed - "), str(err))
+        self.assertIn("actively refused", str(err))
         self.assertNotIn("timeout", str(err))
 
         # The host name does not resolve (simulated, so the test does not depend on a DNS server).
