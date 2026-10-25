@@ -1,9 +1,12 @@
 """_protocol.py
 
-The wire format of PJLink command and response lines (§2).
+The wire format of PJLink command and response lines (§2) and of the UDP search
+request and response (§3.2.2).
 
 Pure functions only: nothing here touches the network.
 """
+
+import re
 
 from ._debug import LOGGER, redact_debug_payload
 from .enums import PJClass
@@ -14,6 +17,12 @@ from .exceptions import (
     PJLinkNotSupported,
     PJLinkProtocolError,
 )
+
+SEARCH_REQUEST = b"%2SRCH\r"
+"""The search start instruction (§3.2.2): `%2SRCH` and CR. It has no separator and no parameter."""
+
+_SEARCH_RESPONSE_PREFIX = "%2ACKN="
+_MAC_ADDRESS = re.compile(r"[0-9a-f]{2}(?::[0-9a-f]{2}){5}", re.IGNORECASE)
 
 
 def format_command(command: str, param: str, pjclass: PJClass, encoding: str = "utf-8") -> str:
@@ -84,3 +93,20 @@ def parse_response(
         raise PJLinkDeviceFailure("projector or display failure", command=command)
 
     return command, param
+
+
+def parse_search_response(data: str) -> str:
+    """Return the MAC address in a search response, `%2ACKN=xx:xx:xx:xx:xx:xx` and CR (§3.2.2).
+
+    The address is returned in lower case (`aa:bb:cc:dd:ee:ff`), whatever case the projector used.
+    A datagram is delimited by the network, so a missing CR (or a CRLF) is accepted.
+
+    Raises `PJLinkProtocolError` if `data` is not a search response.
+    """
+    line = data.rstrip("\r\n")
+    if not line.upper().startswith(_SEARCH_RESPONSE_PREFIX):
+        raise PJLinkProtocolError(f"unexpected search response: {line}")
+    mac = line[len(_SEARCH_RESPONSE_PREFIX) :]
+    if _MAC_ADDRESS.fullmatch(mac) is None:
+        raise PJLinkProtocolError(f"unexpected MAC address in search response: {mac}")
+    return mac.lower()
