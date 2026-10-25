@@ -129,7 +129,7 @@ class WireFormatTests(unittest.TestCase):
             with self.subTest(mac=mac):
                 with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
                     parse_search_response(f"%2ACKN={mac}\r")
-                self.assertEqual(str(err.exception), f"unexpected MAC address in search response: {mac}")
+                self.assertEqual(str(err.exception), "unexpected MAC address in search response")
 
 
 class SourceAddressTests(unittest.TestCase):

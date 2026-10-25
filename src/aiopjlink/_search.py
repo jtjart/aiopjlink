@@ -77,7 +77,7 @@ class _SearchProtocol(asyncio.DatagramProtocol):
             LOGGER.debug("ignoring repeated search response from %s", source)
             return
         self._seen.add(result)
-        LOGGER.debug("search response from %s: %s", source, mac_address)
+        LOGGER.debug("search response from %s", source)
         self._results.put_nowait(result)
 
     def error_received(self, exc: Exception) -> None:
