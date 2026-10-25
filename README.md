@@ -20,6 +20,7 @@ PJLink is a manufacturer-independent protocol for operating data projectors over
 * One connection reused for follow-up commands, opened lazily and replaced when the projector drops it
 * One overall deadline per command, whatever stage it is in
 * A per-command connection mode for projectors that cannot handle more
+* Searching the network for projectors by UDP broadcast (§3.2), by IPv4 or IPv6
 * Python 3.11–3.14; tested on Linux, macOS and Windows
 
 ## Supported commands
@@ -36,7 +37,9 @@ PJLink is a manufacturer-independent protocol for operating data projectors over
 | `freeze` | | `FREZ` |
 | `info` | `NAME`, `INF1`, `INF2`, `INFO`, `CLSS` | `SNUM`, `SVER` |
 
-**Not supported yet:** UDP search (`SRCH`/`ACKN`, §3.2) and status notifications (`LKUP`, `POWR`/`ERST` notifications, §3.3).
+Finding projectors on the network (`SRCH`/`ACKN`, §3.2) is done by `search()` and `search_iter()`, see [below](#searching-for-projectors).
+
+**Not supported yet:** status notifications (`LKUP`, `POWR`/`ERST` notifications, §3.3).
 `PJLink.wait_for_notification()` exists but raises `NotImplementedError`.
 
 ## Installation
@@ -67,6 +70,57 @@ asyncio.run(main())
 ```
 
 One object may be shared between tasks: commands are sent one after the other.
+
+## Searching for projectors
+
+`search()` finds the projectors on the network (§3.2). It broadcasts one UDP datagram, listens for answers, and returns what it found:
+
+```python
+import asyncio
+from aiopjlink import PJLink, search
+
+
+async def main() -> None:
+    for found in await search(duration=12):
+        print(found.address, found.mac_address)  # 192.168.1.120 00:11:22:33:44:55
+    ...
+
+
+asyncio.run(main())
+```
+
+A `SearchResult` has the `address` the answer came from, which goes straight into `PJLink(address=...)`, and the projector's `mac_address` (lower case, `aa:bb:cc:dd:ee:ff`), which stays the same when the address changes. No password is needed to search (§6).
+
+**To stop as soon as the one you want has answered,** use `search_iter()`, which yields each projector when it answers. Close it when you leave the loop, so the socket is released at once:
+
+```python
+from contextlib import aclosing
+from aiopjlink import search_iter
+
+
+async def find_address(mac_address: str) -> str | None:
+    async with aclosing(search_iter()) as results:
+        async for result in results:
+            if result.mac_address == mac_address:
+                return result.address
+    return None
+```
+
+**Time.** The spec has the controller listen for 30 seconds, and that is the default `duration`. Projectors wait a random time of up to 10 seconds before they answer, so about 12 seconds is enough for a person who is waiting, and shorter risks missing some.
+
+**Networks.** The default target, `255.255.255.255`, only reaches the one network the operating system chooses. On a machine with several (Home Assistant often has), give the broadcast address of each, or `ff02::1` for IPv6, with the interface (`ff02::1%eth0`) when there are several:
+
+```python
+await search(broadcast_address=["192.168.1.255", "10.0.0.255"])
+```
+
+The address of a single projector works as well. Host names do not: they are not broadcast addresses. A broadcast does not cross a router, and does not leave a container that is not on the host network.
+
+**Reliability.** The search is UDP, so a datagram can get lost (§6), and a projector that has just been switched on may not answer yet. Nothing found is not proof that nothing is there: search again. Device search is defined by PJLink Class 2, so a projector that only speaks Class 1 is not expected to answer.
+
+**Local port.** Both ends use UDP port 4352 (Fig. 1 of the spec leaves open whether a projector answers the port the request came from, or port 4352), so the search sends from, and listens on, port 4352. That means one search at a time per local address: a second one, or another program using the port, raises `PJLinkNoConnection`. Pass `local_port=0` to let the operating system choose a port; that only works with projectors that answer the port the request came from. `local_address` picks the local interface.
+
+Anything else that arrives on the port is ignored. Problems on this machine (the port is in use, there is no network) raise `PJLinkNoConnection`, and a wrong argument raises `ValueError`.
 
 ## Connection handling
 
@@ -99,7 +153,7 @@ Everything the library raises derives from `PJLinkException`:
 ```
 PJLinkException
 ├── PJLinkConnectionError               projector unreachable or not talking
-│   ├── PJLinkNoConnection              refused / no greeting / no response in time
+│   ├── PJLinkNoConnection              refused / no greeting / no response in time / no search socket
 │   └── PJLinkConnectionClosed          closed or reset by the projector
 ├── PJLinkPassword                      password missing or wrong
 ├── PJLinkProtocolError                 what the projector sent is not valid PJLink
@@ -147,7 +201,7 @@ Only names exported from `aiopjlink` are public API.
 
 Pull requests with tests are welcome:
 
-* [ ] Search protocol (§3.2)
+* [x] Search protocol (§3.2)
 * [ ] Status notification protocol (§3.3)
 
 ## Honorable mentions
