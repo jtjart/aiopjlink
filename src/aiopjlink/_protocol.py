@@ -108,5 +108,5 @@ def parse_search_response(data: str) -> str:
         raise PJLinkProtocolError(f"unexpected search response: {line}")
     mac = line[len(_SEARCH_RESPONSE_PREFIX) :]
     if _MAC_ADDRESS.fullmatch(mac) is None:
-        raise PJLinkProtocolError(f"unexpected MAC address in search response: {mac}")
+        raise PJLinkProtocolError("unexpected MAC address in search response")
     return mac.lower()
