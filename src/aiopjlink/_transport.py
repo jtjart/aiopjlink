@@ -29,6 +29,11 @@ command on one connection.
 
 Either way a command has one deadline (`timeout`) that covers everything it does:
 connecting, the greeting, sending and waiting for the answer.
+
+A kept connection can hold data nobody asked for: some projectors volunteer a status line (e.g. `%1powr=0` a moment
+after a power-on command) or repeat an answer. Nothing can be the answer to a command that has not been sent yet, so
+whatever has arrived by then is thrown away before the next command goes out. Otherwise it would be taken for that
+command's answer: an "unexpected response command" error, or a wrong value if the command happens to be the same.
 """
 
 import asyncio
@@ -60,6 +65,9 @@ DEFAULT_IDLE_TIMEOUT = 25.0
 
 # Politely closing a connection waits for the projector to acknowledge. Never wait longer than this for it.
 _CLOSE_TIMEOUT = 1.0
+
+# Unsolicited data is discarded in chunks of this size (the most a `StreamReader` buffers by default).
+_DISCARD_LIMIT = 2**16
 
 
 @dataclasses.dataclass(slots=True)
@@ -214,6 +222,9 @@ class Transport:
                             phase = "greeting"
                             session.greeting = await self._read_next(session.reader)
                             LOGGER.debug("received welcome/authentication message")
+                        else:
+                            # The connection was kept: whatever is waiting on it is not the answer to this command.
+                            await self._discard_unsolicited(session)
 
                         # 3. Authenticate if needed and send command
                         phase = "send"
@@ -295,6 +306,19 @@ class Transport:
             await session.writer.drain()
         except OSError as err:
             raise PJLinkConnectionClosed(f"connection error - {err}") from err
+
+    @staticmethod
+    async def _discard_unsolicited(session: _Session) -> None:
+        """Throw away what the projector sent while no command was waiting for an answer. Never waits for more."""
+        try:
+            async with asyncio.timeout(0):  # Reads what has arrived already; if there is none, gives up at once.
+                stale = await session.reader.read(_DISCARD_LIMIT)
+        except TimeoutError:  # Before OSError, which it is a subclass of.
+            return
+        except OSError as err:
+            raise PJLinkConnectionClosed(f"connection error - {err}") from err
+        if stale:
+            LOGGER.debug("discarded unsolicited data from the projector: %r", stale)
 
     def _take_session(self) -> _Session | None:
         """Take the kept connection for the duration of a command. None if there is no usable one."""
