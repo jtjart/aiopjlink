@@ -86,6 +86,7 @@ The spec allows both styles (§5.3, §5.4). With `persistent=True`:
 
 * **Reconnecting is automatic.** A connection the projector dropped (it does so after 30 s of silence) is replaced by the next command.
 * **A failed command never poisons the next one.** After a timeout, cancellation or any unexpected error the connection is dropped, so a late answer is never mistaken for the next answer.
+* **Data the projector sends unasked is discarded.** Some projectors volunteer a status line of their own (one was seen to send `%1powr=0` after a power-on command). Nothing can be the answer to a command that has not been sent yet, so whatever has arrived by then is thrown away before the next command goes out, and shows up in the debug log as `discarded unsolicited data`.
 * **Queries are repeated once** on a new connection if the kept one turns out to be dead. Commands that change something (power, input, volume, ...) are not: the projector may already have carried them out, so you get `PJLinkConnectionClosed` and decide.
 
 Every command has a single deadline, `timeout` (default 4 s), covering connect, greeting, send and answer. A command waiting behind others in the queue is bound by `timeout` for each of them.
