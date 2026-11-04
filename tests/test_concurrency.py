@@ -12,12 +12,14 @@ class ConcurrencyTests(unittest.IsolatedAsyncioTestCase):
     async def test_concurrent_commands_are_serialised(self):
         """Two commands issued at the same time use one connection after the other."""
         async with mock_client_server_noauth() as (server, client):
-            async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=1\r"):
-                async with server.when(b"%1CLSS ?\r", respond_with=b"%1CLSS=2\r"):
-                    power, pjclass = await asyncio.gather(
-                        client.power.get(),
-                        client.info.pjlink_class(),
-                    )
+            async with (
+                server.when(b"%1POWR ?\r", respond_with=b"%1POWR=1\r"),
+                server.when(b"%1CLSS ?\r", respond_with=b"%1CLSS=2\r"),
+            ):
+                power, pjclass = await asyncio.gather(
+                    client.power.get(),
+                    client.info.pjlink_class(),
+                )
             self.assertEqual(power, aiopjlink.Power.State.ON)
             self.assertEqual(pjclass, aiopjlink.PJClass.TWO)
 

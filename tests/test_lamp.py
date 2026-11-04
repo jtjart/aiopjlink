@@ -56,11 +56,13 @@ class LampGroup(unittest.IsolatedAsyncioTestCase):
 
     async def test_hours(self):
         """The hours accelerator gets the correct lamp hours."""
-        async with mock_client_server_noauth() as (server, client):
-            # Two lamps (from PJLink test excel sheet)
-            async with server.when(b"%1LAMP ?\r", respond_with=b"%1LAMP=8253 1 13442 1\r"):
-                hours = await client.lamps.hours()
-                self.assertEqual(hours, 8253)
+        # Two lamps (from PJLink test excel sheet)
+        async with (
+            mock_client_server_noauth() as (server, client),
+            server.when(b"%1LAMP ?\r", respond_with=b"%1LAMP=8253 1 13442 1\r"),
+        ):
+            hours = await client.lamps.hours()
+            self.assertEqual(hours, 8253)
 
     async def test_replacement_model(self):
         """Get a list of replacement lamp models."""

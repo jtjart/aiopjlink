@@ -168,9 +168,11 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
 
         async with raw_tcp_server(handler) as server:
             link = server.client(timeout=0.5)
-            with patch.object(aiopjlink._transport.Transport, "_send", fail_send):
-                with self.assertRaises(aiopjlink.PJLinkConnectionClosed):
-                    await link.power.get()
+            with (
+                patch.object(aiopjlink._transport.Transport, "_send", fail_send),
+                self.assertRaises(aiopjlink.PJLinkConnectionClosed),
+            ):
+                await link.power.get()
 
     async def test_hang_up_after_successful_auth_is_a_connection_error(self):
         """Once the password has worked, a later hang-up is not blamed on the password."""

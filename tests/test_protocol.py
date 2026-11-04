@@ -218,21 +218,24 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         reply = "%1NAME=Büro Beamer\r".encode("latin-1")
 
         # Undecodable bytes are replaced ...
-        async with mock_client_server_noauth() as (server, client):
-            async with server.when(b"%1NAME ?\r", respond_with=reply):
-                self.assertEqual(await client.info.projector_name(), "B\ufffdro Beamer")
+        async with mock_client_server_noauth() as (server, client), server.when(b"%1NAME ?\r", respond_with=reply):
+            self.assertEqual(await client.info.projector_name(), "B\ufffdro Beamer")
 
         # ... and the name is exact if the projector's encoding is given.
-        async with mock_client_server_noauth(encoding="latin-1") as (server, client):
-            async with server.when(b"%1NAME ?\r", respond_with=reply):
-                self.assertEqual(await client.info.projector_name(), "Büro Beamer")
+        async with (
+            mock_client_server_noauth(encoding="latin-1") as (server, client),
+            server.when(b"%1NAME ?\r", respond_with=reply),
+        ):
+            self.assertEqual(await client.info.projector_name(), "Büro Beamer")
 
     async def test_garbled_value_is_not_taken_for_a_value(self):
         """Replacing undecodable bytes must not let garbage pass for a status value."""
-        async with mock_client_server_noauth() as (server, client):
-            async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=\xff\r"):
-                with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter):
-                    await client.power.get()
+        async with (
+            mock_client_server_noauth() as (server, client),
+            server.when(b"%1POWR ?\r", respond_with=b"%1POWR=\xff\r"),
+        ):
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter):
+                await client.power.get()
 
     async def test_undecodable_response(self):
         """Bytes that are not text and not PJLink are a `PJLinkProtocolError`, not a `UnicodeDecodeError`."""

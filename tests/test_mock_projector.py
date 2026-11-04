@@ -90,17 +90,21 @@ class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
         # Open a connection successfully with no auth.
         async with mock_client_server_noauth() as (server, client):
             # Expect a POWR followed by a CLSS.
-            async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r"):
-                async with server.when(b"%1CLSS ?\r", respond_with=b"%1CLSS=2\r"):
-                    value = await client.transmit("POWR", "?", pjclass=aiopjlink.PJClass.ONE)
-                    self.assertEqual(value, "0")
-                    value = await client.transmit("CLSS", "?", pjclass=aiopjlink.PJClass.ONE)
-                    self.assertEqual(value, "2")
+            async with (
+                server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r"),
+                server.when(b"%1CLSS ?\r", respond_with=b"%1CLSS=2\r"),
+            ):
+                value = await client.transmit("POWR", "?", pjclass=aiopjlink.PJClass.ONE)
+                self.assertEqual(value, "0")
+                value = await client.transmit("CLSS", "?", pjclass=aiopjlink.PJClass.ONE)
+                self.assertEqual(value, "2")
 
             # Expect a POWR followed by a CLSS - but don't get it, so we should
             # expect a warning about the test case: UnexpectedClientMessage
             with self.assertRaises(UnexpectedClientMessage):
-                async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r"):
-                    async with server.when(b"%1CLSS ?\r", respond_with=b"%1CLSS=2\r"):
-                        await client.transmit("CLSS", "?", pjclass=aiopjlink.PJClass.ONE)
-                        await client.transmit("POWR", "?", pjclass=aiopjlink.PJClass.ONE)
+                async with (
+                    server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r"),
+                    server.when(b"%1CLSS ?\r", respond_with=b"%1CLSS=2\r"),
+                ):
+                    await client.transmit("CLSS", "?", pjclass=aiopjlink.PJClass.ONE)
+                    await client.transmit("POWR", "?", pjclass=aiopjlink.PJClass.ONE)

@@ -79,9 +79,6 @@ select = [
     "RUF",   # Ruff-specific
 ]
 
-[tool.ruff.lint.per-file-ignores]
-"tests/**" = ["SIM117"]
-
 [tool.ruff.format]
 quote-style = "preserve"
 indent-style = "space"
