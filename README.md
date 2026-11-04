@@ -20,6 +20,7 @@ PJLink is a manufacturer-independent protocol for operating data projectors over
 * One connection reused for follow-up commands, opened lazily and replaced when the projector drops it
 * One overall deadline per command, whatever stage it is in
 * A per-command connection mode for projectors that cannot handle more
+* Password authentication with SHA256 (specification 2.10) and automatic fallback to MD5
 * Python 3.11–3.14; tested on Linux, macOS and Windows
 
 ## Supported commands
@@ -91,7 +92,24 @@ The spec allows both styles (§5.3, §5.4). With `persistent=True`:
 
 Every command has a single deadline, `timeout` (default 4 s), covering connect, greeting, send and answer. A command waiting behind others in the queue is bound by `timeout` for each of them.
 
-Keep `timeout` above 2 s: a projector answers a wrong password only after two seconds (§5.1), so a shorter deadline reports it as `PJLinkNoConnection` instead of `PJLinkPassword`.
+`timeout` is how long a projector may take to answer. The exception is a command that carries a password: a projector answers a wrong password only after two seconds (§5.1), so such a command is given at least 3 s to be answered, whatever `timeout` is, and a wrong password is reported as `PJLinkPassword` rather than as a dead connection. There is therefore no minimum for `timeout`.
+
+## Authentication
+
+A projector with a password uses MD5 (PJLink up to 2.00) or SHA256 (PJLink 2.10, §5.1). By default the library does what the spec describes for a controller that knows both: after the projector's greeting it asks `PJLINK 2`. A projector that supports SHA256 answers with a random number and is authenticated with it. For any other reaction (`ERR1`, `ERR2`, `ERRA`, an echo, hanging up, silence) the library drops the connection and reconnects with MD5, as the spec and the JBMIA application guideline (§6) prescribe.
+
+```python
+PJLink(address, password="secret")  # SHA256 if the projector can, otherwise MD5
+PJLink(address, password="secret", authentication=PJAuth.SHA256)  # never MD5: PJLinkNotSupported if it cannot
+PJLink(address, password="secret", authentication=PJAuth.MD5)  # never asks for SHA256
+```
+
+* **The answer is remembered.** Once a projector has not said yes to the question (it answered with an error, hung up, or stayed silent), MD5 is assumed from then on and new connections go straight to MD5, so only the first one pays for the question. That also protects a projector that cannot cope with the question (it may lock up for 30 s, guideline behaviour 6) from being put out of action again by every new connection.
+* **A rejected MD5 digest is retried at once.** If MD5 is rejected by a projector that never said it lacks SHA256 (the question was skipped because MD5 was assumed or worked before, or went unanswered), it may have been switched to SHA256 or just missed the question. The same command then asks again on a new connection, for SHA256 only, with a deadline of its own (a command can thus make two attempts, each bounded by `timeout`). A projector that did answer the question with an error is not asked again, and a wrong password is never tried twice. A rejected command was not carried out, so this is safe for commands that change something.
+* **A silent projector costs time once.** The question is bound by 2 s, and by half of `timeout`, so that the command can still reconnect. For a projector that cannot cope with the question at all, use `PJAuth.MD5`.
+* **`ERRA` in answer to the question is not a wrong password.** Some MD5-only projectors answer it that way. A wrong password is reported as `PJLinkPassword` once the digest has been sent.
+* **With `persistent=False`** every command does the whole handshake (question included) on its own connection.
+* **Security note.** The fallback can be provoked by anyone who can tamper with the traffic. If all your projectors support SHA256, use `PJAuth.SHA256`.
 
 ## Error handling
 
@@ -106,7 +124,7 @@ PJLinkException
 ├── PJLinkProtocolError                 what the projector sent is not valid PJLink
 ├── PJLinkUnexpectedResponseParameter   valid PJLink, but a value the library does not know
 └── PJLinkProjectorError                the projector answered with an error
-    ├── PJLinkNotSupported      ERR1    not supported ("no lamp", "no speaker installed", ...)
+    ├── PJLinkNotSupported      ERR1    not supported ("no lamp", "no speaker installed", SHA256 when required, ...)
     ├── PJLinkInvalidParameter  ERR2    parameter out of range
     ├── PJLinkNotReady          ERR3    unavailable now (standby, warming up, `OK` to a status query)
     └── PJLinkDeviceFailure     ERR4    projector or display failure

@@ -26,6 +26,7 @@ Which exception for which situation:
     Connection closed (FIN) or reset (RST) by the peer     `PJLinkConnectionClosed`
     Password required, rejected (`ERRA`)                   `PJLinkPassword`
     Hang-up after the first password                       `PJLinkPassword`
+    SHA256 required but not offered by the projector       `PJLinkNotSupported`
     Bytes that are not a valid PJLink line                 `PJLinkProtocolError`
     A valid line with a value the library cannot map       `PJLinkUnexpectedResponseParameter`
     `ERR1` ... `ERR4`                                      `PJLinkNotSupported` ... `PJLinkDeviceFailure`
@@ -105,6 +106,8 @@ class PJLinkNotSupported(PJLinkProjectorError):
 
     Some commands give it a specific meaning ("no lamp", "no speaker installed", ...):
     see the module documentation.
+
+    Also raised, with no `command`, when `PJAuth.SHA256` is required and the projector does not support it.
     """
 
 

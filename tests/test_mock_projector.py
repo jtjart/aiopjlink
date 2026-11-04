@@ -53,7 +53,7 @@ class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
                 # a projector and NOT the behaviour of the projector.
                 async with server.when(expected_cmd, respond_with=b"%1POWR=0\r"):
                     # Give a junk password to trigger the UnexpectedClientMessage.
-                    link = server.client(password="INCORRECT")
+                    link = server.client(password="INCORRECT", authentication=aiopjlink.PJAuth.MD5)
                     await link.power.get()
 
     async def test_mock_unexpectedresponse_after_connection(self):

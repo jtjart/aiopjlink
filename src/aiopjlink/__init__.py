@@ -27,7 +27,7 @@ from .commands import (
     Sources,
     Volume,
 )
-from .enums import PJClass
+from .enums import PJAuth, PJClass
 from .exceptions import (
     PJLinkConnectionClosed,
     PJLinkConnectionError,
@@ -51,6 +51,7 @@ __all__ = [
     "Information",
     "Lamp",
     "Mute",
+    "PJAuth",
     "PJClass",
     "PJLink",
     "PJLinkConnectionClosed",

@@ -102,7 +102,7 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
         projector = FakeProjector(token=b"21d0e96e")
         digest = hashlib.md5(b"21d0e96eabc123").hexdigest().encode()
         async with raw_tcp_server(projector) as server:
-            link = server.client(password="abc123", timeout=TIMEOUT)
+            link = server.client(password="abc123", timeout=TIMEOUT, authentication=aiopjlink.PJAuth.MD5)
             await link.power.get()
             await link.power.get()
             self.assertEqual(projector.lines, [digest + b"%1POWR ?\r", b"%1POWR ?\r"])
@@ -207,7 +207,9 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
         projector = FakeProjector(token=b"21d0e96e")
         digest = hashlib.md5(b"21d0e96eabc123").hexdigest().encode()
         async with raw_tcp_server(projector) as server:
-            link = server.client(password="abc123", timeout=TIMEOUT, idle_timeout=0.2)
+            link = server.client(
+                password="abc123", timeout=TIMEOUT, idle_timeout=0.2, authentication=aiopjlink.PJAuth.MD5
+            )
             for poll in range(3):  # Three polls.
                 for _ in range(3):  # Three commands per poll.
                     await link.power.get()
@@ -281,7 +283,9 @@ class PerCommandTests(unittest.IsolatedAsyncioTestCase):
         projector = FakeProjector(token=b"21d0e96e")
         digest = hashlib.md5(b"21d0e96eabc123").hexdigest().encode()
         async with raw_tcp_server(projector) as server:
-            link = server.client(password="abc123", timeout=TIMEOUT, persistent=False)
+            link = server.client(
+                password="abc123", timeout=TIMEOUT, persistent=False, authentication=aiopjlink.PJAuth.MD5
+            )
             await link.power.get()
             await link.power.get()
         self.assertEqual(projector.lines, [digest + b"%1POWR ?\r"] * 2)
