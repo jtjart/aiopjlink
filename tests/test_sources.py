@@ -117,14 +117,16 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
                     await client.sources.get_source_name(aiopjlink.Sources.Mode.DIGITAL, bad_index)
 
             # Get the names of available.
-            async with server.when(b"%2INST ?\r", respond_with=b"%2INST=11\r"):
-                async with server.when(b"%2INNM ?11\r", respond_with=b"%2INNM=Computer\r"):
-                    sources = await client.sources.available_with_names()
-                    self.assertEqual(len(sources), 1)
-                    mode, index, name = sources[0]
-                    self.assertEqual(mode, aiopjlink.Sources.Mode.RGB)
-                    self.assertEqual(index, "1")
-                    self.assertEqual(name, "Computer")
+            async with (
+                server.when(b"%2INST ?\r", respond_with=b"%2INST=11\r"),
+                server.when(b"%2INNM ?11\r", respond_with=b"%2INNM=Computer\r"),
+            ):
+                sources = await client.sources.available_with_names()
+                self.assertEqual(len(sources), 1)
+                mode, index, name = sources[0]
+                self.assertEqual(mode, aiopjlink.Sources.Mode.RGB)
+                self.assertEqual(index, "1")
+                self.assertEqual(name, "Computer")
 
     async def test_inpt_index_forms(self):
         """Setting a source accepts digits, letters (any case) and integers."""

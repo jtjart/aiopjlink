@@ -172,9 +172,11 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
         async with raw_tcp_server(projector) as server, client(server) as link:
             await link.power.get()
             await projector.wait_for_closed_connections(1)
-            with mock.patch.object(_Session, "usable", new_callable=mock.PropertyMock, return_value=True):
-                with self.assertRaises(aiopjlink.PJLinkConnectionClosed):
-                    await link.power.turn_on()
+            with (
+                mock.patch.object(_Session, "usable", new_callable=mock.PropertyMock, return_value=True),
+                self.assertRaises(aiopjlink.PJLinkConnectionClosed),
+            ):
+                await link.power.turn_on()
             # The failed connection was dropped: the next command works.
             self.assertEqual(await link.power.get(), aiopjlink.Power.State.ON)
         # One connection for the first query, one for the last. A repeat would have needed a third.
@@ -243,10 +245,12 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
         async with raw_tcp_server(FakeProjector()) as server:
             link = client(server)
             await link.power.get()
-            with mock.patch("aiopjlink._transport._CLOSE_TIMEOUT", 0.1):
-                with mock.patch.object(asyncio.StreamWriter, "wait_closed", hang):
-                    start = time.monotonic()
-                    await link.close()
+            with (
+                mock.patch("aiopjlink._transport._CLOSE_TIMEOUT", 0.1),
+                mock.patch.object(asyncio.StreamWriter, "wait_closed", hang),
+            ):
+                start = time.monotonic()
+                await link.close()
             self.assertLess(time.monotonic() - start, 1)
 
 

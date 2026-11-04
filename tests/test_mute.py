@@ -81,13 +81,17 @@ class MuteGroup(unittest.IsolatedAsyncioTestCase):
                 await client.mute.set(False, False)
 
             # Fully specified (2x instructions)
-            async with server.when(b"%1AVMT 11\r", respond_with=b"%1AVMT=OK\r"):
-                async with server.when(b"%1AVMT 20\r", respond_with=b"%1AVMT=OK\r"):
-                    await client.mute.set(True, False)
+            async with (
+                server.when(b"%1AVMT 11\r", respond_with=b"%1AVMT=OK\r"),
+                server.when(b"%1AVMT 20\r", respond_with=b"%1AVMT=OK\r"),
+            ):
+                await client.mute.set(True, False)
 
-            async with server.when(b"%1AVMT 10\r", respond_with=b"%1AVMT=OK\r"):
-                async with server.when(b"%1AVMT 21\r", respond_with=b"%1AVMT=OK\r"):
-                    await client.mute.set(False, True)
+            async with (
+                server.when(b"%1AVMT 10\r", respond_with=b"%1AVMT=OK\r"),
+                server.when(b"%1AVMT 21\r", respond_with=b"%1AVMT=OK\r"),
+            ):
+                await client.mute.set(False, True)
 
             # Partially specified (for audio) (1x instruction)
             async with server.when(b"%1AVMT 21\r", respond_with=b"%1AVMT=OK\r"):
