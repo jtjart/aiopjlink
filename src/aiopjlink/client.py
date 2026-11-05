@@ -16,7 +16,7 @@ See `aiopjlink.exceptions`: everything raised here is a subclass of `PJLinkExcep
 
 from ._transport import DEFAULT_IDLE_TIMEOUT, Transport
 from .commands import Errors, Filter, Freeze, Information, Lamp, Mute, Power, Sources, Volume
-from .enums import PJClass
+from .enums import PJAuth, PJClass
 
 
 class PJLink(Transport):
@@ -42,9 +42,15 @@ class PJLink(Transport):
     with U+FFFD instead of failing, so a name in another encoding is still readable; pass the projector's
     encoding (e.g. `"latin-1"`) to get it exactly.
 
-    Every command is bound by `timeout` seconds in total, including connecting. Keep it above 2 seconds:
-    a projector answers a wrong password only after two seconds (§5.1), so a shorter deadline reports it
-    as `PJLinkNoConnection` instead of `PJLinkPassword`.
+    Every command is bound by `timeout` seconds in total, including connecting. The exception is a command
+    that carries a password: a projector answers a wrong password only after two seconds (§5.1), so such a command
+    is given at least 3 seconds to be answered, and a wrong password is reported as `PJLinkPassword`
+    instead of `PJLinkNoConnection`, whatever `timeout` is.
+
+    `authentication` chooses the password procedure (§5.1) for a projector that has security on. The default,
+    `PJAuth.AUTO`, asks for SHA256 (specification 2.10) and uses MD5 for projectors that do not support it;
+    `PJAuth.SHA256` never uses MD5 (a projector without SHA256 raises `PJLinkNotSupported`), and `PJAuth.MD5` never
+    asks for SHA256. See the README for how a projector without SHA256 is recognised.
 
     Usage:
 
@@ -68,8 +74,18 @@ class PJLink(Transport):
         *,
         persistent: bool = True,
         idle_timeout: float = DEFAULT_IDLE_TIMEOUT,
+        authentication: PJAuth | str = PJAuth.AUTO,
     ) -> None:
-        super().__init__(address, port, password, timeout, encoding, persistent=persistent, idle_timeout=idle_timeout)
+        super().__init__(
+            address,
+            port,
+            password,
+            timeout,
+            encoding,
+            persistent=persistent,
+            idle_timeout=idle_timeout,
+            authentication=authentication,
+        )
 
         # Add the different API namespaces.
         self.info: Information = Information(self)

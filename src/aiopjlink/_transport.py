@@ -34,6 +34,31 @@ A kept connection can hold data nobody asked for: some projectors volunteer a st
 after a power-on command) or repeat an answer. Nothing can be the answer to a command that has not been sent yet, so
 whatever has arrived by then is thrown away before the next command goes out. Otherwise it would be taken for that
 command's answer: an "unexpected response command" error, or a wrong value if the command happens to be the same.
+
+Authentication
+--------------
+A projector with security on greets with `PJLINK 1 <token>`. Specification 2.10 (§5.1) then lets the
+controller ask for SHA256 by sending `PJLINK 2`; a projector that supports it answers with a random number
+and the first command carries a SHA256 digest instead of the MD5 one. Anything else the projector does in reply
+(`ERR1`, `ERR2`, `ERRA`, an echo, hanging up, silence) means "MD5 only": the connection is dropped and a new one
+is made with the original MD5 procedure (see `PJAuth`).
+
+The question costs one round trip per connection, and a projector that stays silent costs `_INQUIRY_TIMEOUT`
+once: from the moment a projector has not answered the question with a yes, MD5 is assumed and later connections
+do not ask again. (A projector that cannot cope with the question would otherwise be disturbed by every new
+connection; one that merely missed it is put right by what follows.)
+
+If MD5 is rejected (`ERRA`) by a projector that never said it does not do SHA256 (the question was skipped because
+MD5 was assumed or worked before), it may be a SHA256 projector after all. The command then asks once more on a
+new connection, for SHA256 only, with a deadline of its own. Nothing was carried out by the rejected command, so
+repeating it is safe whatever it does.
+
+Deadline
+--------
+`timeout` is how long a projector may take to answer. The exception is a command that carries a password digest:
+a projector that dislikes it waits two seconds before saying so (§5.1), and that must come out as
+`PJLinkPassword`, not as a dead connection, so such a command is given at least `_DIGEST_ANSWER_TIME`
+to be answered, whatever `timeout` is.
 """
 
 import asyncio
@@ -41,13 +66,14 @@ import dataclasses
 from types import TracebackType
 from typing import Self
 
-from ._auth import build_request
-from ._debug import LOGGER
+from ._auth import SHA256_INQUIRY, build_request, build_sha256_request, parse_security_reply, parse_welcome
+from ._debug import LOGGER, redact_debug_payload
 from ._protocol import format_command, parse_response
-from .enums import PJClass
+from .enums import PJAuth, PJClass
 from .exceptions import (
     PJLinkConnectionClosed,
     PJLinkNoConnection,
+    PJLinkNotSupported,
     PJLinkPassword,
     PJLinkProjectorError,
     PJLinkProtocolError,
@@ -56,6 +82,7 @@ from .exceptions import (
 _TIMEOUT_ERRORS: dict[str, str] = {
     "connect": "timeout - projector did not accept the connection in time",
     "greeting": "timeout - projector did not send a welcome message in time",
+    "security": "timeout - projector did not complete the security handshake in time",
     "send": "timeout - projector did not accept the command in time",
     "response": "timeout - projector did not respond in time",
 }
@@ -69,6 +96,23 @@ _CLOSE_TIMEOUT = 1.0
 # Unsolicited data is discarded in chunks of this size (the most a `StreamReader` buffers by default).
 _DISCARD_LIMIT = 2**16
 
+# How long a projector gets to answer the SHA256 question (§5.1). One that is not going to answer must not use up
+# the whole deadline of the command, which still needs time to reconnect: the wait is also capped at half of what
+# is left of it.
+_INQUIRY_TIMEOUT = 2.0
+
+# How long the answer to a command that carries a password digest may take: the two seconds a projector may wait
+# before rejecting a digest (§5.1), and a second more. If `timeout` ends sooner, the deadline is moved to this.
+_DIGEST_ANSWER_TIME = 3.0
+
+
+class _Md5Rejected(PJLinkPassword):
+    """MD5 was rejected by a projector that may still do SHA256. Never leaves `Transport.transmit`."""
+
+
+class _Sha256Refused(PJLinkNotSupported):
+    """The projector does not do SHA256, found out on the second try. Never leaves `Transport.transmit`."""
+
 
 @dataclasses.dataclass(slots=True)
 class _Session:
@@ -80,8 +124,14 @@ class _Session:
     greeting: str | None = None
     """The welcome line, kept until the first command has been built from it (§5.1, §5.3)."""
 
+    sha256_nonce: str | None = None
+    """The projector's random number, if it agreed to SHA256; kept until the first command has been built (§5.1)."""
+
     digest_sent: bool = False
     """True if the last command went out with authentication data in front of it."""
+
+    method: PJAuth | None = None
+    """Which procedure that authentication data belongs to: `PJAuth.SHA256` or `PJAuth.MD5`."""
 
     @property
     def usable(self) -> bool:
@@ -108,9 +158,11 @@ class Transport:
         *,
         persistent: bool = True,
         idle_timeout: float = DEFAULT_IDLE_TIMEOUT,
+        authentication: PJAuth | str = PJAuth.AUTO,
     ) -> None:
         if idle_timeout <= 0:
             raise ValueError("idle_timeout must be positive (use persistent=False for one connection per command)")
+        self._authentication = PJAuth(authentication)
         self._address = address
         self._port = port
         self._encoding = encoding
@@ -131,10 +183,19 @@ class Transport:
         # True once the projector has answered a command we sent a password digest with.
         self._authenticated = False
 
+        # The procedure the projector last accepted a password with (`PJAuth.SHA256` or `PJAuth.MD5`), if any.
+        # Only a success is remembered: a silent projector may just be having a bad moment.
+        self._learned: PJAuth | None = None
+
     @property
     def persistent(self) -> bool:
         """True if the connection is kept open and reused, False if every command opens its own."""
         return self._persistent
+
+    @property
+    def authentication(self) -> PJAuth:
+        """The authentication this object was asked to use (`PJAuth.AUTO` unless set otherwise)."""
+        return self._authentication
 
     async def __aenter__(self) -> Self:
         return self
@@ -194,21 +255,50 @@ class Transport:
 
         async with self._lock:
             # Queries have no side effects, so they may be repeated if a reused connection turns out to be dead.
-            return await self._transmit(command, cstring, pjclass, retry=param.startswith("?"))
+            retry = param.startswith("?")
+            try:
+                return await self._transmit(command, cstring, pjclass, retry=retry, budget=self._timeout)
+            except _Md5Rejected:
+                # The projector rejected the digest, so it did not carry out the command: asking again is safe even
+                # for a command that changes something. The second try is for SHA256 only, so a wrong password is
+                # not rejected twice, and it has a deadline of its own: the first try ended with an answer, so the
+                # projector is there.
+                LOGGER.debug("MD5 was rejected by a projector that may do SHA256, asking again")
+                try:
+                    return await self._transmit(
+                        command, cstring, pjclass, retry=retry, budget=self._timeout, sha256_only=True
+                    )
+                except _Sha256Refused:
+                    raise PJLinkPassword("authentication failed") from None
 
-    async def _transmit(self, command: str, cstring: str, pjclass: PJClass, *, retry: bool) -> str:
+    async def _transmit(
+        self,
+        command: str,
+        cstring: str,
+        pjclass: PJClass,
+        *,
+        retry: bool,
+        budget: float,
+        sha256_only: bool = False,
+    ) -> str:
         """Does the actual work of `transmit`. Must only be called with the lock held.
 
         `retry` allows one more attempt on a new connection if the kept connection was closed
         by the projector in the meantime. A command that changes something must not be repeated:
         the projector may have carried it out before it hung up.
+
+        `budget` is the number of seconds this attempt may take (but see `_DIGEST_ANSWER_TIME`).
+        `sha256_only` is the second try after a rejected MD5 digest: it asks for SHA256 and never falls back
+        (`_Sha256Refused` if the projector does not do it).
         """
 
         session = self._take_session()
         phase = "connect"  # What was going on if the deadline expires.
         in_sync = False  # True once a complete answer was read: the connection can carry another command.
+        no_sha256 = False  # True once the projector has answered the SHA256 question with something but yes.
         try:
-            async with asyncio.timeout(self._timeout):
+            async with asyncio.timeout(budget) as deadline:
+                ask_sha256 = sha256_only or self._asks_for_sha256()
                 while True:
                     reused = session is not None
                     try:
@@ -222,15 +312,42 @@ class Transport:
                             phase = "greeting"
                             session.greeting = await self._read_next(session.reader)
                             LOGGER.debug("received welcome/authentication message")
+
+                            # 3. Ask a projector that wants a password whether it does SHA256 (§5.1).
+                            # Anything but a yes means: drop this connection and start again with MD5.
+                            if ask_sha256:
+                                phase = "security"
+                                answer = await self._negotiate(session, deadline)
+                                if answer is not True:
+                                    self._abort(session)
+                                    session = None
+                                    if self._authentication is PJAuth.SHA256:
+                                        raise PJLinkNotSupported("SHA256 authentication not supported by the projector")
+                                    if sha256_only:
+                                        raise _Sha256Refused("SHA256 authentication not supported by the projector")
+                                    no_sha256 = answer is False
+                                    # Assumed from now on, even if the new connection fails: a projector that cannot
+                                    # cope with the question must not be asked again by every connection. If it was a
+                                    # SHA256 projector that missed it, the rejected MD5 digest puts that right.
+                                    self._learned = PJAuth.MD5
+                                    LOGGER.debug("projector does not support SHA256, reconnecting to use MD5")
+                                    ask_sha256 = False
+                                    continue
                         else:
                             # The connection was kept: whatever is waiting on it is not the answer to this command.
                             await self._discard_unsolicited(session)
 
-                        # 3. Authenticate if needed and send command
+                        # 4. Authenticate if needed and send command
                         phase = "send"
                         await self._send(session, cstring)
+                        if session.digest_sent:
+                            # A projector that dislikes the digest answers only after two seconds (§5.1): that wait
+                            # must not use up the deadline, or a wrong password would look like a dead connection.
+                            when = deadline.when()
+                            if when is not None:
+                                deadline.reschedule(max(when, asyncio.get_running_loop().time() + _DIGEST_ANSWER_TIME))
 
-                        # 4. Read response
+                        # 5. Read response
                         phase = "response"
                         response = await self._read_next(session.reader)
                         break
@@ -256,11 +373,20 @@ class Transport:
 
                 # Read the first few bytes of the response - check for failed auth.
                 if response.upper() == "PJLINK ERRA\r":
+                    if session.method is PJAuth.MD5:
+                        if self._learned is PJAuth.MD5:
+                            # MD5 worked before and does not any more (the projector may have been switched to
+                            # SHA256, or the password changed): do not take it for granted any longer.
+                            self._learned = None
+                        if self._authentication is PJAuth.AUTO and not no_sha256:
+                            # The projector never said it does not do SHA256: ask again (see `transmit`).
+                            raise _Md5Rejected("authentication failed")
                     raise PJLinkPassword("authentication failed")
                 if session.digest_sent:
                     self._authenticated = True  # Any other complete answer means the password was accepted.
+                    self._learned = session.method
 
-                # 5. Parse response
+                # 6. Parse response
                 try:
                     _, param = parse_response(response, expect_command=command, expect_pjclass=pjclass)
                 except PJLinkProjectorError:
@@ -271,6 +397,10 @@ class Transport:
                 return param
 
         except TimeoutError as err:
+            if sha256_only and phase == "response" and session is not None and session.digest_sent:
+                # MD5 was rejected before, and now the projector sits on our SHA256 digest: a projector that dislikes
+                # a digest answers only after two seconds (§5.1). The password is wrong, not the connection.
+                raise PJLinkPassword("authentication failed") from err
             raise PJLinkNoConnection(_TIMEOUT_ERRORS[phase]) from err
 
         finally:
@@ -289,16 +419,63 @@ class Transport:
         LOGGER.debug("connected to %s:%s", self._address, self._port)
         return _Session(reader, writer)
 
+    def _asks_for_sha256(self) -> bool:
+        """True if a new connection should ask the projector for SHA256 (§5.1)."""
+        if self._authentication is PJAuth.MD5:
+            return False
+        return not (self._authentication is PJAuth.AUTO and self._learned is PJAuth.MD5)
+
+    async def _negotiate(self, session: _Session, deadline: asyncio.Timeout) -> bool | None:
+        """Ask a projector that wants a password whether it supports SHA256 (§5.1).
+
+        Returns True if it does. Anything short of `PJLINK 2 <random number>` counts as "not" for the spec, which
+        has the controller use MD5 then: `ERR1`, `ERR2`, `ERRA` (which is *not* a password error here), an echo
+        (False: the projector said something), hanging up or silence for `_INQUIRY_TIMEOUT` (None: it said nothing,
+        which proves little, since a projector may just be having a bad moment).
+        Raises `PJLinkProtocolError` for a welcome line that is not valid, before anything is sent.
+        """
+        if session.greeting is None or not parse_welcome(session.greeting).secured or self._password is None:
+            # Nothing to ask: no password is needed, or none was given (`_send` reports that).
+            return True
+
+        when = deadline.when()
+        remaining = self._timeout if when is None else max(when - asyncio.get_running_loop().time(), 0.0)
+        try:
+            async with asyncio.timeout(min(_INQUIRY_TIMEOUT, remaining / 2)):
+                LOGGER.debug("asking the projector for SHA256 security")
+                session.writer.write(SHA256_INQUIRY.encode("ascii"))
+                await session.writer.drain()
+                reply = await self._read_next(session.reader)
+        except (TimeoutError, PJLinkConnectionClosed, PJLinkProtocolError, OSError):
+            LOGGER.debug("no answer to the security level inquiry")
+            return None
+
+        nonce = parse_security_reply(reply)
+        if nonce is None:
+            LOGGER.debug("security level inquiry answered with: %s", redact_debug_payload(reply.strip()))
+            return False
+        session.sha256_nonce = nonce
+        return True
+
     async def _send(self, session: _Session, cstring: str) -> None:
         """Send a command line, with the authentication data in front if this is the first one (§5.1, §5.3)."""
         plain = cstring.encode(self._encoding)
-        if session.greeting is not None:
+        session.method = None
+        if session.sha256_nonce is not None and self._password is not None:
+            cbytes = build_sha256_request(session.sha256_nonce, cstring, self._password, self._encoding)
+            session.sha256_nonce = None
+            session.greeting = None
+            session.method = PJAuth.SHA256
+        elif session.greeting is not None:
             cbytes = build_request(session.greeting, cstring, self._password, self._encoding)
             session.greeting = None
+            session.method = PJAuth.MD5
         else:
             # Authenticated already: the spec allows the digest to be left out from now on.
             cbytes = plain
         session.digest_sent = cbytes != plain
+        if not session.digest_sent:
+            session.method = None  # `PJLINK 0`: nothing was added to the command.
 
         LOGGER.debug("sending command: %s", cstring.strip())
         try:

@@ -108,7 +108,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             cmd = bytes(salted_password) + b"%1POWR ?\r"
             async with server.when(cmd, respond_with=b"%1POWR=0\r"):
                 # Send the power request and check the response is expected.
-                link = server.client(password="abc123")
+                link = server.client(password="abc123", authentication=aiopjlink.PJAuth.MD5)
                 self.addAsyncCleanup(link.close)
                 await link.power.get()
 
@@ -125,7 +125,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             async with server.when(cmd, respond_with=b"PJLINK ERRA\r"):
                 # Send the power request and check the response is expected.
                 with self.assertRaises(aiopjlink.PJLinkPassword):
-                    link = server.client(password="INVALIDPW")
+                    link = server.client(password="INVALIDPW", authentication=aiopjlink.PJAuth.MD5)
                     await link.power.get()
 
     async def test_auth_missing_pw(self):
@@ -190,7 +190,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             writer.close()
 
         async with raw_tcp_server(handler) as server:
-            link = server.client(password="abc123", timeout=0.5, persistent=False)
+            link = server.client(password="abc123", timeout=0.5, persistent=False, authentication=aiopjlink.PJAuth.MD5)
             await link.power.get()
             with self.assertRaises(aiopjlink.PJLinkConnectionClosed):
                 await link.power.get()
