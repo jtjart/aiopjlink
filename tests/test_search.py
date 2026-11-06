@@ -361,18 +361,22 @@ class SearchErrorTests(unittest.IsolatedAsyncioTestCase):
     async def test_no_socket_can_be_made(self):
         """E.g. a machine without IPv6: the search cannot start, and says so like any other failure of the network."""
         async with udp_projector() as server:
-            with mock.patch.object(socket, "socket", side_effect=OSError(errno.EAFNOSUPPORT, "not supported")):
-                with self.assertRaises(aiopjlink.PJLinkNoConnection) as err:
-                    await aiopjlink.search(**options(server))
+            with (
+                mock.patch.object(socket, "socket", side_effect=OSError(errno.EAFNOSUPPORT, "not supported")),
+                self.assertRaises(aiopjlink.PJLinkNoConnection) as err,
+            ):
+                await aiopjlink.search(**options(server))
         self.assertEqual(str(err.exception), f"search failed - [Errno {errno.EAFNOSUPPORT}] not supported")
 
     async def test_socket_is_not_leaked_when_the_loop_cannot_take_it(self):
         """The port was bound already: whatever goes wrong next, it is given back."""
         port = free_udp_port()
         async with udp_projector() as server:
-            with mock.patch.object(asyncio.BaseEventLoop, "create_datagram_endpoint", side_effect=RuntimeError("x")):
-                with self.assertRaises(RuntimeError):
-                    await aiopjlink.search(**options(server, local_port=port))
+            with (
+                mock.patch.object(asyncio.BaseEventLoop, "create_datagram_endpoint", side_effect=RuntimeError("x")),
+                self.assertRaises(RuntimeError),
+            ):
+                await aiopjlink.search(**options(server, local_port=port))
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
                 sock.bind((LOCALHOST, port))
 
@@ -401,7 +405,6 @@ class SearchErrorTests(unittest.IsolatedAsyncioTestCase):
         }
         async with udp_projector(ACKN) as server:
             for name, overrides in cases.items():
-                with self.subTest(name):
-                    with self.assertRaises(ValueError):
-                        await aiopjlink.search(**options(server, **overrides))
+                with self.subTest(name), self.assertRaises(ValueError):
+                    await aiopjlink.search(**options(server, **overrides))
         self.assertEqual(server.requests, [])
