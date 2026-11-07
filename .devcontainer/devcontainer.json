@@ -27,7 +27,7 @@
         "python.testing.pytestArgs": [
           "tests"
         ],
-        "python.analysis.typeCheckingMode": "strict",
+        "mypy-type-checker.importStrategy": "fromEnvironment",
         "[toml]": {
           "editor.defaultFormatter": "tamasfe.even-better-toml",
           "editor.formatOnSave": true,

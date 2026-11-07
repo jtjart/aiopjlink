@@ -91,7 +91,8 @@ line-ending = "lf"
 
 [tool.mypy]
 python_version = "3.11"
-files = ["src"]
+files = ["src", "tests"]
+mypy_path = ["tests"]
 
 strict = true
 warn_unreachable = true
@@ -104,10 +105,14 @@ pretty = true
 # ---------------------------------------------------------------------------
 
 [tool.pyright]
-include = ["src"]
+include = ["src", "tests"]
 typeCheckingMode = "strict"
 pythonVersion = "3.11"
 reportMissingImports = "error"
+executionEnvironments = [
+    { root = "tests", extraPaths = ["src", "tests"], reportPrivateUsage = "none" },
+    { root = "src" },
+]
 
 
 # ---------------------------------------------------------------------------

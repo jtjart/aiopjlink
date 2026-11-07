@@ -32,9 +32,13 @@ uv run pre-commit install    # optional: run the checks on every commit
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
-uv run mypy src
+uv run mypy
 uv run pyright
 ```
+
+The tests are type-checked as strictly as the library (mypy `strict` and pyright `strict`, configured once in `pyproject.toml`
+and shared by the editor, pre-commit and CI): annotate every test method (`-> None`) and helper. Tests may use private
+modules such as `aiopjlink._transport`; that is the only rule pyright relaxes for them.
 
 The pre-commit hooks run the same tools, including the full test suite, so a commit takes a moment.
 CI runs them too, with the tests on Linux, macOS and Windows with Python 3.11–3.14.
