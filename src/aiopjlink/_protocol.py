@@ -95,6 +95,11 @@ def parse_response(
     return command, param
 
 
+def parse_mac_address(text: str) -> str | None:
+    """Return `text` as a lower-case MAC address (`aa:bb:cc:dd:ee:ff`), or None if it is not one."""
+    return text.lower() if _MAC_ADDRESS.fullmatch(text) else None
+
+
 def parse_search_response(data: str) -> str:
     """Return the MAC address in a search response, `%2ACKN=xx:xx:xx:xx:xx:xx` and CR (§3.2.2).
 
@@ -106,7 +111,7 @@ def parse_search_response(data: str) -> str:
     line = data.rstrip("\r\n")
     if not line.upper().startswith(_SEARCH_RESPONSE_PREFIX):
         raise PJLinkProtocolError(f"unexpected search response: {line}")
-    mac = line[len(_SEARCH_RESPONSE_PREFIX) :]
-    if _MAC_ADDRESS.fullmatch(mac) is None:
+    mac_address = parse_mac_address(line[len(_SEARCH_RESPONSE_PREFIX) :])
+    if mac_address is None:
         raise PJLinkProtocolError("unexpected MAC address in search response")
-    return mac.lower()
+    return mac_address

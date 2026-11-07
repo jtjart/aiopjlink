@@ -20,10 +20,8 @@ from typing import Any
 
 from ._debug import LOGGER
 from ._protocol import SEARCH_REQUEST, parse_search_response
+from ._udp import PJLINK_PORT, open_socket, resolve_address, source_address
 from .exceptions import PJLinkNoConnection, PJLinkProtocolError
-
-PJLINK_PORT = 4352
-"""The UDP port a projector listens on for the search (§3.2)."""
 
 DEFAULT_SEARCH_DURATION = 30.0
 """How long the controller listens for answers (§3.2.1, step 2), in seconds."""
@@ -43,19 +41,6 @@ class SearchResult:
     """The MAC address the projector reported, in lower case: `aa:bb:cc:dd:ee:ff`."""
 
 
-def _source_address(addr: tuple[Any, ...]) -> str:
-    """The IP address a datagram came from, as a string that can be connected to.
-
-    An IPv6 link-local address is only meaningful together with the interface it was seen on. The operating
-    system reports that as a separate scope id (and some also write it after a `%` in the address), so it is
-    added here when it is missing: `fe80::1%3`.
-    """
-    host = str(addr[0])
-    if len(addr) >= 4 and addr[3] and "%" not in host:
-        return f"{host}%{addr[3]}"
-    return host
-
-
 class _SearchProtocol(asyncio.DatagramProtocol):
     """Collects the search responses that arrive on the socket."""
 
@@ -64,7 +49,7 @@ class _SearchProtocol(asyncio.DatagramProtocol):
         self._seen: set[SearchResult] = set()
 
     def datagram_received(self, data: bytes, addr: tuple[str | Any, int]) -> None:
-        source = _source_address(addr)
+        source = source_address(addr)
         try:
             mac_address = parse_search_response(data.decode("ascii", errors="replace"))
         except PJLinkProtocolError as err:
@@ -85,20 +70,6 @@ class _SearchProtocol(asyncio.DatagramProtocol):
         LOGGER.debug("search datagram error: %s", exc)
 
 
-def _resolve(host: str, port: int, what: str) -> tuple[socket.AddressFamily, tuple[Any, ...]]:
-    """Turn an IP address literal (not a host name: nothing here may block on DNS) into `(family, sockaddr)`.
-
-    The `sockaddr` is what the `socket` methods take. For IPv6 it carries the scope id of `ff02::1%eth0`,
-    which a plain `(host, port)` tuple would lose.
-    """
-    try:
-        infos = socket.getaddrinfo(host, port, 0, socket.SOCK_DGRAM, 0, socket.AI_NUMERICHOST)
-    except (socket.gaierror, UnicodeError) as err:
-        raise ValueError(f"{what} is not a usable IP address: {host!r}") from err
-    family, _, _, _, sockaddr = infos[0]
-    return family, sockaddr
-
-
 def _resolve_targets(
     broadcast_address: str | Sequence[str], port: int
 ) -> tuple[socket.AddressFamily, list[tuple[Any, ...]]]:
@@ -106,7 +77,7 @@ def _resolve_targets(
     addresses = [broadcast_address] if isinstance(broadcast_address, str) else list(broadcast_address)
     if not addresses:
         raise ValueError("at least one broadcast address is required")
-    resolved = [_resolve(address, port, "broadcast_address") for address in addresses]
+    resolved = [resolve_address(address, port, "broadcast_address") for address in addresses]
     families = {family for family, _ in resolved}
     if len(families) != 1:
         raise ValueError("broadcast_address must not mix IPv4 and IPv6 addresses")
@@ -117,27 +88,10 @@ def _resolve_local(local_address: str | None, local_port: int, family: socket.Ad
     """The `sockaddr` to bind to: the wildcard address of `family`, or `local_address`, which must be of that family."""
     if local_address is None:
         return ("0.0.0.0" if family == socket.AF_INET else "::", local_port)
-    local_family, sockaddr = _resolve(local_address, local_port, "local_address")
+    local_family, sockaddr = resolve_address(local_address, local_port, "local_address")
     if local_family != family:
         raise ValueError("local_address must be of the same IP version as broadcast_address")
     return sockaddr
-
-
-def _open_socket(family: socket.AddressFamily, local: tuple[Any, ...]) -> socket.socket:
-    """Create the non-blocking UDP socket the search sends from and listens on."""
-    try:
-        sock = socket.socket(family, socket.SOCK_DGRAM)
-    except OSError as err:
-        raise PJLinkNoConnection(f"search failed - {err}") from err
-    try:
-        sock.setblocking(False)
-        if family == socket.AF_INET:
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        sock.bind(local)
-    except OSError as err:
-        sock.close()
-        raise PJLinkNoConnection(f"search failed - {err}") from err
-    return sock
 
 
 def _send_requests(sock: socket.socket, targets: list[tuple[Any, ...]]) -> None:
@@ -214,7 +168,10 @@ async def search_iter(
 
     loop = asyncio.get_running_loop()
     results: asyncio.Queue[SearchResult] = asyncio.Queue()
-    sock = _open_socket(family, local)
+    try:
+        sock = open_socket(family, local, broadcast=True)
+    except OSError as err:
+        raise PJLinkNoConnection(f"search failed - {err}") from err
     try:
         transport, _ = await loop.create_datagram_endpoint(lambda: _SearchProtocol(results), sock=sock)
     except BaseException:
