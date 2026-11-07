@@ -10,7 +10,7 @@ from mock_projector import (
 class MuteGroup(unittest.IsolatedAsyncioTestCase):
     """PJLink mute controls behave as expected."""
 
-    async def test_status(self):
+    async def test_status(self) -> None:
         """Mute status is acquired OK."""
         async with mock_client_server_noauth() as (server, client):
             # Video only muted.
@@ -43,7 +43,7 @@ class MuteGroup(unittest.IsolatedAsyncioTestCase):
                     video, audio = await client.mute.status()
             self.assertEqual(str(err.exception), "unexpected mute response")
 
-    async def test_control_api(self):
+    async def test_control_api(self) -> None:
         """Mute status can be set OK using expressive methods."""
         async with mock_client_server_noauth() as (server, client):
             # VIDEO
@@ -71,7 +71,7 @@ class MuteGroup(unittest.IsolatedAsyncioTestCase):
             async with server.when(b"%1AVMT 30\r", respond_with=b"%1AVMT=OK\r"):
                 await client.mute.both(False)
 
-    async def test_set(self):
+    async def test_set(self) -> None:
         """Mute status can be set OK using the shortcut set method."""
         async with mock_client_server_noauth() as (server, client):
             # Fully specified (3x condition).

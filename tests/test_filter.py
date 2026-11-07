@@ -7,7 +7,7 @@ from mock_projector import mock_client_server_noauth
 class FilterGroup(unittest.IsolatedAsyncioTestCase):
     """PJLink filter reports correctly."""
 
-    async def test_hours(self):
+    async def test_hours(self) -> None:
         """Get the correct filter hours."""
         async with mock_client_server_noauth() as (server, client):
             # Valid filter.
@@ -22,12 +22,12 @@ class FilterGroup(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(str(err.exception), "no filter")
 
             # Unparsable usage time.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err_unexpected_response_parameter:
                 async with server.when(b"%2FILT ?\r", respond_with=b"%2FILT=abc\r"):
                     hours = await client.filter.hours()
-            self.assertEqual(str(err.exception), "filter usage not parsable")
+            self.assertEqual(str(err_unexpected_response_parameter.exception), "filter usage not parsable")
 
-    async def test_replacement_model(self):
+    async def test_replacement_model(self) -> None:
         """Get a list of replacement filter models."""
         async with mock_client_server_noauth() as (server, client):
             # Once replacement.

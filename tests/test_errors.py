@@ -7,7 +7,7 @@ from mock_projector import mock_client_server_noauth
 class ErrorGroup(unittest.IsolatedAsyncioTestCase):
     """PJLink error reporting behaves as expected."""
 
-    async def test_query(self):
+    async def test_query(self) -> None:
         """Error status parses results correctly."""
         async with mock_client_server_noauth() as (server, client):
             # No errors!

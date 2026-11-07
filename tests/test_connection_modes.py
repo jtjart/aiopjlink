@@ -8,11 +8,13 @@ import asyncio
 import hashlib
 import time
 import unittest
+from collections.abc import Sequence
+from typing import Any
 from unittest import mock
 
 import aiopjlink
 from aiopjlink._transport import _Session
-from mock_projector import raw_tcp_server
+from mock_projector import RawServer, raw_tcp_server
 
 ON = b"%1POWR=1\r"
 TIMEOUT = 2.0
@@ -26,7 +28,15 @@ class FakeProjector:
     When `response_gate` is set, replies wait until that event is set.
     """
 
-    def __init__(self, *, token=None, replies=(), delays=None, response_gate=None, hang_up_after_answer=False):
+    def __init__(
+        self,
+        *,
+        token: bytes | None = None,
+        replies: Sequence[bytes] = (),
+        delays: dict[int, float] | None = None,
+        response_gate: asyncio.Event | None = None,
+        hang_up_after_answer: bool = False,
+    ) -> None:
         self.token = token
         self.replies = list(replies)
         self.delays = delays or {}
@@ -38,14 +48,14 @@ class FakeProjector:
         self.command_received = asyncio.Event()
         self.connection_closed = asyncio.Event()
 
-    async def wait_for_closed_connections(self, count):
+    async def wait_for_closed_connections(self, count: int) -> None:
         while self.connections - self.open_connections < count:
             self.connection_closed.clear()
             if self.connections - self.open_connections >= count:
                 break
             await asyncio.wait_for(self.connection_closed.wait(), timeout=5)
 
-    async def __call__(self, reader, writer):
+    async def __call__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         self.connections += 1
         self.open_connections += 1
         try:
@@ -71,18 +81,18 @@ class FakeProjector:
             self.connection_closed.set()
 
 
-def client(server, timeout=TIMEOUT, **options):
+def client(server: RawServer, timeout: float = TIMEOUT, **options: Any) -> aiopjlink.PJLink:
     return server.client(timeout=timeout, **options)
 
 
 class PersistentTests(unittest.IsolatedAsyncioTestCase):
     """The default: the connection is kept for the next command."""
 
-    async def test_default_is_persistent(self):
+    async def test_default_is_persistent(self) -> None:
         self.assertTrue(aiopjlink.PJLink(address="127.0.0.1").persistent)
         self.assertFalse(aiopjlink.PJLink(address="127.0.0.1", persistent=False).persistent)
 
-    async def test_follow_up_commands_reuse_the_connection(self):
+    async def test_follow_up_commands_reuse_the_connection(self) -> None:
         projector = FakeProjector()
         async with raw_tcp_server(projector) as server, client(server) as link:
             for _ in range(3):
@@ -90,14 +100,14 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(projector.connections, 1)
         self.assertEqual(len(projector.lines), 3)
 
-    async def test_concurrent_commands_share_the_connection(self):
+    async def test_concurrent_commands_share_the_connection(self) -> None:
         projector = FakeProjector()
         async with raw_tcp_server(projector) as server, client(server) as link:
             results = await asyncio.gather(*(link.power.get() for _ in range(5)))
         self.assertEqual(results, [aiopjlink.Power.State.ON] * 5)
         self.assertEqual(projector.connections, 1)
 
-    async def test_digest_is_sent_with_the_first_command_only(self):
+    async def test_digest_is_sent_with_the_first_command_only(self) -> None:
         """§5.3: after the first command the authentication data may be left out."""
         projector = FakeProjector(token=b"21d0e96e")
         digest = hashlib.md5(b"21d0e96eabc123").hexdigest().encode()
@@ -113,7 +123,7 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
             await link.close()
             self.assertEqual(projector.lines[2], digest + b"%1POWR ?\r")
 
-    async def test_projector_error_keeps_the_connection(self):
+    async def test_projector_error_keeps_the_connection(self) -> None:
         """ERR3 is a complete answer: the connection is fine and carries the next command."""
         projector = FakeProjector(replies=[b"%1POWR=ERR3\r"])
         async with raw_tcp_server(projector) as server, client(server) as link:
@@ -122,7 +132,7 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await link.power.get(), aiopjlink.Power.State.ON)
         self.assertEqual(projector.connections, 1)
 
-    async def test_timeout_drops_the_connection(self):
+    async def test_timeout_drops_the_connection(self) -> None:
         """A late answer must not be taken for the answer to the next command."""
         projector = FakeProjector(replies=[b"%1POWR=0\r"], delays={0: TIMEOUT * 1.4})
         async with raw_tcp_server(projector) as server, client(server) as link:
@@ -132,7 +142,7 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await link.power.get(), aiopjlink.Power.State.ON)
         self.assertEqual(projector.connections, 2)
 
-    async def test_cancelled_command_drops_the_connection(self):
+    async def test_cancelled_command_drops_the_connection(self) -> None:
         """Same for a command whose caller gave up (e.g. a cancelled service call)."""
         response_gate = asyncio.Event()
         projector = FakeProjector(replies=[b"%1POWR=0\r"], response_gate=response_gate)
@@ -146,7 +156,7 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await link.power.get(), aiopjlink.Power.State.ON)
         self.assertEqual(projector.connections, 2)
 
-    async def test_connection_closed_by_the_projector_is_replaced(self):
+    async def test_connection_closed_by_the_projector_is_replaced(self) -> None:
         """The projector drops a silent connection (§5.4): the next command connects again, no error."""
         projector = FakeProjector(hang_up_after_answer=True)
         async with raw_tcp_server(projector) as server, client(server) as link:
@@ -155,7 +165,7 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
                 await projector.wait_for_closed_connections(connection_number + 1)
         self.assertEqual(projector.connections, 3)
 
-    async def test_query_is_repeated_when_the_kept_connection_is_dead(self):
+    async def test_query_is_repeated_when_the_kept_connection_is_dead(self) -> None:
         """The projector hangs up right when the next query is sent: it is repeated on a new connection."""
         projector = FakeProjector(hang_up_after_answer=True)
         async with raw_tcp_server(projector) as server, client(server) as link:
@@ -166,7 +176,7 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(await link.power.get(), aiopjlink.Power.State.ON)
         self.assertEqual(projector.connections, 2)
 
-    async def test_command_that_changes_something_is_not_repeated(self):
+    async def test_command_that_changes_something_is_not_repeated(self) -> None:
         """The projector may have carried it out before it hung up, so the caller gets the error."""
         projector = FakeProjector(hang_up_after_answer=True)
         async with raw_tcp_server(projector) as server, client(server) as link:
@@ -182,7 +192,7 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
         # One connection for the first query, one for the last. A repeat would have needed a third.
         self.assertEqual(projector.connections, 2)
 
-    async def test_idle_connection_is_released(self):
+    async def test_idle_connection_is_released(self) -> None:
         """A connection nobody uses is given back, so another controller can get in."""
         projector = FakeProjector()
         async with raw_tcp_server(projector) as server, client(server, idle_timeout=0.1) as link:
@@ -193,12 +203,12 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await link.power.get(), aiopjlink.Power.State.ON)
         self.assertEqual(projector.connections, 2)
 
-    async def test_idle_timeout_must_be_positive(self):
+    async def test_idle_timeout_must_be_positive(self) -> None:
         for bad in (0, -1):
             with self.assertRaises(ValueError):
                 aiopjlink.PJLink(address="127.0.0.1", idle_timeout=bad)
 
-    async def test_short_idle_timeout_gives_one_connection_per_burst(self):
+    async def test_short_idle_timeout_gives_one_connection_per_burst(self) -> None:
         """Three commands at once share a connection, which is closed before the next poll.
 
         This is what the Home Assistant integration did before it used this library: one connection
@@ -220,7 +230,7 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sum(line.startswith(digest) for line in projector.lines), 3)
         self.assertEqual(len(projector.lines), 9)
 
-    async def test_close_releases_the_connection(self):
+    async def test_close_releases_the_connection(self) -> None:
         projector = FakeProjector()
         async with raw_tcp_server(projector) as server:
             link = client(server)
@@ -235,13 +245,13 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
             await link.close()
         self.assertEqual(projector.connections, 2)
 
-    async def test_close_before_any_command(self):
+    async def test_close_before_any_command(self) -> None:
         await aiopjlink.PJLink(address="127.0.0.1").close()
 
-    async def test_close_is_bounded(self):
+    async def test_close_is_bounded(self) -> None:
         """A connection that never finishes closing does not stall `close`."""
 
-        async def hang(*_args, **_kwargs):
+        async def hang(*_args: object, **_kwargs: object) -> None:
             await asyncio.sleep(3600)
 
         async with raw_tcp_server(FakeProjector()) as server:
@@ -259,7 +269,7 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
 class PerCommandTests(unittest.IsolatedAsyncioTestCase):
     """`persistent=False`: every command has a connection of its own, as §5.4 describes."""
 
-    async def test_every_command_opens_and_closes_a_connection(self):
+    async def test_every_command_opens_and_closes_a_connection(self) -> None:
         projector = FakeProjector()
         async with raw_tcp_server(projector) as server:
             link = client(server, persistent=False)
@@ -269,7 +279,7 @@ class PerCommandTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(projector.open_connections, 0)
         self.assertEqual(projector.connections, 3)
 
-    async def test_idle_timeout_does_not_apply(self):
+    async def test_idle_timeout_does_not_apply(self) -> None:
         projector = FakeProjector()
         async with raw_tcp_server(projector) as server:
             link = client(server, persistent=False, idle_timeout=30)
@@ -279,7 +289,7 @@ class PerCommandTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(projector.open_connections, 0)
         self.assertEqual(projector.connections, 2)
 
-    async def test_digest_is_sent_with_every_command(self):
+    async def test_digest_is_sent_with_every_command(self) -> None:
         projector = FakeProjector(token=b"21d0e96e")
         digest = hashlib.md5(b"21d0e96eabc123").hexdigest().encode()
         async with raw_tcp_server(projector) as server:
@@ -290,7 +300,7 @@ class PerCommandTests(unittest.IsolatedAsyncioTestCase):
             await link.power.get()
         self.assertEqual(projector.lines, [digest + b"%1POWR ?\r"] * 2)
 
-    async def test_close_does_nothing(self):
+    async def test_close_does_nothing(self) -> None:
         async with raw_tcp_server(FakeProjector()) as server:
             link = client(server, persistent=False)
             await link.close()

@@ -7,7 +7,7 @@ from mock_projector import mock_client_server_noauth
 class FreezeGroup(unittest.IsolatedAsyncioTestCase):
     """PJLink freeze behavour activates and reports correctly."""
 
-    async def test_set(self):
+    async def test_set(self) -> None:
         """Screen freezes and unfreezes."""
         async with mock_client_server_noauth() as (server, client):
             # Expected.
@@ -22,7 +22,7 @@ class FreezeGroup(unittest.IsolatedAsyncioTestCase):
                     await client.freeze.set(True)
             self.assertEqual(str(err.exception), "expected OK response")
 
-    async def test_get(self):
+    async def test_get(self) -> None:
         """Getting the current freeze state."""
         async with mock_client_server_noauth() as (server, client):
             # Expected.

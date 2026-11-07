@@ -1,8 +1,10 @@
+import asyncio
 import hashlib
 import unittest
 from unittest.mock import patch
 
 import aiopjlink
+from aiopjlink._transport import Transport, _Session
 from aiopjlink.enums import PJClass
 from mock_projector import client_for, mock_tcp_pjlink, raw_tcp_server, unused_port
 
@@ -10,7 +12,7 @@ from mock_projector import client_for, mock_tcp_pjlink, raw_tcp_server, unused_p
 class DebugLoggingTests(unittest.TestCase):
     """The redaction helper hides the one-time auth token in debug logs."""
 
-    def test_debug_redaction(self):
+    def test_debug_redaction(self) -> None:
         from aiopjlink._debug import redact_debug_payload
 
         self.assertEqual(redact_debug_payload("PJLINK 1 123456"), "PJLINK 1 <redacted>")
@@ -20,7 +22,7 @@ class DebugLoggingTests(unittest.TestCase):
 class AuthTests(unittest.IsolatedAsyncioTestCase):
     """PJLink authentication behaves as expected."""
 
-    async def test_auth_none(self):
+    async def test_auth_none(self) -> None:
         """Tests a connection with no authentication."""
 
         # Start server with no auth.
@@ -35,7 +37,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
                 value = await client.transmit("POWR", "?", pjclass=PJClass.ONE)
                 self.assertEqual(value, "0")
 
-    async def test_auth_malformed(self):
+    async def test_auth_malformed(self) -> None:
         """Tests the projector sending back a malformed welcome message generates a `PJLinkProtocolError`."""
 
         # Start server with no auth.
@@ -47,7 +49,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
                 link = server.client()
                 await link.power.get()
 
-    async def test_auth_malformed_security_message(self):
+    async def test_auth_malformed_security_message(self) -> None:
         """Auth is announced (`1`) but the token is not separated by a space: `PJLinkProtocolError`."""
 
         async with mock_tcp_pjlink() as server:
@@ -59,7 +61,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
                 await link.power.get()
             self.assertIn("unrecognised auth method", str(err.exception))
 
-    async def test_auth_no_welcome(self):
+    async def test_auth_no_welcome(self) -> None:
         """A projector that accepts the connection but sends no welcome message is a `PJLinkNoConnection`."""
 
         # Start server with no auth.
@@ -74,7 +76,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertIn("welcome message", str(err.exception))
 
-    async def test_auth_no_server(self):
+    async def test_auth_no_server(self) -> None:
         """Tests that the client honours the timeout if no server responds to the connection."""
 
         # CONDITION 1: The host can be reached by the OS but no response (aiotimeout).
@@ -94,7 +96,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             await link.power.get()
         self.assertIn("connection failed", str(err.exception))
 
-    async def test_auth_valid_pw(self):
+    async def test_auth_valid_pw(self) -> None:
         """Tests a connection with valid authentication."""
 
         # Server sends the auth challenge: token='21d0e96e'; password='abc123'
@@ -112,7 +114,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
                 self.addAsyncCleanup(link.close)
                 await link.power.get()
 
-    async def test_auth_invalid_pw(self):
+    async def test_auth_invalid_pw(self) -> None:
         """Tests a connection with invalid authentication."""
 
         # Server sends the auth challenge: token='21d0e96e'; password='abc123'
@@ -128,7 +130,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
                     link = server.client(password="INVALIDPW", authentication=aiopjlink.PJAuth.MD5)
                     await link.power.get()
 
-    async def test_auth_missing_pw(self):
+    async def test_auth_missing_pw(self) -> None:
         """Tests a projector that wants a password when none was given."""
 
         async with mock_tcp_pjlink() as server:
@@ -139,10 +141,10 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
                 await link.power.get()
             self.assertEqual(str(err.exception), "password required")
 
-    async def test_auth_wrong_password_projector_hangs_up(self):
+    async def test_auth_wrong_password_projector_hangs_up(self) -> None:
         """A projector that closes instead of sending ERRA is reported as a password problem."""
 
-        async def hang_up(reader, writer):
+        async def hang_up(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             writer.write(b"PJLINK 1 21d0e96e\r")
             await writer.drain()
             await reader.readuntil(b"\r")
@@ -153,32 +155,32 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(aiopjlink.PJLinkPassword):
                 await link.power.get()
 
-    async def test_send_failure_is_not_reported_as_a_password_error(self):
+    async def test_send_failure_is_not_reported_as_a_password_error(self) -> None:
         """A failure while sending the digest is a connection error, not a rejected password."""
 
-        async def handler(reader, writer):
+        async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             writer.write(b"PJLINK 1 21d0e96e\r")
             await writer.drain()
             await reader.read()
             writer.close()
 
-        async def fail_send(transport, session, cstring):
+        async def fail_send(transport: Transport, session: _Session, cstring: str) -> None:
             session.digest_sent = True
             raise aiopjlink.PJLinkConnectionClosed("simulated send failure")
 
         async with raw_tcp_server(handler) as server:
             link = server.client(timeout=0.5)
             with (
-                patch.object(aiopjlink._transport.Transport, "_send", fail_send),
+                patch.object(Transport, "_send", fail_send),
                 self.assertRaises(aiopjlink.PJLinkConnectionClosed),
             ):
                 await link.power.get()
 
-    async def test_hang_up_after_successful_auth_is_a_connection_error(self):
+    async def test_hang_up_after_successful_auth_is_a_connection_error(self) -> None:
         """Once the password has worked, a later hang-up is not blamed on the password."""
         connections = 0
 
-        async def handler(reader, writer):
+        async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             nonlocal connections
             connections += 1
             writer.write(b"PJLINK 1 21d0e96e\r")
