@@ -67,12 +67,12 @@ async def take(notifications: AsyncGenerator[Notification, None], count: int) ->
 
 
 async def listen_and_send(port: int, *datagrams: bytes, count: int, **overrides: Any) -> list[Notification]:
-    """Listen on `port`, send the datagrams to it, and return the first `count` notifications."""
+    """Listen on `port`, send the datagrams to the address listened on, and return the first `count` notifications."""
     async with contextlib.aclosing(listen_notifications(**options(port, **overrides))) as found:
         pending = asyncio.ensure_future(take(found, count))
         await asyncio.sleep(0)  # The listener binds the port when it starts: nothing is lost from here on.
         for datagram in datagrams:
-            send(port, datagram)
+            send(port, datagram, host=overrides.get("local_address", LOCALHOST) or LOCALHOST)
         return await pending
 
 
