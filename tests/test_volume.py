@@ -7,7 +7,7 @@ from mock_projector import mock_client_server_noauth
 class VolumeGroups(unittest.IsolatedAsyncioTestCase):
     """PJLink volume increments and decrements correctly."""
 
-    async def test_change_volume(self):
+    async def test_change_volume(self) -> None:
         """Volume turns up and down for speaker and microphone."""
         async with mock_client_server_noauth() as (server, client):
             # Turn up mic.

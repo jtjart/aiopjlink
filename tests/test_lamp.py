@@ -7,7 +7,7 @@ from mock_projector import mock_client_server_noauth
 class LampGroup(unittest.IsolatedAsyncioTestCase):
     """PJLink lamps report correctly."""
 
-    async def test_status(self):
+    async def test_status(self) -> None:
         """Lamp status parses correctly for common values."""
         async with mock_client_server_noauth() as (server, client):
             # Two lamps (from PJLink test excel sheet)
@@ -54,7 +54,7 @@ class LampGroup(unittest.IsolatedAsyncioTestCase):
                     lamps = await client.lamps.status()
             self.assertEqual(str(err.exception), "unparsable lamp status")
 
-    async def test_hours(self):
+    async def test_hours(self) -> None:
         """The hours accelerator gets the correct lamp hours."""
         # Two lamps (from PJLink test excel sheet)
         async with (
@@ -64,7 +64,7 @@ class LampGroup(unittest.IsolatedAsyncioTestCase):
             hours = await client.lamps.hours()
             self.assertEqual(hours, 8253)
 
-    async def test_replacement_model(self):
+    async def test_replacement_model(self) -> None:
         """Get a list of replacement lamp models."""
         async with mock_client_server_noauth() as (server, client):
             # Once replacement.

@@ -7,7 +7,7 @@ from mock_projector import mock_client_server_noauth
 class InfoGroup(unittest.IsolatedAsyncioTestCase):
     """PJLink projector information queries."""
 
-    async def test_software_version(self):
+    async def test_software_version(self) -> None:
         """Get the software version number string."""
         async with mock_client_server_noauth() as (server, client):
             # Version provided.
@@ -20,7 +20,7 @@ class InfoGroup(unittest.IsolatedAsyncioTestCase):
                 version = await client.info.software_version()
                 self.assertEqual(version, "")
 
-    async def test_serial_number(self):
+    async def test_serial_number(self) -> None:
         """Get the device serial number string."""
         async with mock_client_server_noauth() as (server, client):
             # Version provided.
@@ -33,7 +33,7 @@ class InfoGroup(unittest.IsolatedAsyncioTestCase):
                 version = await client.info.serial_number()
                 self.assertEqual(version, "")
 
-    async def test_pjlink_class(self):
+    async def test_pjlink_class(self) -> None:
         """Query the PJLink class support."""
         async with mock_client_server_noauth() as (server, client):
             # Class 1 query (default).
@@ -55,7 +55,7 @@ class InfoGroup(unittest.IsolatedAsyncioTestCase):
                     await client.info.pjlink_class()
             self.assertEqual(str(err.exception), "unexpected PJLink class")
 
-    async def test_info_other(self):
+    async def test_info_other(self) -> None:
         """Query the "other" info."""
         async with mock_client_server_noauth() as (server, client):
             # Test from spec excel sheet.
@@ -70,7 +70,7 @@ class InfoGroup(unittest.IsolatedAsyncioTestCase):
             async with server.when(b"%1INFO ?\r", respond_with=b"%1INFO=\r"):
                 self.assertEqual(await client.info.other(), "")
 
-    async def test_product_name(self):
+    async def test_product_name(self) -> None:
         """Query the product name information."""
         async with mock_client_server_noauth() as (server, client):
             # Test from actual projector.
@@ -81,7 +81,7 @@ class InfoGroup(unittest.IsolatedAsyncioTestCase):
             async with server.when(b"%1INF2 ?\r", respond_with=b"%1INF2=\r"):
                 self.assertEqual(await client.info.product_name(), "")
 
-    async def test_manufacturer_name(self):
+    async def test_manufacturer_name(self) -> None:
         """Query the manufacturer name information."""
         async with mock_client_server_noauth() as (server, client):
             # Test from actual projector.
@@ -92,7 +92,7 @@ class InfoGroup(unittest.IsolatedAsyncioTestCase):
             async with server.when(b"%1INF1 ?\r", respond_with=b"%1INF1=\r"):
                 self.assertEqual(await client.info.manufacturer_name(), "")
 
-    async def test_projector_name(self):
+    async def test_projector_name(self) -> None:
         """Query the projector name information."""
         async with mock_client_server_noauth() as (server, client):
             # Test from actual projector.

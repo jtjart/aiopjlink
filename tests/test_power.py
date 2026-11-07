@@ -7,7 +7,7 @@ from mock_projector import mock_tcp_pjlink
 class PowerGroup(unittest.IsolatedAsyncioTestCase):
     """PJLink power control behaves as expected."""
 
-    async def test_state_enum_coercion(self):
+    async def test_state_enum_coercion(self) -> None:
         """Do the enums behave logically."""
         # Power commands.
         self.assertEqual(bool(aiopjlink.Power.State.ON), True)
@@ -23,7 +23,7 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(aiopjlink.Power.State.COOLING)
         self.assertFalse(aiopjlink.Power.State.OFF)
 
-    async def test_power_get(self):
+    async def test_power_get(self) -> None:
         """Get power status."""
 
         # Start server with no auth.
@@ -58,7 +58,7 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
                     await client.power.get()
             self.assertEqual(str(err.exception), "unexpected power state")
 
-    async def test_power_set(self):
+    async def test_power_set(self) -> None:
         """Set power status."""
 
         # Start server with no auth.
@@ -90,30 +90,30 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(str(err.exception), "out of parameter")
 
             # Power set unavailable (test duplicated in test_response_parsing)
-            with self.assertRaises(aiopjlink.PJLinkNotReady) as err:
+            with self.assertRaises(aiopjlink.PJLinkNotReady) as err_not_ready:
                 async with server.when(b"%1POWR 0\r", respond_with=b"%1POWR=ERR3\r"):
                     await client.power.set(client.power.State.OFF)
-            self.assertEqual(str(err.exception), "unavailable in the current state")
+            self.assertEqual(str(err_not_ready.exception), "unavailable in the current state")
 
             # Power set not possible (test duplicated in test_response_parsing)
-            with self.assertRaises(aiopjlink.PJLinkDeviceFailure) as err:
+            with self.assertRaises(aiopjlink.PJLinkDeviceFailure) as err_device_failure:
                 async with server.when(b"%1POWR 0\r", respond_with=b"%1POWR=ERR4\r"):
                     await client.power.set(client.power.State.OFF)
-            self.assertEqual(str(err.exception), "projector or display failure")
+            self.assertEqual(str(err_device_failure.exception), "projector or display failure")
 
             # Unexpected projector reply to a sensible message.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err_unexpected_response_parameter:
                 async with server.when(b"%1POWR 0\r", respond_with=b"%1POWR=UGH\r"):
                     await client.power.set(aiopjlink.Power.State.OFF)
-            self.assertEqual(str(err.exception), "expected OK response")
+            self.assertEqual(str(err_unexpected_response_parameter.exception), "expected OK response")
 
             # Expect enums.
-            with self.assertRaises(ValueError) as err:
+            with self.assertRaises(ValueError) as err_value_error:
                 async with server.when(b"%1POWR 0\r", respond_with=b"%1POWR=OK\r"):
                     await client.power.set(aiopjlink.Power.State.COOLING)
-            self.assertEqual(str(err.exception), "expected Power.State.ON or Power.State.OFF")
+            self.assertEqual(str(err_value_error.exception), "expected Power.State.ON or Power.State.OFF")
 
-    async def test_power_shortcuts(self):
+    async def test_power_shortcuts(self) -> None:
         """Set power status."""
 
         # Start server with no auth.

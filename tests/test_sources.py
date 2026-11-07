@@ -7,7 +7,7 @@ from mock_projector import mock_client_server_noauth
 class SourcesGroup(unittest.IsolatedAsyncioTestCase):
     """PJLink input source control and enumeration behaves as expected."""
 
-    async def test_enum(self):
+    async def test_enum(self) -> None:
         """Ensure the enumeration matches the spec."""
         self.assertEqual(aiopjlink.Sources.Mode.RGB.value, "1")
         self.assertEqual(aiopjlink.Sources.Mode.VIDEO.value, "2")
@@ -16,7 +16,7 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(aiopjlink.Sources.Mode.NETWORK.value, "5")
         self.assertEqual(aiopjlink.Sources.Mode.INTERNAL.value, "6")
 
-    async def test_inpt(self):
+    async def test_inpt(self) -> None:
         """Check the INPT instructions work."""
         async with mock_client_server_noauth() as (server, client):
             # Get current source.
@@ -41,7 +41,7 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
                     await client.sources.get()
             self.assertEqual(str(err.exception), "unexpected input source mode")
 
-    async def test_inst_class1(self):
+    async def test_inst_class1(self) -> None:
         """Test that available sources can be enumerated."""
         async with mock_client_server_noauth() as (server, client):
             # List available clients
@@ -88,7 +88,7 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
                         await client.sources.available()
                 self.assertEqual(str(err.exception), "unable to parse available sources")
 
-    async def test_inst_innm_class2(self):
+    async def test_inst_innm_class2(self) -> None:
         """Test that available sources and their names can be enumerated."""
         async with mock_client_server_noauth() as (server, client):
             # List available clients (Class 2) - brief as the Class 1 shares the logic.
@@ -121,14 +121,14 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
                 server.when(b"%2INST ?\r", respond_with=b"%2INST=11\r"),
                 server.when(b"%2INNM ?11\r", respond_with=b"%2INNM=Computer\r"),
             ):
-                sources = await client.sources.available_with_names()
-                self.assertEqual(len(sources), 1)
-                mode, index, name = sources[0]
+                named_sources = await client.sources.available_with_names()
+                self.assertEqual(len(named_sources), 1)
+                mode, index, source_name = named_sources[0]
                 self.assertEqual(mode, aiopjlink.Sources.Mode.RGB)
                 self.assertEqual(index, "1")
-                self.assertEqual(name, "Computer")
+                self.assertEqual(source_name, "Computer")
 
-    async def test_inpt_index_forms(self):
+    async def test_inpt_index_forms(self) -> None:
         """Setting a source accepts digits, letters (any case) and integers."""
         async with mock_client_server_noauth() as (server, client):
             mode = aiopjlink.Sources.Mode.VIDEO
@@ -153,7 +153,7 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(ValueError):
                 await client.sources.set(mode, 0)
 
-    async def test_ires(self):
+    async def test_ires(self) -> None:
         """Test that the resolution of the current input can be recieved."""
         async with mock_client_server_noauth() as (server, client):
             # Get resolution.
@@ -175,12 +175,12 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(str(err.exception), "unknown signal")
 
             # Bad response from the projecetor.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err_unexpected_response_parameter:
                 async with server.when(b"%2IRES ?\r", respond_with=b"%2IRES=\r"):
                     x, y = await client.sources.resolution()
-            self.assertIn("unable to parse resolution", str(err.exception))
+            self.assertIn("unable to parse resolution", str(err_unexpected_response_parameter.exception))
 
-    async def test_rres(self):
+    async def test_rres(self) -> None:
         """Test that the recommended resolution for the current input can be recieved."""
         async with mock_client_server_noauth() as (server, client):
             # Get resolution.
@@ -195,7 +195,7 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
                     x, y = await client.sources.recommended_resolution()
             self.assertIn("unable to parse resolution", str(err.exception))
 
-    async def test_resolution_is_exactly_two_numbers(self):
+    async def test_resolution_is_exactly_two_numbers(self) -> None:
         """A resolution is `<width>x<height>`: more or fewer than two numbers is not a resolution."""
         async with mock_client_server_noauth() as (server, client):
             for response in (b"%2IRES=1920\r", b"%2IRES=1920x1080x60\r", b"%2IRES=axb\r", b"%2IRES=1920x\r"):
