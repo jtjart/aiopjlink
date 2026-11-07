@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 
 import aiopjlink
@@ -15,7 +16,7 @@ from mock_projector import (
 class ProtocolTests(unittest.IsolatedAsyncioTestCase):
     """PJLink protocol managment behaves as expected."""
 
-    async def test_response_parsing_high_level(self):
+    async def test_response_parsing_high_level(self) -> None:
         """Check that responses are handled correctly by the client."""
 
         # Start server with no auth.
@@ -28,7 +29,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(aiopjlink.PJLinkProtocolError):
                     await client.power.get()
 
-    async def test_command_construction(self):
+    async def test_command_construction(self) -> None:
         """Test that command formatting accepts valid values and raises errors if out of spec."""
         # Normal commands.
         result = format_command("ABCD", "???", pjclass=PJClass.ONE)
@@ -57,9 +58,9 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             result = format_command("ABCD", large_param, pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "command param is larger than 128 bytes")
 
-        with self.assertRaises(ValueError) as err:
-            result = format_command("ABCD", "?", pjclass="3")
-        self.assertEqual(str(err.exception), "'3' is not a valid PJClass")
+        with self.assertRaises(ValueError) as err_value_error:
+            result = format_command("ABCD", "?", pjclass="3")  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
+        self.assertEqual(str(err_value_error.exception), "'3' is not a valid PJClass")
 
         # The limit is 128 bytes, not 128 characters (§2.1): "é" takes two bytes in UTF-8 ...
         format_command("ABCD", "é" * 64, pjclass=PJClass.ONE)
@@ -70,7 +71,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         # ... and one byte in the encoding the line is actually sent in, if that is Latin-1.
         format_command("ABCD", "é" * 65, pjclass=PJClass.ONE, encoding="latin-1")
 
-    async def test_bad_command_rejected_before_connecting(self):
+    async def test_bad_command_rejected_before_connecting(self) -> None:
         """A malformed command fails fast, without touching the network."""
 
         # No server is running: if the library tried to connect first,
@@ -80,7 +81,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             await link.transmit("abcd", "?", pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "command is not uppercase")
 
-    async def test_oversized_or_unencodable_command_rejected_before_connecting(self):
+    async def test_oversized_or_unencodable_command_rejected_before_connecting(self) -> None:
         """The byte limit is checked in the link's encoding, and bad input never reaches the network."""
         link = client_for(unused_port(), timeout=0.5)
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
@@ -89,14 +90,14 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
 
         # A class that is neither 1 nor 2 is a programming error.
         with self.assertRaises(ValueError):
-            await link.transmit("NAME", "?", pjclass="3")
+            await link.transmit("NAME", "?", pjclass="3")  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
 
         # Text the encoding cannot represent is a `ValueError` too (`UnicodeEncodeError` is one).
         ascii_link = client_for(unused_port(), timeout=0.5, encoding="ascii")
         with self.assertRaises(ValueError):
             await ascii_link.transmit("NAME", "é", pjclass=aiopjlink.PJClass.ONE)
 
-    async def test_response_parsing(self):
+    async def test_response_parsing(self) -> None:
         """Ensure that errors generate the correct responses."""
 
         # Valid data.
@@ -136,30 +137,30 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(str(err.exception), "unexpected response command")
 
         # ERR1 - unsupported command
-        with self.assertRaises(aiopjlink.PJLinkNotSupported) as err:
+        with self.assertRaises(aiopjlink.PJLinkNotSupported) as err_not_supported:
             parse_response(data="%1ABCD=ERR1\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
-        self.assertEqual(str(err.exception), "unsupported command")
+        self.assertEqual(str(err_not_supported.exception), "unsupported command")
 
         # ERR2 - out of parameter
-        with self.assertRaises(aiopjlink.PJLinkInvalidParameter) as err:
+        with self.assertRaises(aiopjlink.PJLinkInvalidParameter) as err_invalid_parameter:
             parse_response(data="%1ABCD=ERR2\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
-        self.assertEqual(str(err.exception), "out of parameter")
+        self.assertEqual(str(err_invalid_parameter.exception), "out of parameter")
 
         # ERR3 - unavailable in the current state
-        with self.assertRaises(aiopjlink.PJLinkNotReady) as err:
+        with self.assertRaises(aiopjlink.PJLinkNotReady) as err_not_ready:
             parse_response(data="%1ABCD=ERR3\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
-        self.assertEqual(str(err.exception), "unavailable in the current state")
+        self.assertEqual(str(err_not_ready.exception), "unavailable in the current state")
 
         # ERR4 - projector or display failure
-        with self.assertRaises(aiopjlink.PJLinkDeviceFailure) as err:
+        with self.assertRaises(aiopjlink.PJLinkDeviceFailure) as err_device_failure:
             parse_response(data="%1ABCD=ERR4\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
-        self.assertEqual(str(err.exception), "projector or display failure")
+        self.assertEqual(str(err_device_failure.exception), "projector or display failure")
 
         # Check error parsing is case insensitive (from projector) and error
         # parsing is handled in the same way too (Postel's law).
-        with self.assertRaises(aiopjlink.PJLinkDeviceFailure) as err:
+        with self.assertRaises(aiopjlink.PJLinkDeviceFailure) as err_device_failure:
             parse_response(data="%1abcd=err4\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
-        self.assertEqual(str(err.exception), "projector or display failure")
+        self.assertEqual(str(err_device_failure.exception), "projector or display failure")
 
         # Check that a respone does not fail if there is a CR right after
         # an equals (e.g. §4.12 of the spec)
@@ -167,7 +168,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(command, "INF2")
         self.assertEqual(param, "")
 
-    async def test_response_too_short(self):
+    async def test_response_too_short(self) -> None:
         """A truncated response is a protocol error, not an `IndexError`."""
         async with mock_client_server_noauth() as (server, client):
             async with server.when(b"%1POWR ?\r", respond_with=b"%\r"):
@@ -175,7 +176,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
                     await client.power.get()
             self.assertEqual(str(err.exception), "unexpected response - too short")
 
-    async def test_response_timeout(self):
+    async def test_response_timeout(self) -> None:
         """A projector that accepts the connection but never answers the command is a `PJLinkNoConnection`."""
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK 0\r")
@@ -187,7 +188,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
                     await client.power.get()
             self.assertIn("did not respond in time", str(err.exception))
 
-    async def test_response_crlf_is_accepted_across_commands(self):
+    async def test_response_crlf_is_accepted_across_commands(self) -> None:
         """A projector that sends CRLF keeps the later command from choking on the leftover LF."""
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK 0\r\n")
@@ -199,10 +200,10 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r\n"):
                 self.assertFalse(await client.power.get())
 
-    async def test_connection_closed_before_response(self):
+    async def test_connection_closed_before_response(self) -> None:
         """A projector that hangs up in the middle of a command is a `PJLinkConnectionClosed`."""
 
-        async def hang_up(reader, writer):
+        async def hang_up(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             writer.write(b"PJLINK 0\r")
             await writer.drain()
             await reader.readuntil(b"\r")
@@ -213,7 +214,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(aiopjlink.PJLinkConnectionClosed):
                 await client.power.get()
 
-    async def test_free_text_in_another_encoding_is_still_returned(self):
+    async def test_free_text_in_another_encoding_is_still_returned(self) -> None:
         """The spec says UTF-8, but a Latin-1 projector name must not make `projector_name()` fail."""
         reply = "%1NAME=Büro Beamer\r".encode("latin-1")
 
@@ -228,7 +229,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         ):
             self.assertEqual(await client.info.projector_name(), "Büro Beamer")
 
-    async def test_garbled_value_is_not_taken_for_a_value(self):
+    async def test_garbled_value_is_not_taken_for_a_value(self) -> None:
         """Replacing undecodable bytes must not let garbage pass for a status value."""
         async with (
             mock_client_server_noauth() as (server, client),
@@ -237,10 +238,10 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter):
                 await client.power.get()
 
-    async def test_undecodable_response(self):
+    async def test_undecodable_response(self) -> None:
         """Bytes that are not text and not PJLink are a `PJLinkProtocolError`, not a `UnicodeDecodeError`."""
 
-        async def send_garbage(reader, writer):
+        async def send_garbage(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             writer.write(b"PJLINK 0\r")
             await writer.drain()
             await reader.readuntil(b"\r")
