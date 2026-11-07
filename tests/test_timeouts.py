@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import time
 import unittest
+from typing import Any
 from unittest import mock
 
 import aiopjlink
@@ -10,19 +11,19 @@ from mock_projector import client_for, raw_tcp_server, until_hung_up, unused_por
 TIMEOUT = 0.5
 
 
-async def hang(*_args, **_kwargs):
+async def hang(*_args: object, **_kwargs: object) -> None:
     """Stand-in for a coroutine that never completes (until it is cancelled)."""
     await asyncio.sleep(3600)
 
 
-def make_client(port, **options):
+def make_client(port: int, **options: Any) -> aiopjlink.PJLink:
     return client_for(port, timeout=TIMEOUT, **options)
 
 
 class TimeoutTests(unittest.IsolatedAsyncioTestCase):
     """One overall deadline per command, and the error names the phase that ran out of time."""
 
-    async def _expect_timeout(self, port, exc_type=aiopjlink.PJLinkNoConnection):
+    async def _expect_timeout(self, port: int, exc_type: type[Exception] = aiopjlink.PJLinkNoConnection) -> str:
         """Run a command on `port`, return the exception and check it took about one timeout."""
         start = time.monotonic()
         with self.assertRaises(exc_type) as err:
@@ -30,18 +31,18 @@ class TimeoutTests(unittest.IsolatedAsyncioTestCase):
         self.assertLess(time.monotonic() - start, TIMEOUT * 2)
         return str(err.exception)
 
-    async def test_connect_phase(self):
+    async def test_connect_phase(self) -> None:
         with mock.patch.object(asyncio, "open_connection", hang):
             message = await self._expect_timeout(unused_port())
         self.assertEqual(message, "timeout - projector did not accept the connection in time")
 
-    async def test_greeting_phase(self):
+    async def test_greeting_phase(self) -> None:
         async with raw_tcp_server(until_hung_up) as server:
             message = await self._expect_timeout(server.port)
         self.assertEqual(message, "timeout - projector did not send a welcome message in time")
 
-    async def test_send_phase(self):
-        async def greet_only(reader, writer):
+    async def test_send_phase(self) -> None:
+        async def greet_only(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             writer.write(b"PJLINK 0\r")  # No drain(): it is patched out below.
             await until_hung_up(reader, writer)
 
@@ -50,8 +51,8 @@ class TimeoutTests(unittest.IsolatedAsyncioTestCase):
                 message = await self._expect_timeout(server.port)
         self.assertEqual(message, "timeout - projector did not accept the command in time")
 
-    async def test_response_phase(self):
-        async def no_answer(reader, writer):
+    async def test_response_phase(self) -> None:
+        async def no_answer(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             writer.write(b"PJLINK 0\r")
             await writer.drain()
             await reader.readuntil(b"\r")
@@ -61,11 +62,11 @@ class TimeoutTests(unittest.IsolatedAsyncioTestCase):
             message = await self._expect_timeout(server.port)
         self.assertEqual(message, "timeout - projector did not respond in time")
 
-    async def test_deadline_covers_the_whole_command(self):
+    async def test_deadline_covers_the_whole_command(self) -> None:
         """Phases that are each within the timeout, but together exceed it, still time out."""
         delay = TIMEOUT * 0.7
 
-        async def slow(reader, writer):
+        async def slow(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             await asyncio.sleep(delay)
             writer.write(b"PJLINK 0\r")
             await reader.readuntil(b"\r")
@@ -79,10 +80,10 @@ class TimeoutTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(aiopjlink.PJLinkNoConnection):
                 await make_client(server.port).power.get()
 
-    async def test_close_is_bounded(self):
+    async def test_close_is_bounded(self) -> None:
         """A connection that never finishes closing does not stall the command (one connection per command)."""
 
-        async def answer(reader, writer):
+        async def answer(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             writer.write(b"PJLINK 0\r")
             await writer.drain()
             await reader.readuntil(b"\r")
