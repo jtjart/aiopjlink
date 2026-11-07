@@ -13,7 +13,7 @@ from mock_projector import (
 class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
     """Validate the test case framework."""
 
-    async def test_mock_nonresponse(self):
+    async def test_mock_nonresponse(self) -> None:
         """
         The test framework notices that the client has not issued the expected command.
         It times out with a `NoClientMessage` and closes the server.
@@ -24,11 +24,11 @@ class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
 
             # Expect a POWR status request.
             with self.assertRaises(NoClientMessage):
-                async with server.when("%1POWR ?", respond_with=b"%1POWR=0\r"):
+                async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r"):
                     # Never give one.
                     pass
 
-    async def test_mock_unexpectedresponse(self):
+    async def test_mock_unexpectedresponse(self) -> None:
         """
         The test framework notices that the client has issued an "incorrect" command
         to the one that was expected (in this case, during auth).
@@ -56,7 +56,7 @@ class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
                     link = server.client(password="INCORRECT", authentication=aiopjlink.PJAuth.MD5)
                     await link.power.get()
 
-    async def test_mock_unexpectedresponse_after_connection(self):
+    async def test_mock_unexpectedresponse_after_connection(self) -> None:
         """
         The test framework allows: (1) successful messages to be handled OK, (2) successive
         successful messages, and (3) catches errors in successive unexpected messages.
@@ -85,7 +85,7 @@ class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
                 async with server.when(b"SOME_MESSAGE\r", respond_with=b"%1POWR=0\r"):
                     await client.transmit("POWR", "?", pjclass=aiopjlink.PJClass.ONE)
 
-    async def test_mock_response_stacking(self):
+    async def test_mock_response_stacking(self) -> None:
         """The test framework allows expected responses to be queued."""
         # Open a connection successfully with no auth.
         async with mock_client_server_noauth() as (server, client):

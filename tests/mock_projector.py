@@ -7,23 +7,25 @@ including erroneous behaviour. See `PJLinkServerProtocol.when`.
 import asyncio
 import contextlib
 import socket
+from collections.abc import AsyncGenerator, Awaitable, Callable
+from typing import Any, cast
 
 import aiopjlink
 
 LOCALHOST = "127.0.0.1"
 
 
-def client_for(port, **options):
+def client_for(port: int, **options: Any) -> aiopjlink.PJLink:
     """A `PJLink` for the mock projector on `port` (no password unless `options` give one)."""
     options.setdefault("password", None)
     return aiopjlink.PJLink(address=LOCALHOST, port=port, **options)
 
 
-def unused_port():
+def unused_port() -> int:
     """A port nothing listens on: asked from the OS and given back at once."""
     with socket.socket() as sock:
         sock.bind((LOCALHOST, 0))
-        return sock.getsockname()[1]
+        return cast(int, sock.getsockname()[1])
 
 
 class PJLinkTestFrameworkError(Exception):
@@ -52,7 +54,7 @@ class PJLinkServerProtocol(asyncio.Protocol):
     https://docs.python.org/3/library/asyncio-protocol.html
     """
 
-    def __init__(self, loop, debug=False):
+    def __init__(self, loop: asyncio.AbstractEventLoop, debug: bool = False) -> None:
 
         # Event loop of the current test case.
         self.loop = loop
@@ -61,10 +63,10 @@ class PJLinkServerProtocol(asyncio.Protocol):
         self.debug = debug
 
         # An opening message is sent as soon as a connection is established.
-        self._opening_message = None
+        self._opening_message: bytes | None = None
 
         # What the projector should expect to recieve / do next (as defined by the test case).
-        self._expected_events = []
+        self._expected_events: list[ExpectedEvent] = []
 
         # Buffer fore incoming messages until \r.
         self._recv_buffer = b""
@@ -72,32 +74,35 @@ class PJLinkServerProtocol(asyncio.Protocol):
         # The port the server listens on (chosen by the OS, set by `mock_tcp_pjlink`).
         self.port = 0
 
-    def client(self, **options):
+        # The server side of the current connection (set by `connection_made`).
+        self.transport: asyncio.Transport
+
+    def client(self, **options: Any) -> aiopjlink.PJLink:
         """A `PJLink` connected to this mock projector. `options` are passed on to `PJLink`."""
         return client_for(self.port, **options)
 
-    def _write(self, data):
+    def _write(self, data: bytes) -> None:
         """Send data to the client."""
         if self.debug:
             print("PJLinkServerProtocol SEND:", data)
         self.transport.write(data)
 
-    def connection_made(self, transport):
+    def connection_made(self, transport: asyncio.BaseTransport) -> None:
         """Called when a connection is first made to this projector."""
-        self.transport = transport
+        self.transport = cast(asyncio.Transport, transport)
         if self.debug:
             peer = self.transport.get_extra_info("peername")
             print("PJLinkServerProtocol CONNECTION_MADE:", peer)
         if self._opening_message:
             self._write(self._opening_message)
 
-    def connection_lost(self, exc):
+    def connection_lost(self, exc: Exception | None) -> None:
         """Called when the connection is lost or closed."""
         if self.debug:
             peer = self.transport.get_extra_info("peername")
             print("PJLinkServerProtocol CONNECTION_LOST:", peer)
 
-    def data_received(self, data):
+    def data_received(self, data: bytes) -> None:
         """Called when the projector recieves data from the client."""
         if self.debug:
             print("PJLinkServerProtocol RECV:", data)
@@ -131,12 +136,14 @@ class PJLinkServerProtocol(asyncio.Protocol):
                 self.transport.write(expected.respond_with)
                 self._recv_buffer = b""
 
-    def open_and_send(self, message):
+    def open_and_send(self, message: bytes) -> None:
         """Set the message to send to the client when a connection is first established."""
         self._opening_message = message
 
     @contextlib.asynccontextmanager
-    async def when(self, incoming, respond_with, within=1):
+    async def when(
+        self, incoming: bytes, respond_with: bytes, within: float = 1
+    ) -> AsyncGenerator["ExpectedEvent", None]:
         """
         When the projector recieves an incoming message, it should respond with
         a reply within n seconds.
@@ -209,7 +216,7 @@ class ExpectedEvent(asyncio.Event):
     does next and validates that it behaves in the expected way.
     """
 
-    def __init__(self, incoming, respond_with, within):
+    def __init__(self, incoming: bytes, respond_with: bytes, within: float) -> None:
         super().__init__()
         # What the projector expects to recieve from the client.
         self.incoming = incoming
@@ -224,25 +231,29 @@ class ExpectedEvent(asyncio.Event):
         self.timeout = within
 
         # Contents of the projector recieve buffer after processing.
-        self.recv_buffer_contents = None
+        self.recv_buffer_contents: bytes | None = None
 
 
 @contextlib.asynccontextmanager
-async def mock_tcp_pjlink(host=LOCALHOST, port=0, password=None):
+async def mock_tcp_pjlink(
+    host: str = LOCALHOST, port: int = 0, password: str | None = None
+) -> AsyncGenerator[PJLinkServerProtocol, None]:
     """A mock projector on a free port (`port=0`: the OS picks one, so tests do not collide with anything)."""
     loop = asyncio.get_running_loop()
     protocol = PJLinkServerProtocol(loop=loop)
     server = await loop.create_server(lambda: protocol, host, port)
     protocol.port = server.sockets[0].getsockname()[1]
+    server_task = loop.create_task(server.serve_forever())
     try:
-        server_task = loop.create_task(server.serve_forever())
         yield protocol
     finally:
         server_task.cancel()
 
 
 @contextlib.asynccontextmanager
-async def mock_client_server_noauth(**client_options):
+async def mock_client_server_noauth(
+    **client_options: Any,
+) -> AsyncGenerator[tuple[PJLinkServerProtocol, aiopjlink.PJLink], None]:
     """A mock projector without authentication and a client connected to it.
 
     `client_options` are passed on to `PJLink` (e.g. `persistent=False`). The client is closed afterwards.
@@ -259,16 +270,20 @@ async def mock_client_server_noauth(**client_options):
 class RawServer:
     """What `raw_tcp_server` yields: the port it listens on and a client for it."""
 
-    def __init__(self, server):
-        self.port = server.sockets[0].getsockname()[1]
+    def __init__(self, server: asyncio.Server) -> None:
+        self.port: int = server.sockets[0].getsockname()[1]
 
-    def client(self, **options):
+    def client(self, **options: Any) -> aiopjlink.PJLink:
         """A `PJLink` connected to this server. `options` are passed on to `PJLink`."""
         return client_for(self.port, **options)
 
 
 @contextlib.asynccontextmanager
-async def raw_tcp_server(handler, host=LOCALHOST, port=0):
+async def raw_tcp_server(
+    handler: Callable[[asyncio.StreamReader, asyncio.StreamWriter], Awaitable[None]],
+    host: str = LOCALHOST,
+    port: int = 0,
+) -> AsyncGenerator[RawServer, None]:
     """A bare-bones server for misbehaviour the mock projector can't simulate
     (e.g. hanging up in the middle of a command). `handler(reader, writer)` is
     called for every connection. Like `mock_tcp_pjlink` it listens on a free port.
@@ -281,7 +296,7 @@ async def raw_tcp_server(handler, host=LOCALHOST, port=0):
         await server.wait_closed()
 
 
-async def until_hung_up(reader, writer):
+async def until_hung_up(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
     """Wait for the client to disconnect, then close our side."""
     await reader.read()
     writer.close()
