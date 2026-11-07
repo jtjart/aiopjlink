@@ -1,7 +1,7 @@
 """_protocol.py
 
-The wire format of PJLink command and response lines (§2) and of the UDP search
-request and response (§3.2.2).
+The wire format of PJLink command and response lines (§2), of the UDP search
+request and response (§3.2.2) and of the UDP status notifications (§3.3.2).
 
 Pure functions only: nothing here touches the network.
 """
@@ -115,3 +115,19 @@ def parse_search_response(data: str) -> str:
     if mac_address is None:
         raise PJLinkProtocolError("unexpected MAC address in search response")
     return mac_address
+
+
+def split_notification(data: str) -> tuple[str, str]:
+    """Split a status notification, `%2<COMMAND>=<parameter>` and CR (§3.3.2), into `(COMMAND, parameter)`.
+
+    The command is returned in upper case, whatever case the projector used. What the parameter means is up
+    to the command, so it is not looked at here. A datagram is delimited by the network, so a missing CR (or a
+    CRLF) is accepted, as it is for the search response.
+
+    Raises `PJLinkProtocolError` if `data` is not a notification line.
+    """
+    line = data.rstrip("\r\n")
+    # Shortest valid line: header, class, 4 command characters and the separator (e.g. `%2POWR=`).
+    if len(line) < 7 or line[:2] != "%2" or line[6] != "=":
+        raise PJLinkProtocolError(f"unexpected status notification: {line}")
+    return line[2:6].upper(), line[7:]

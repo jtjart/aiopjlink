@@ -6,7 +6,7 @@ The hierarchy tells a caller what to do about it::
 
     PJLinkException
     ├── PJLinkConnectionError              projector unreachable or not talking: try again later
-    │   ├── PJLinkNoConnection             could not connect, or no greeting / answer in time, or no search socket
+    │   ├── PJLinkNoConnection             could not connect, or no greeting / answer in time, or no UDP socket
     │   └── PJLinkConnectionClosed         connection closed or reset by the projector
     ├── PJLinkPassword                     password missing or wrong
     ├── PJLinkProtocolError                what the projector sent is not valid PJLink
@@ -23,7 +23,7 @@ Which exception for which situation:
     TCP connect refused, DNS failure, connect timeout      `PJLinkNoConnection`
     Connected, but no greeting within the timeout          `PJLinkNoConnection`
     Greeting received, but no response within the timeout  `PJLinkNoConnection`
-    Search: UDP socket cannot be opened, bound or used     `PJLinkNoConnection`
+    Search, listen: UDP socket cannot be opened or bound   `PJLinkNoConnection`
     Connection closed (FIN) or reset (RST) by the peer     `PJLinkConnectionClosed`
     Password required, rejected (`ERRA`)                   `PJLinkPassword`
     Hang-up after the first password                       `PJLinkPassword`
@@ -72,7 +72,8 @@ class PJLinkNoConnection(PJLinkConnectionError):
 
     Also raised by `search` when the network is not there to search: the UDP socket cannot be opened or bound
     (e.g. the local port is in use), or the search request cannot be sent anywhere. The message says
-    `search failed - ...` and carries the reason.
+    `search failed - ...` and carries the reason. `listen_notifications` raises it when its UDP socket cannot be
+    opened or bound, with `listening for notifications failed - ...`.
     """
 
 

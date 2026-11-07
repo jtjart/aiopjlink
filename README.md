@@ -22,6 +22,7 @@ PJLink is a manufacturer-independent protocol for operating data projectors over
 * A per-command connection mode for projectors that cannot handle more
 * Password authentication with SHA256 (specification 2.10) and automatic fallback to MD5
 * Searching the network for projectors by UDP broadcast (§3.2), by IPv4 or IPv6
+* Listening for the status notifications projectors send on their own (§3.3): power, errors, input, link-up
 * Python 3.11–3.14; tested on Linux, macOS and Windows
 
 ## Supported commands
@@ -39,9 +40,7 @@ PJLink is a manufacturer-independent protocol for operating data projectors over
 | `info` | `NAME`, `INF1`, `INF2`, `INFO`, `CLSS` | `SNUM`, `SVER` |
 
 Finding projectors on the network (`SRCH`/`ACKN`, §3.2) is done by `search()` and `search_iter()`, see [below](#searching-for-projectors).
-
-**Not supported yet:** status notifications (`LKUP`, `POWR`/`ERST` notifications, §3.3).
-`PJLink.wait_for_notification()` exists but raises `NotImplementedError`.
+Status notifications (`LKUP`, `ERST`, `POWR`, `INPT`, §3.3) are received by `listen_notifications()`, see [below](#status-notifications).
 
 ## Installation
 
@@ -122,6 +121,48 @@ The address of a single projector works as well. Host names do not: they are not
 **Local port.** Both ends use UDP port 4352 (Fig. 1 of the spec leaves open whether a projector answers the port the request came from, or port 4352), so the search sends from, and listens on, port 4352. That means one search at a time per local address: a second one, or another program using the port, raises `PJLinkNoConnection`. Pass `local_port=0` to let the operating system choose a port; that only works with projectors that answer the port the request came from. `local_address` picks the local interface.
 
 Anything else that arrives on the port is ignored. Problems on this machine (the port is in use, there is no network) raise `PJLinkNoConnection`, and a wrong argument raises `ValueError`.
+
+## Status notifications
+
+A projector can report changes of its state by itself (§3.3): it started warming up or cooling down, an error appeared or went away, an input switch is completed, or its PJLink communication became ready (the power cable was connected). `listen_notifications()` yields each of them as it arrives:
+
+```python
+import asyncio
+
+from aiopjlink import ErrorsChanged, InputChanged, LinkUp, PowerChanged, listen_notifications
+
+
+async def main() -> None:
+    async for notification in listen_notifications():
+        match notification.event:
+            case PowerChanged(powered_on=powered_on):
+                print(notification.address, "power", "on" if powered_on else "off")
+            case InputChanged(mode=mode, index=index):
+                print(notification.address, "input", mode, index)
+            case ErrorsChanged(levels=levels):
+                print(notification.address, "errors", levels)
+            case LinkUp(mac_address=mac_address):
+                print(notification.address, "is ready again:", mac_address)
+
+
+asyncio.run(main())
+```
+
+A `Notification` has the `address` it came from (what you give `PJLink(address=...)`) and an `event`: `LinkUp`, `ErrorsChanged` (the same table as `link.errors.query()`), `PowerChanged` or `InputChanged` (the same mode and index as `link.sources.get()`). One listener serves every projector on the network, so with several projectors, run **one** listener and pass each notification on by its `address`. Stop it by cancelling the task, or, to release the socket at once when you leave a loop, with `contextlib.aclosing`, as for `search_iter()` above.
+
+**The projector has to be set up to send them.** The specification says the projector sends to "the IP address registered in advance", and leaves open how that is done: look for a notification or "status notification" destination in the projector's network settings, and enter the address of the machine the listener runs on. The library only listens, and it needs no password.
+
+**Do not rely on them alone.** The protocol is UDP (§6): a notification can get lost, and a projector that was not reachable when the state changed never says so. Nothing authenticates the sender either, so anyone on the network can send one. Treat a notification as the cue to ask the projector over the authenticated connection (`link.power.get()`, `link.errors.query()`, ...), and keep polling at a long interval as a safety net.
+
+**What they say.**
+
+* `PowerChanged` has two values only: `powered_on` is true for "on" and "warming up", false for "off" and "cooling down" (§3.3.2). Ask `link.power.get()` for the exact `Power.State`.
+* A projector that has no warm-up or cooling time reports the switch to on or off itself.
+* Datagrams that are not notifications, or hold a value this library does not know, are ignored (and logged at `DEBUG`).
+
+**Local port.** Projectors send to UDP port 4352 (§3.3), so the listener binds it, on all IPv4 interfaces. `local_address` picks one interface, or `"::"` for IPv6 (a listener is for one IP version). Only one program can use the port at a time, and **the search uses it too**: while a listener runs, `search()` fails with `PJLinkNoConnection`, unless it is given another `local_port`. `search(local_port=0)` works with projectors that answer the port the request came from, but not with those that answer port 4352 (see [above](#searching-for-projectors)). The way out is to search before listening starts, or to stop listening while searching. In a container, the datagrams only arrive if it is on the host network, and a firewall has to let UDP port 4352 in.
+
+If more than 256 notifications are waiting to be taken, the newest are dropped, so a flood of datagrams cannot fill the memory. A socket that cannot be opened (the port is in use, ...) raises `PJLinkNoConnection`, and a wrong argument raises `ValueError`.
 
 ## Connection handling
 
@@ -221,7 +262,7 @@ Only names exported from `aiopjlink` are public API.
 Pull requests with tests are welcome:
 
 * [x] Search protocol (§3.2)
-* [ ] Status notification protocol (§3.3)
+* [x] Status notification protocol (§3.3)
 
 ## Honorable mentions
 

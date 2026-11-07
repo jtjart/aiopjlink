@@ -98,6 +98,3 @@ class PJLink(Transport):
         self.freeze: Freeze = Freeze(self)
         self.microphone: Volume = Volume(self, "MVOL")
         self.speaker: Volume = Volume(self, "SVOL")
-
-    async def wait_for_notification(self) -> None:
-        raise NotImplementedError("class 2 method not supported")
