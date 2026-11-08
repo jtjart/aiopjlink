@@ -19,7 +19,9 @@ from unittest import mock
 
 import aiopjlink
 from aiopjlink._protocol import SEARCH_REQUEST, parse_search_response
-from aiopjlink._search import _SearchProtocol, _source_address
+from aiopjlink._search import _SearchProtocol
+from aiopjlink._udp import source_address
+from mock_projector import unused_udp_port
 
 LOCALHOST = "127.0.0.1"
 MAC = "00:11:22:33:44:55"
@@ -61,13 +63,6 @@ async def udp_projector(
         yield protocol
     finally:
         transport.close()
-
-
-def free_udp_port() -> int:
-    """A local UDP port nothing is using: asked from the OS and given back at once."""
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.bind((LOCALHOST, 0))
-        return cast(int, sock.getsockname()[1])
 
 
 def options(server: UdpProjector, **overrides: Any) -> dict[str, Any]:
@@ -140,17 +135,17 @@ class SourceAddressTests(unittest.TestCase):
     """The address a datagram came from is something `PJLink(address=...)` can connect to."""
 
     def test_ipv4(self) -> None:
-        self.assertEqual(_source_address(("192.168.1.20", 4352)), "192.168.1.20")
+        self.assertEqual(source_address(("192.168.1.20", 4352)), "192.168.1.20")
 
     def test_ipv6(self) -> None:
-        self.assertEqual(_source_address(("2001:db8::1", 4352, 0, 0)), "2001:db8::1")
+        self.assertEqual(source_address(("2001:db8::1", 4352, 0, 0)), "2001:db8::1")
 
     def test_ipv6_link_local_gets_its_interface(self) -> None:
         """Without the scope id, `fe80::1` does not say which network it is on."""
-        self.assertEqual(_source_address(("fe80::1", 4352, 0, 3)), "fe80::1%3")
+        self.assertEqual(source_address(("fe80::1", 4352, 0, 3)), "fe80::1%3")
 
     def test_scope_is_not_added_twice(self) -> None:
-        self.assertEqual(_source_address(("fe80::1%eth0", 4352, 0, 3)), "fe80::1%eth0")
+        self.assertEqual(source_address(("fe80::1%eth0", 4352, 0, 3)), "fe80::1%eth0")
 
 
 class ResultTests(unittest.TestCase):
@@ -237,7 +232,7 @@ class SearchTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_local_port(self) -> None:
         """The request is sent from `local_port`, where the answer may be expected (Fig. 1)."""
-        port = free_udp_port()
+        port = unused_udp_port()
         async with udp_projector(ACKN) as server:
             await aiopjlink.search(**options(server, local_port=port))
         self.assertEqual(server.requests[0][1], (LOCALHOST, port))
@@ -281,7 +276,7 @@ class IterTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_stopping_early_releases_the_port_at_once(self) -> None:
         """The next search, on the same local port, must not find it still in use."""
-        port = free_udp_port()
+        port = unused_udp_port()
         async with udp_projector(ACKN) as server:
             async with contextlib.aclosing(
                 aiopjlink.search_iter(**options(server, duration=5, local_port=port))
@@ -292,7 +287,7 @@ class IterTests(unittest.IsolatedAsyncioTestCase):
                 sock.bind((LOCALHOST, port))
 
     async def test_cancelling_releases_the_port_at_once(self) -> None:
-        port = free_udp_port()
+        port = unused_udp_port()
         async with udp_projector() as server:
             task = asyncio.create_task(aiopjlink.search(**options(server, duration=5, local_port=port)))
             await asyncio.sleep(0.1)
@@ -304,7 +299,7 @@ class IterTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_searches_in_a_row_on_the_same_port(self) -> None:
         """Back to back, as when a Home Assistant config flow searches again: the port is free every time."""
-        port = free_udp_port()
+        port = unused_udp_port()
         async with udp_projector(ACKN) as server:
             for _ in range(3):
                 results = await aiopjlink.search(**options(server, duration=0.2, local_port=port))
@@ -374,7 +369,7 @@ class SearchErrorTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_socket_is_not_leaked_when_the_loop_cannot_take_it(self) -> None:
         """The port was bound already: whatever goes wrong next, it is given back."""
-        port = free_udp_port()
+        port = unused_udp_port()
         async with udp_projector() as server:
             with (
                 mock.patch.object(asyncio.BaseEventLoop, "create_datagram_endpoint", side_effect=RuntimeError("x")),

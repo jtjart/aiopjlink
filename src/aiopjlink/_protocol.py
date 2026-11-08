@@ -1,7 +1,7 @@
 """_protocol.py
 
-The wire format of PJLink command and response lines (§2) and of the UDP search
-request and response (§3.2.2).
+The wire format of PJLink command and response lines (§2), of the UDP search
+request and response (§3.2.2) and of the UDP status notifications (§3.3.2).
 
 Pure functions only: nothing here touches the network.
 """
@@ -95,6 +95,11 @@ def parse_response(
     return command, param
 
 
+def parse_mac_address(text: str) -> str | None:
+    """Return `text` as a lower-case MAC address (`aa:bb:cc:dd:ee:ff`), or None if it is not one."""
+    return text.lower() if _MAC_ADDRESS.fullmatch(text) else None
+
+
 def parse_search_response(data: str) -> str:
     """Return the MAC address in a search response, `%2ACKN=xx:xx:xx:xx:xx:xx` and CR (§3.2.2).
 
@@ -106,7 +111,23 @@ def parse_search_response(data: str) -> str:
     line = data.rstrip("\r\n")
     if not line.upper().startswith(_SEARCH_RESPONSE_PREFIX):
         raise PJLinkProtocolError(f"unexpected search response: {line}")
-    mac = line[len(_SEARCH_RESPONSE_PREFIX) :]
-    if _MAC_ADDRESS.fullmatch(mac) is None:
+    mac_address = parse_mac_address(line[len(_SEARCH_RESPONSE_PREFIX) :])
+    if mac_address is None:
         raise PJLinkProtocolError("unexpected MAC address in search response")
-    return mac.lower()
+    return mac_address
+
+
+def split_notification(data: str) -> tuple[str, str]:
+    """Split a status notification, `%2<COMMAND>=<parameter>` and CR (§3.3.2), into `(COMMAND, parameter)`.
+
+    The command is returned in upper case, whatever case the projector used. What the parameter means is up
+    to the command, so it is not looked at here. A datagram is delimited by the network, so a missing CR (or a
+    CRLF) is accepted, as it is for the search response.
+
+    Raises `PJLinkProtocolError` if `data` is not a notification line.
+    """
+    line = data.rstrip("\r\n")
+    # Shortest valid line: header, class, 4 command characters and the separator (e.g. `%2POWR=`).
+    if len(line) < 7 or line[:2] != "%2" or line[6] != "=":
+        raise PJLinkProtocolError(f"unexpected status notification: {line}")
+    return line[2:6].upper(), line[7:]

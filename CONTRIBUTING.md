@@ -44,7 +44,7 @@ The pre-commit hooks run the same tools, including the full test suite, so a com
 CI runs them too, with the tests on Linux, macOS and Windows with Python 3.11–3.14.
 
 The mock projectors in the tests listen on ports chosen by the operating system, so the tests neither collide with a real PJLink service on port 4352 nor with each other. They can run in parallel, e.g. `uv run --with pytest-xdist pytest -n auto`.
-The search tests (`tests/test_search.py`) do the same for UDP, and also pass `local_port=0` because `search` would otherwise bind port 4352 on this side too.
+The UDP tests (`tests/test_search.py`, `tests/test_notifications.py`) do the same: the search tests pass `local_port=0`, and the notification tests listen on a free port from `unused_udp_port()`, because both would otherwise bind port 4352 on this side too.
 
 ## Code layout
 
@@ -56,9 +56,11 @@ src/aiopjlink/
 ├── __init__.py       public API (everything in __all__)
 ├── client.py         PJLink: the entry point, wires the command groups onto a Transport
 ├── _transport.py     Transport: connection, lock, deadline, transmit()
-├── _protocol.py      command / response line format (§2) and the search datagrams (§3.2.2)
+├── _protocol.py      command / response line format (§2), search (§3.2.2) and notification (§3.3.2) datagrams
 ├── _auth.py          opening handshake and password hashing (§5)
 ├── _search.py        search() and search_iter(): finding projectors by UDP broadcast (§3.2)
+├── _notify.py        listen_notifications(): status notifications sent by projectors (§3.3)
+├── _udp.py           socket plumbing shared by _search and _notify
 ├── _debug.py         logger and redaction of authentication data
 ├── exceptions.py     PJLinkException and its subclasses
 ├── enums.py          PJClass
@@ -77,8 +79,8 @@ src/aiopjlink/
 
 Rules the code follows:
 
-* Dependencies point one way: `exceptions`, `enums` → `_protocol`, `_auth` → `_transport` → `commands` → `client`. `_search` builds on `_protocol` and `exceptions` only.
-* Only `Transport` (TCP) and `_search` (UDP) touch sockets. `_protocol` and `_auth` are pure functions.
+* Dependencies point one way: `exceptions`, `enums` → `_protocol`, `_auth` → `_transport` → `commands` → `client`. `_search` builds on `_udp`, `_protocol` and `exceptions` only. `_notify` also uses the parsers of the command groups (`parse_error_levels`, `parse_input_source`), so a notification is read exactly like the answer to the matching query.
+* Only `Transport` (TCP), `_search` and `_notify` (UDP, opened through `_udp`) touch sockets. `_protocol` and `_auth` are pure functions.
 * Everything raised while talking to a projector is a `PJLinkException` (see `exceptions.py` for which one when). Invalid arguments are a `ValueError`, raised before anything is sent.
 * Commands that change something are never repeated after a dropped connection; queries may be.
 * New public names must be exported in `__init__.py` and new commands added to the README table.

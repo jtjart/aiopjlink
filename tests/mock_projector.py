@@ -28,6 +28,13 @@ def unused_port() -> int:
         return cast(int, sock.getsockname()[1])
 
 
+def unused_udp_port() -> int:
+    """A local UDP port nothing is using: asked from the OS and given back at once."""
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.bind((LOCALHOST, 0))
+        return cast(int, sock.getsockname()[1])
+
+
 class PJLinkTestFrameworkError(Exception):
     """Base exception for problems with the test framework."""
 

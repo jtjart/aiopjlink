@@ -48,6 +48,7 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
     "pytest-cov>=5.0",
+    "pytest-timeout>=2.3",
     "pyright[nodejs]",
     "ruff",
     "pytest-xdist>=3.8.0",
@@ -121,6 +122,9 @@ executionEnvironments = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# A test that waits forever (e.g. for a datagram that never comes) fails with its name and a traceback
+# instead of holding up CI until the job times out. The slowest test takes a few seconds.
+timeout = 60
 pythonpath = ["src", "tests"]
 testpaths = ["tests"]
 

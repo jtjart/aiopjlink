@@ -50,13 +50,7 @@ class Sources(CommandGroup):
 
     async def get(self, pjclass: PJClass = PJClass.ONE) -> tuple[Mode, str]:
         """Get the current source input selection (§4.4)."""
-        values = await self._transmit_state("INPT", pjclass)
-        if len(values) != 2:
-            raise PJLinkUnexpectedResponseParameter("expected 2 INPT response characters")
-        try:
-            return Sources.Mode(values[0]), values[1]
-        except ValueError as err:
-            raise PJLinkUnexpectedResponseParameter("unexpected input source mode") from err
+        return parse_input_source(await self._transmit_state("INPT", pjclass))
 
     _INDEX_CHARS = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
@@ -136,3 +130,13 @@ class Sources(CommandGroup):
             (x:int, y:int) tuple: Horizontal and vertical resolutions of input signal respectively.
         """
         return _parse_resolution(await self._transmit_state("RRES", PJClass.TWO))
+
+
+def parse_input_source(text: str) -> tuple[Sources.Mode, str]:
+    """Parse `<mode><index>` of an `INPT` query response (§4.4) or status notification (§3.3.2)."""
+    if len(text) != 2:
+        raise PJLinkUnexpectedResponseParameter("expected 2 INPT response characters")
+    try:
+        return Sources.Mode(text[0]), text[1]
+    except ValueError as err:
+        raise PJLinkUnexpectedResponseParameter("unexpected input source mode") from err
