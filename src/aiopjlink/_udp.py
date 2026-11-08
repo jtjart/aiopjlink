@@ -32,6 +32,9 @@ def resolve_address(host: str, port: int, what: str) -> tuple[socket.AddressFami
     The `sockaddr` is what the `socket` methods take. For IPv6 it carries the scope id of `ff02::1%eth0`,
     which a plain `(host, port)` tuple would lose. `what` names the argument in the `ValueError`.
     """
+    if not host:
+        # Not left to `getaddrinfo`: macOS takes an empty string for "no host" and answers with a loopback address.
+        raise ValueError(f"{what} is not a usable IP address: {host!r}")
     try:
         infos = socket.getaddrinfo(host, port, 0, socket.SOCK_DGRAM, 0, socket.AI_NUMERICHOST)
     except (socket.gaierror, UnicodeError) as err:

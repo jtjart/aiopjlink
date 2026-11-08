@@ -411,6 +411,21 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
         _NotificationProtocol(queue).error_received(ConnectionRefusedError(errno.ECONNREFUSED, "refused"))
         self.assertTrue(queue.empty())
 
+    async def test_empty_address_is_rejected_where_the_os_resolves_it(self) -> None:
+        """macOS answers `getaddrinfo("")` with a loopback address: an empty address must still be an error.
+
+        Simulated here, so that the test means the same on every system.
+        """
+        loopback = [(socket.AF_INET, socket.SOCK_DGRAM, 17, "", (LOCALHOST, 4352))]
+        with mock.patch.object(socket, "getaddrinfo", return_value=loopback):
+            for argument in ("local_address", "broadcast_address"):
+                with self.subTest(argument), self.assertRaises(ValueError) as err:
+                    if argument == "local_address":
+                        await start_listening(local_address="", local_port=unused_udp_port())
+                    else:
+                        await aiopjlink.search(broadcast_address="", duration=0.1, local_port=0)
+                self.assertIn("is not a usable IP address", str(err.exception))
+
     async def test_invalid_arguments(self) -> None:
         """Rejected before anything is bound."""
         cases: dict[str, dict[str, Any]] = {
