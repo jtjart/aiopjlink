@@ -16,3 +16,7 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    groups:
+      uv-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]

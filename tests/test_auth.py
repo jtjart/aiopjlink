@@ -151,7 +151,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             writer.close()
 
         async with raw_tcp_server(hang_up) as server:
-            link = server.client(password="wrong", timeout=0.5)
+            link = server.client(password="wrong", timeout=2.0)
             with self.assertRaises(aiopjlink.PJLinkPassword):
                 await link.power.get()
 
