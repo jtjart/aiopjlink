@@ -66,6 +66,15 @@ async def take(notifications: AsyncGenerator[Notification, None], count: int) ->
         return [await anext(notifications) for _ in range(count)]
 
 
+async def start_listening(**arguments: Any) -> None:
+    """Start a listener and wait for its first notification, for tests that expect starting it to fail.
+
+    If it starts after all, nothing is ever sent to it: the test then fails after `WAIT` instead of waiting forever.
+    """
+    async with contextlib.aclosing(listen_notifications(**arguments)) as found, asyncio.timeout(WAIT):
+        await anext(found)
+
+
 async def listen_and_send(port: int, *datagrams: bytes, count: int, **overrides: Any) -> list[Notification]:
     """Listen on `port`, send the datagrams to the address listened on, and return the first `count` notifications."""
     async with contextlib.aclosing(listen_notifications(**options(port, **overrides))) as found:
@@ -319,7 +328,8 @@ class ReleaseTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0.1)
         task.cancel()
         with self.assertRaises(asyncio.CancelledError):
-            await task
+            async with asyncio.timeout(WAIT):
+                await task
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.bind((LOCALHOST, port))
 
@@ -337,7 +347,7 @@ class ReleaseTests(unittest.IsolatedAsyncioTestCase):
             mock.patch.object(asyncio.BaseEventLoop, "create_datagram_endpoint", side_effect=RuntimeError("x")),
             self.assertRaises(RuntimeError),
         ):
-            await anext(listen_notifications(**options(port)))
+            await start_listening(**options(port))
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.bind((LOCALHOST, port))
 
@@ -350,7 +360,7 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
             blocker.bind((LOCALHOST, 0))
             port = blocker.getsockname()[1]
             with self.assertRaises(aiopjlink.PJLinkNoConnection) as err:
-                await anext(listen_notifications(**options(port)))
+                await start_listening(**options(port))
         self.assertTrue(str(err.exception).startswith("listening for notifications failed - "), str(err.exception))
         self.assertIsInstance(err.exception, aiopjlink.PJLinkConnectionError)
 
@@ -360,7 +370,7 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
             pending = asyncio.ensure_future(take(first, 1))
             await asyncio.sleep(0)
             with self.assertRaises(aiopjlink.PJLinkNoConnection):
-                await anext(listen_notifications(**options(port)))
+                await start_listening(**options(port))
             pending.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await pending
@@ -381,7 +391,7 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_local_address_not_on_this_machine(self) -> None:
         with self.assertRaises(aiopjlink.PJLinkNoConnection):
-            await anext(listen_notifications(local_address="192.0.2.1", local_port=unused_udp_port()))
+            await start_listening(local_address="192.0.2.1", local_port=unused_udp_port())
 
     async def test_no_socket_can_be_made(self) -> None:
         """E.g. a machine without IPv6: the listener cannot start, and says so like any other failure."""
@@ -390,7 +400,7 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
             mock.patch.object(socket, "socket", side_effect=OSError(errno.EAFNOSUPPORT, "not supported")),
             self.assertRaises(aiopjlink.PJLinkNoConnection) as err,
         ):
-            await anext(listen_notifications(**options(port)))
+            await start_listening(**options(port))
         self.assertEqual(
             str(err.exception), f"listening for notifications failed - [Errno {errno.EAFNOSUPPORT}] not supported"
         )
@@ -413,4 +423,4 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
         }
         for name, overrides in cases.items():
             with self.subTest(name), self.assertRaises(ValueError):
-                await anext(listen_notifications(**options(unused_udp_port(), **overrides)))
+                await start_listening(**options(unused_udp_port(), **overrides))
