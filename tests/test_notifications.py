@@ -29,7 +29,7 @@ from mock_projector import unused_udp_port
 
 LOCALHOST = "127.0.0.1"
 MAC = "00:11:22:33:44:55"
-WAIT = 2.0
+MAX_WAIT_SECONDS = 2.0
 """The most a test waits for a notification that is expected to arrive."""
 
 ALL_OK = dict.fromkeys(aiopjlink.Errors.Category, aiopjlink.Errors.Level.OK)
@@ -46,42 +46,43 @@ def ipv6_loopback_available() -> bool:
     return True
 
 
-def send(port: int, data: bytes, *, host: str = LOCALHOST) -> None:
+def send_datagram(port: int, datagram: bytes, *, host: str = LOCALHOST) -> None:
     """Send one datagram to `host`, as a projector would."""
     family = socket.AF_INET6 if ":" in host else socket.AF_INET
     with socket.socket(family, socket.SOCK_DGRAM) as sock:
-        sock.sendto(data, (host, port))
+        sock.sendto(datagram, (host, port))
 
 
-def options(port: int, **overrides: Any) -> dict[str, Any]:
+def listener_arguments(port: int, **overrides: Any) -> dict[str, Any]:
     """Arguments that make the listener listen on `port` of the loopback interface only."""
     result: dict[str, Any] = {"local_address": LOCALHOST, "local_port": port}
     result.update(overrides)
     return result
 
 
-async def take(notifications: AsyncGenerator[Notification, None], count: int) -> list[Notification]:
-    """The next `count` notifications, but never wait for longer than `WAIT` for them."""
-    async with asyncio.timeout(WAIT):
+async def take_notifications(notifications: AsyncGenerator[Notification, None], count: int) -> list[Notification]:
+    """The next `count` notifications, but never wait for longer than `MAX_WAIT_SECONDS` for them."""
+    async with asyncio.timeout(MAX_WAIT_SECONDS):
         return [await anext(notifications) for _ in range(count)]
 
 
 async def start_listening(**arguments: Any) -> None:
     """Start a listener and wait for its first notification, for tests that expect starting it to fail.
 
-    If it starts after all, nothing is ever sent to it: the test then fails after `WAIT` instead of waiting forever.
+    If it starts after all, nothing is ever sent to it: the test then fails after `MAX_WAIT_SECONDS` instead of
+    waiting forever.
     """
-    async with contextlib.aclosing(listen_notifications(**arguments)) as found, asyncio.timeout(WAIT):
+    async with contextlib.aclosing(listen_notifications(**arguments)) as found, asyncio.timeout(MAX_WAIT_SECONDS):
         await anext(found)
 
 
 async def listen_and_send(port: int, *datagrams: bytes, count: int, **overrides: Any) -> list[Notification]:
     """Listen on `port`, send the datagrams to the address listened on, and return the first `count` notifications."""
-    async with contextlib.aclosing(listen_notifications(**options(port, **overrides))) as found:
-        pending = asyncio.ensure_future(take(found, count))
+    async with contextlib.aclosing(listen_notifications(**listener_arguments(port, **overrides))) as found:
+        pending = asyncio.ensure_future(take_notifications(found, count))
         await asyncio.sleep(0)  # The listener binds the port when it starts: nothing is lost from here on.
         for datagram in datagrams:
-            send(port, datagram, host=overrides.get("local_address", LOCALHOST) or LOCALHOST)
+            send_datagram(port, datagram, host=overrides.get("local_address", LOCALHOST) or LOCALHOST)
         return await pending
 
 
@@ -295,7 +296,7 @@ class ListenTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_nothing_happens_before_the_first_iteration(self) -> None:
         port = unused_udp_port()
-        listen_notifications(**options(port))
+        listen_notifications(**listener_arguments(port))
         await asyncio.sleep(0.05)
         # The port is still free: nothing was bound.
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
@@ -321,14 +322,14 @@ class ReleaseTests(unittest.IsolatedAsyncioTestCase):
         port = unused_udp_port()
 
         async def listen_forever() -> None:
-            async for _ in listen_notifications(**options(port)):
+            async for _ in listen_notifications(**listener_arguments(port)):
                 pass
 
         task = asyncio.create_task(listen_forever())
         await asyncio.sleep(0.1)
         task.cancel()
         with self.assertRaises(asyncio.CancelledError):
-            async with asyncio.timeout(WAIT):
+            async with asyncio.timeout(MAX_WAIT_SECONDS):
                 await task
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.bind((LOCALHOST, port))
@@ -347,7 +348,7 @@ class ReleaseTests(unittest.IsolatedAsyncioTestCase):
             mock.patch.object(asyncio.BaseEventLoop, "create_datagram_endpoint", side_effect=RuntimeError("x")),
             self.assertRaises(RuntimeError),
         ):
-            await start_listening(**options(port))
+            await start_listening(**listener_arguments(port))
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.bind((LOCALHOST, port))
 
@@ -360,17 +361,17 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
             blocker.bind((LOCALHOST, 0))
             port = blocker.getsockname()[1]
             with self.assertRaises(aiopjlink.PJLinkNoConnection) as err:
-                await start_listening(**options(port))
+                await start_listening(**listener_arguments(port))
         self.assertTrue(str(err.exception).startswith("listening for notifications failed - "), str(err.exception))
         self.assertIsInstance(err.exception, aiopjlink.PJLinkConnectionError)
 
     async def test_only_one_listener_per_port(self) -> None:
         port = unused_udp_port()
-        async with contextlib.aclosing(listen_notifications(**options(port))) as first:
-            pending = asyncio.ensure_future(take(first, 1))
+        async with contextlib.aclosing(listen_notifications(**listener_arguments(port))) as first:
+            pending = asyncio.ensure_future(take_notifications(first, 1))
             await asyncio.sleep(0)
             with self.assertRaises(aiopjlink.PJLinkNoConnection):
-                await start_listening(**options(port))
+                await start_listening(**listener_arguments(port))
             pending.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await pending
@@ -378,8 +379,8 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
     async def test_search_cannot_share_the_port(self) -> None:
         """Both protocols use port 4352 by default, so a search needs another local port while listening."""
         port = unused_udp_port()
-        async with contextlib.aclosing(listen_notifications(**options(port))) as found:
-            pending = asyncio.ensure_future(take(found, 1))
+        async with contextlib.aclosing(listen_notifications(**listener_arguments(port))) as found:
+            pending = asyncio.ensure_future(take_notifications(found, 1))
             await asyncio.sleep(0)
             with self.assertRaises(aiopjlink.PJLinkNoConnection):
                 await aiopjlink.search(
@@ -400,7 +401,7 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
             mock.patch.object(socket, "socket", side_effect=OSError(errno.EAFNOSUPPORT, "not supported")),
             self.assertRaises(aiopjlink.PJLinkNoConnection) as err,
         ):
-            await start_listening(**options(port))
+            await start_listening(**listener_arguments(port))
         self.assertEqual(
             str(err.exception), f"listening for notifications failed - [Errno {errno.EAFNOSUPPORT}] not supported"
         )
@@ -438,4 +439,4 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
         }
         for name, overrides in cases.items():
             with self.subTest(name), self.assertRaises(ValueError):
-                await start_listening(**options(unused_udp_port(), **overrides))
+                await start_listening(**listener_arguments(unused_udp_port(), **overrides))

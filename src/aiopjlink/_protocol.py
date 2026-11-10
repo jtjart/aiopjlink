@@ -22,10 +22,10 @@ SEARCH_REQUEST = b"%2SRCH\r"
 """The search start instruction (§3.2.2): `%2SRCH` and CR. It has no separator and no parameter."""
 
 _SEARCH_RESPONSE_PREFIX = "%2ACKN="
-_MAC_ADDRESS = re.compile(r"[0-9a-f]{2}(?::[0-9a-f]{2}){5}", re.IGNORECASE)
+_MAC_ADDRESS_PATTERN = re.compile(r"[0-9a-f]{2}(?::[0-9a-f]{2}){5}", re.IGNORECASE)
 
 
-def format_command(command: str, param: str, pjclass: PJClass, encoding: str = "utf-8") -> str:
+def format_command(command: str, parameter: str, pjclass: PJClass, encoding: str = "utf-8") -> str:
     """Build a command line: `%<class><COMMAND> <param>\\r` (§2.1).
 
     The spec limits the command to 4 bytes and the parameter to 128 bytes, so both are measured in
@@ -40,14 +40,14 @@ def format_command(command: str, param: str, pjclass: PJClass, encoding: str = "
         raise PJLinkProtocolError("command is not uppercase")
     if len(command.encode(encoding)) != 4:
         raise PJLinkProtocolError("command is not 4 bytes")
-    if len(param.encode(encoding)) > 128:
+    if len(parameter.encode(encoding)) > 128:
         raise PJLinkProtocolError("command param is larger than 128 bytes")
-    sep = " "
-    return f"%{pjclass.value}{command}{sep}{param}\r"
+    separator = " "
+    return f"%{pjclass.value}{command}{separator}{parameter}\r"
 
 
 def parse_response(
-    data: str, expect_command: str | None = None, expect_pjclass: PJClass = PJClass.ONE
+    response_line: str, expect_command: str | None = None, expect_pjclass: PJClass = PJClass.ONE
 ) -> tuple[str, str]:
     """Split a response line into `(COMMAND, parameter)` (§2.2).
 
@@ -56,59 +56,59 @@ def parse_response(
     `expect_command`.
     """
     # NOTE: Postels robustness principle - be conservative in what you do, be liberal in what you accept from others
-    LOGGER.debug("received response: %s", redact_debug_payload(data.strip()))
+    LOGGER.debug("received response: %s", redact_debug_payload(response_line.strip()))
     expect_pjclass = PJClass(expect_pjclass)
 
     # Shortest valid response: header, class, 4 command characters, separator, CR (e.g. `%1INF2=\r`).
-    if len(data) < 8:
+    if len(response_line) < 8:
         raise PJLinkProtocolError("unexpected response - too short")
 
     # Check header and class version.
-    header, version = data[0], data[1]
-    if header != "%":
+    header_character, class_digit = response_line[0], response_line[1]
+    if header_character != "%":
         raise PJLinkProtocolError("unexpected response header")
-    if version != expect_pjclass.value:
+    if class_digit != expect_pjclass.value:
         raise PJLinkProtocolError("unexpected response protocol class")
 
-    # Grab the command body, separator, and param.
-    command = f"{data[2:6]}".upper()
-    sep = data[6]
-    param = data[7:-1]
+    # Grab the command body, separator, and parameter.
+    command = response_line[2:6].upper()
+    separator = response_line[6]
+    parameter = response_line[7:-1]
 
     # Check them for correctness.
-    if sep != "=":
+    if separator != "=":
         raise PJLinkProtocolError("unexpected response separator")
     if expect_command is not None and command != expect_command:
         raise PJLinkProtocolError("unexpected response command")
 
     # Handle for protocol and projector errors.
-    param_u = param.upper()
-    if param_u == "ERR1":
+    parameter_uppercase = parameter.upper()
+    if parameter_uppercase == "ERR1":
         raise PJLinkNotSupported("unsupported command", command=command)
-    if param_u == "ERR2":
+    if parameter_uppercase == "ERR2":
         raise PJLinkInvalidParameter("out of parameter", command=command)
-    if param_u == "ERR3":
+    if parameter_uppercase == "ERR3":
         raise PJLinkNotReady("unavailable in the current state", command=command)
-    if param_u == "ERR4":
+    if parameter_uppercase == "ERR4":
         raise PJLinkDeviceFailure("projector or display failure", command=command)
 
-    return command, param
+    return command, parameter
 
 
-def parse_mac_address(text: str) -> str | None:
-    """Return `text` as a lower-case MAC address (`aa:bb:cc:dd:ee:ff`), or None if it is not one."""
-    return text.lower() if _MAC_ADDRESS.fullmatch(text) else None
+def parse_mac_address(candidate: str) -> str | None:
+    """Return `candidate` as a lower-case MAC address (`aa:bb:cc:dd:ee:ff`), or None if it is not one."""
+    return candidate.lower() if _MAC_ADDRESS_PATTERN.fullmatch(candidate) else None
 
 
-def parse_search_response(data: str) -> str:
+def parse_search_response(datagram_text: str) -> str:
     """Return the MAC address in a search response, `%2ACKN=xx:xx:xx:xx:xx:xx` and CR (§3.2.2).
 
     The address is returned in lower case (`aa:bb:cc:dd:ee:ff`), whatever case the projector used.
     A datagram is delimited by the network, so a missing CR (or a CRLF) is accepted.
 
-    Raises `PJLinkProtocolError` if `data` is not a search response.
+    Raises `PJLinkProtocolError` if `datagram_text` is not a search response.
     """
-    line = data.rstrip("\r\n")
+    line = datagram_text.rstrip("\r\n")
     if not line.upper().startswith(_SEARCH_RESPONSE_PREFIX):
         raise PJLinkProtocolError(f"unexpected search response: {line}")
     mac_address = parse_mac_address(line[len(_SEARCH_RESPONSE_PREFIX) :])
@@ -117,16 +117,16 @@ def parse_search_response(data: str) -> str:
     return mac_address
 
 
-def split_notification(data: str) -> tuple[str, str]:
+def split_notification(datagram_text: str) -> tuple[str, str]:
     """Split a status notification, `%2<COMMAND>=<parameter>` and CR (§3.3.2), into `(COMMAND, parameter)`.
 
     The command is returned in upper case, whatever case the projector used. What the parameter means is up
     to the command, so it is not looked at here. A datagram is delimited by the network, so a missing CR (or a
     CRLF) is accepted, as it is for the search response.
 
-    Raises `PJLinkProtocolError` if `data` is not a notification line.
+    Raises `PJLinkProtocolError` if `datagram_text` is not a notification line.
     """
-    line = data.rstrip("\r\n")
+    line = datagram_text.rstrip("\r\n")
     # Shortest valid line: header, class, 4 command characters and the separator (e.g. `%2POWR=`).
     if len(line) < 7 or line[:2] != "%2" or line[6] != "=":
         raise PJLinkProtocolError(f"unexpected status notification: {line}")

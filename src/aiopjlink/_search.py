@@ -20,7 +20,7 @@ from typing import Any
 
 from ._debug import LOGGER
 from ._protocol import SEARCH_REQUEST, parse_search_response
-from ._udp import PJLINK_PORT, open_socket, resolve_address, source_address
+from ._udp import PJLINK_UDP_PORT, open_socket, resolve_address, source_address
 from .exceptions import PJLinkNoConnection, PJLinkProtocolError
 
 DEFAULT_SEARCH_DURATION = 30.0
@@ -44,26 +44,26 @@ class SearchResult:
 class _SearchProtocol(asyncio.DatagramProtocol):
     """Collects the search responses that arrive on the socket."""
 
-    def __init__(self, results: asyncio.Queue[SearchResult]) -> None:
-        self._results = results
-        self._seen: set[SearchResult] = set()
+    def __init__(self, results_queue: asyncio.Queue[SearchResult]) -> None:
+        self._results_queue = results_queue
+        self._already_reported: set[SearchResult] = set()
 
     def datagram_received(self, data: bytes, addr: tuple[str | Any, int]) -> None:
-        source = source_address(addr)
+        sender_address = source_address(addr)
         try:
             mac_address = parse_search_response(data.decode("ascii", errors="replace"))
         except PJLinkProtocolError as err:
             # Includes our own request when the network loops a broadcast back to us.
-            LOGGER.debug("ignoring datagram from %s: %s", source, err)
+            LOGGER.debug("ignoring datagram from %s: %s", sender_address, err)
             return
 
-        result = SearchResult(source, mac_address)
-        if result in self._seen:
-            LOGGER.debug("ignoring repeated search response from %s", source)
+        result = SearchResult(sender_address, mac_address)
+        if result in self._already_reported:
+            LOGGER.debug("ignoring repeated search response from %s", sender_address)
             return
-        self._seen.add(result)
-        LOGGER.debug("search response from %s", source)
-        self._results.put_nowait(result)
+        self._already_reported.add(result)
+        LOGGER.debug("search response from %s", sender_address)
+        self._results_queue.put_nowait(result)
 
     def error_received(self, exc: Exception) -> None:
         # The operating system reporting an earlier datagram as undeliverable (ICMP). Nothing to do about it.
@@ -94,31 +94,31 @@ def _resolve_local(local_address: str | None, local_port: int, family: socket.Ad
     return sockaddr
 
 
-def _send_requests(sock: socket.socket, targets: list[tuple[Any, ...]]) -> None:
+def _send_requests(udp_socket: socket.socket, targets: list[tuple[Any, ...]]) -> None:
     """Send the search start instruction to every target. Fails only if none of them could be sent to.
 
     The datagram is sent on the socket itself rather than through the asyncio transport, because the transport
     reports a failed send to the protocol later, where the caller of the search can no longer see it.
     """
-    errors: list[OSError] = []
-    for target in targets:
-        LOGGER.debug("sending search request to %s", target[0])
+    send_errors: list[OSError] = []
+    for target_sockaddr in targets:
+        LOGGER.debug("sending search request to %s", target_sockaddr[0])
         try:
-            sock.sendto(SEARCH_REQUEST, target)
+            udp_socket.sendto(SEARCH_REQUEST, target_sockaddr)
         except OSError as err:
-            LOGGER.debug("could not send search request to %s: %s", target[0], err)
-            errors.append(err)
-    if len(errors) == len(targets):
-        raise PJLinkNoConnection(f"search failed - {errors[0]}") from errors[0]
+            LOGGER.debug("could not send search request to %s: %s", target_sockaddr[0], err)
+            send_errors.append(err)
+    if len(send_errors) == len(targets):
+        raise PJLinkNoConnection(f"search failed - {send_errors[0]}") from send_errors[0]
 
 
 async def search_iter(
     *,
     duration: float = DEFAULT_SEARCH_DURATION,
     broadcast_address: str | Sequence[str] = DEFAULT_BROADCAST_ADDRESS,
-    port: int = PJLINK_PORT,
+    port: int = PJLINK_UDP_PORT,
     local_address: str | None = None,
-    local_port: int = PJLINK_PORT,
+    local_port: int = PJLINK_UDP_PORT,
 ) -> AsyncGenerator[SearchResult, None]:
     """Search for projectors and yield each one as soon as it answers (§3.2).
 
@@ -164,31 +164,31 @@ async def search_iter(
     if not 0 <= local_port < 65536:
         raise ValueError("local_port must be between 0 and 65535")
     family, targets = _resolve_targets(broadcast_address, port)
-    local = _resolve_local(local_address, local_port, family)
+    local_sockaddr = _resolve_local(local_address, local_port, family)
 
     loop = asyncio.get_running_loop()
-    results: asyncio.Queue[SearchResult] = asyncio.Queue()
+    answers: asyncio.Queue[SearchResult] = asyncio.Queue()
     try:
-        sock = open_socket(family, local, broadcast=True)
+        udp_socket = open_socket(family, local_sockaddr, enable_broadcast=True)
     except OSError as err:
         raise PJLinkNoConnection(f"search failed - {err}") from err
     try:
-        transport, _ = await loop.create_datagram_endpoint(lambda: _SearchProtocol(results), sock=sock)
+        transport, _ = await loop.create_datagram_endpoint(lambda: _SearchProtocol(answers), sock=udp_socket)
     except BaseException:
-        sock.close()
+        udp_socket.close()
         raise
 
     try:
-        _send_requests(sock, targets)
+        _send_requests(udp_socket, targets)
         deadline = loop.time() + duration
         while True:
             try:
-                result = results.get_nowait()
+                result = answers.get_nowait()
             except asyncio.QueueEmpty:
                 try:
                     # The timeout only covers the wait, never a `yield`: it would otherwise cancel the caller.
                     async with asyncio.timeout_at(deadline):
-                        result = await results.get()
+                        result = await answers.get()
                 except TimeoutError:
                     return
             yield result
@@ -203,9 +203,9 @@ async def search(
     *,
     duration: float = DEFAULT_SEARCH_DURATION,
     broadcast_address: str | Sequence[str] = DEFAULT_BROADCAST_ADDRESS,
-    port: int = PJLINK_PORT,
+    port: int = PJLINK_UDP_PORT,
     local_address: str | None = None,
-    local_port: int = PJLINK_PORT,
+    local_port: int = PJLINK_UDP_PORT,
 ) -> list[SearchResult]:
     """Search for projectors, wait `duration` seconds and return all that answered (§3.2).
 

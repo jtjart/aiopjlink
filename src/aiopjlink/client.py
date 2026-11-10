@@ -14,7 +14,7 @@ Error handling
 See `aiopjlink.exceptions`: everything raised here is a subclass of `PJLinkException`.
 """
 
-from ._transport import DEFAULT_IDLE_TIMEOUT, Transport
+from ._transport import DEFAULT_IDLE_TIMEOUT_SECONDS, Transport
 from .commands import Errors, Filter, Freeze, Information, Lamp, Mute, Power, Sources, Volume
 from .enums import PJAuth, PJClass
 
@@ -73,7 +73,7 @@ class PJLink(Transport):
         encoding: str = "utf-8",
         *,
         persistent: bool = True,
-        idle_timeout: float = DEFAULT_IDLE_TIMEOUT,
+        idle_timeout: float = DEFAULT_IDLE_TIMEOUT_SECONDS,
         authentication: PJAuth | str = PJAuth.AUTO,
     ) -> None:
         super().__init__(

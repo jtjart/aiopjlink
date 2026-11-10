@@ -13,14 +13,14 @@ class Freeze(CommandGroup):
 
     async def set(self, freeze: bool) -> None:
         """Freeze or unfreeze the screen (§4.25)."""
-        cmd = "1" if bool(freeze) else "0"
-        await self._transmit_ok("FREZ", cmd, PJClass.TWO, err1="freeze not supported")
+        parameter = "1" if bool(freeze) else "0"
+        await self._transmit_expecting_ok("FREZ", parameter, PJClass.TWO, not_supported_message="freeze not supported")
 
     async def get(self) -> bool:
         """Returns True if the screen is currently frozen, and False if not §4.26."""
-        response = await self._transmit_state("FREZ", PJClass.TWO, err1="freeze not supported")
-        if response == "0":
+        response_parameter = await self._query_status("FREZ", PJClass.TWO, not_supported_message="freeze not supported")
+        if response_parameter == "0":
             return False
-        if response == "1":
+        if response_parameter == "1":
             return True
         raise PJLinkUnexpectedResponseParameter("unexpected freeze state")

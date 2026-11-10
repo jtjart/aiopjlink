@@ -24,7 +24,7 @@ from typing import Any
 
 from ._debug import LOGGER
 from ._protocol import parse_mac_address, split_notification
-from ._udp import PJLINK_PORT, open_socket, resolve_address, source_address
+from ._udp import PJLINK_UDP_PORT, open_socket, resolve_address, source_address
 from .commands.errors import Errors, parse_error_levels
 from .commands.sources import Sources, parse_input_source
 from .exceptions import PJLinkNoConnection, PJLinkProtocolError, PJLinkUnexpectedResponseParameter
@@ -90,13 +90,13 @@ class Notification:
     event: NotificationEvent
 
 
-def parse_event(data: str) -> NotificationEvent:
+def parse_event(datagram_text: str) -> NotificationEvent:
     """Turn the text of a notification datagram (§3.3.2) into the event it describes.
 
     Raises `PJLinkProtocolError` if it is not a notification, and `PJLinkUnexpectedResponseParameter`
     if it is one but holds a value that is not defined for it.
     """
-    command, parameter = split_notification(data)
+    command, parameter = split_notification(datagram_text)
     if command == "LKUP":
         mac_address = parse_mac_address(parameter)
         if mac_address is None:
@@ -117,24 +117,24 @@ def parse_event(data: str) -> NotificationEvent:
 class _NotificationProtocol(asyncio.DatagramProtocol):
     """Collects the status notifications that arrive on the socket."""
 
-    def __init__(self, notifications: asyncio.Queue[Notification]) -> None:
-        self._notifications = notifications
+    def __init__(self, notification_queue: asyncio.Queue[Notification]) -> None:
+        self._notification_queue = notification_queue
 
     def datagram_received(self, data: bytes, addr: tuple[str | Any, int]) -> None:
-        source = source_address(addr)
+        sender_address = source_address(addr)
         try:
             event = parse_event(data.decode("ascii", errors="replace"))
         except (PJLinkProtocolError, PJLinkUnexpectedResponseParameter) as err:
             # Includes the search protocol's datagrams, which use the same port.
-            LOGGER.debug("ignoring datagram from %s: %s", source, err)
+            LOGGER.debug("ignoring datagram from %s: %s", sender_address, err)
             return
 
         try:
-            self._notifications.put_nowait(Notification(source, event))
+            self._notification_queue.put_nowait(Notification(sender_address, event))
         except asyncio.QueueFull:
-            LOGGER.debug("dropping status notification from %s: too many are waiting to be taken", source)
+            LOGGER.debug("dropping status notification from %s: too many are waiting to be taken", sender_address)
             return
-        LOGGER.debug("status notification from %s: %s", source, event)
+        LOGGER.debug("status notification from %s: %s", sender_address, event)
 
     def error_received(self, exc: Exception) -> None:
         # The operating system reporting an earlier datagram as undeliverable (ICMP). Nothing to do about it.
@@ -144,7 +144,7 @@ class _NotificationProtocol(asyncio.DatagramProtocol):
 async def listen_notifications(
     *,
     local_address: str | None = None,
-    local_port: int = PJLINK_PORT,
+    local_port: int = PJLINK_UDP_PORT,
 ) -> AsyncGenerator[Notification, None]:
     """Listen for status notifications and yield each one as it arrives (§3.3).
 
@@ -179,26 +179,26 @@ async def listen_notifications(
     if not 0 < local_port < 65536:
         raise ValueError("local_port must be between 1 and 65535")
     if local_address is None:
-        family, local = socket.AF_INET, ("0.0.0.0", local_port)
+        family, local_sockaddr = socket.AF_INET, ("0.0.0.0", local_port)
     else:
-        family, local = resolve_address(local_address, local_port, "local_address")
+        family, local_sockaddr = resolve_address(local_address, local_port, "local_address")
 
-    notifications: asyncio.Queue[Notification] = asyncio.Queue(_MAX_PENDING_NOTIFICATIONS)
+    pending_notifications: asyncio.Queue[Notification] = asyncio.Queue(_MAX_PENDING_NOTIFICATIONS)
     try:
-        sock = open_socket(family, local, broadcast=False)
+        udp_socket = open_socket(family, local_sockaddr, enable_broadcast=False)
     except OSError as err:
         raise PJLinkNoConnection(f"listening for notifications failed - {err}") from err
     try:
         transport, _ = await asyncio.get_running_loop().create_datagram_endpoint(
-            lambda: _NotificationProtocol(notifications), sock=sock
+            lambda: _NotificationProtocol(pending_notifications), sock=udp_socket
         )
     except BaseException:
-        sock.close()
+        udp_socket.close()
         raise
 
     try:
         while True:
-            yield await notifications.get()
+            yield await pending_notifications.get()
     finally:
         # The transport gives the socket back on the next iteration of the event loop. Let that happen, so that
         # whoever listens next (on the same local port) does not find it still in use.

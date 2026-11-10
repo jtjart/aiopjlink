@@ -7,7 +7,7 @@ from .._transport import Transport
 from ..enums import PJClass
 from .base import CommandGroup
 
-_NOT_INSTALLED = {"SVOL": "no speaker installed", "MVOL": "no microphone installed"}
+_NOT_INSTALLED_MESSAGES = {"SVOL": "no speaker installed", "MVOL": "no microphone installed"}
 
 
 class Volume(CommandGroup):
@@ -31,12 +31,16 @@ class Volume(CommandGroup):
         super().__init__(link)
         self.instruction = instruction
         # ERR1 means the device is not installed (§4.23, §4.24).
-        self._err1 = _NOT_INSTALLED.get(instruction)
+        self._not_installed_message = _NOT_INSTALLED_MESSAGES.get(instruction)
 
     async def turn_up(self) -> None:
         """Increase the volume by one unit."""
-        await self._transmit_ok(self.instruction, "1", PJClass.TWO, err1=self._err1)
+        await self._transmit_expecting_ok(
+            self.instruction, "1", PJClass.TWO, not_supported_message=self._not_installed_message
+        )
 
     async def turn_down(self) -> None:
         """Decrease the volume by one unit."""
-        await self._transmit_ok(self.instruction, "0", PJClass.TWO, err1=self._err1)
+        await self._transmit_expecting_ok(
+            self.instruction, "0", PJClass.TWO, not_supported_message=self._not_installed_message
+        )

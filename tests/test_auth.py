@@ -164,7 +164,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             await reader.read()
             writer.close()
 
-        async def fail_send(transport: Transport, session: _Session, cstring: str) -> None:
+        async def fail_send(transport: Transport, session: _Session, command_line: str) -> None:
             session.digest_sent = True
             raise aiopjlink.PJLinkConnectionClosed("simulated send failure")
 

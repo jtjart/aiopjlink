@@ -40,8 +40,9 @@ class SecureProjector:
     `sha256` / `md5`: which procedures it accepts. `on_inquiry`: what it does with `PJLINK 2` when it has no
     SHA256 (one of `LEGACY_BEHAVIOURS`). `secured=False` makes it greet with `PJLINK 0` and accept anything.
     `drop`: numbers of connections it closes at once, without a greeting. `ignore_inquiries`: how many of the first
-    questions it leaves unanswered (a bad moment). `sha256_reject_delay`: seconds it waits before rejecting a
-    wrong SHA256 digest, `md5_reject_delay` the same for a wrong MD5 digest (the spec has projectors wait two seconds).
+    questions it leaves unanswered (a bad moment). `sha256_reject_delay_seconds`: seconds it waits before rejecting a
+    wrong SHA256 digest, `md5_reject_delay_seconds` the same for a wrong MD5 digest (the spec has projectors wait two
+    seconds).
     """
 
     def __init__(
@@ -54,15 +55,15 @@ class SecureProjector:
         password: str = PASSWORD,
         drop: Iterable[int] = (),
         ignore_inquiries: int = 0,
-        sha256_reject_delay: float = 0.0,
-        md5_reject_delay: float = 0.0,
-        inquiry_delay: float = 0.0,
+        sha256_reject_delay_seconds: float = 0.0,
+        md5_reject_delay_seconds: float = 0.0,
+        inquiry_delay_seconds: float = 0.0,
     ) -> None:
         self.drop = set(drop)  # Numbers (from 1) of the connections to close at once, without a greeting.
         self.ignore_inquiries = ignore_inquiries
-        self.sha256_reject_delay = sha256_reject_delay
-        self.md5_reject_delay = md5_reject_delay
-        self.inquiry_delay = inquiry_delay  # Seconds it takes to answer the question.
+        self.sha256_reject_delay_seconds = sha256_reject_delay_seconds
+        self.md5_reject_delay_seconds = md5_reject_delay_seconds
+        self.inquiry_delay_seconds = inquiry_delay_seconds  # Seconds it takes to answer the question.
         self.executed: list[bytes] = []  # The commands it carried out (after a right digest).
         self.sha256 = sha256
         self.md5 = md5
@@ -91,7 +92,7 @@ class SecureProjector:
                     self.inquiries += 1
                     if self.inquiries <= self.ignore_inquiries:
                         continue
-                    await asyncio.sleep(self.inquiry_delay)
+                    await asyncio.sleep(self.inquiry_delay_seconds)
                     if self.sha256:
                         nonce = NONCE
                         writer.write(f"PJLINK 2 {NONCE}\r".encode())
@@ -111,11 +112,13 @@ class SecureProjector:
                 else:
                     verified = self._verify(line, nonce)
                     if verified is None:
-                        delay = self.sha256_reject_delay if nonce is not None else self.md5_reject_delay
-                        if delay:
+                        reject_delay_seconds = (
+                            self.sha256_reject_delay_seconds if nonce is not None else self.md5_reject_delay_seconds
+                        )
+                        if reject_delay_seconds:
                             with contextlib.suppress(TimeoutError):
                                 # Ends early if the client hangs up.
-                                await asyncio.wait_for(reader.read(), delay)
+                                await asyncio.wait_for(reader.read(), reject_delay_seconds)
                         writer.write(b"PJLINK ERRA\r")
                         await writer.drain()
                         return
@@ -373,7 +376,7 @@ class LegacyFallbackTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_the_second_try_does_not_depend_on_the_timeout(self) -> None:
         """Even with a very short `timeout` the second try happens: it has a deadline of its own."""
-        projector = SecureProjector(sha256=True, md5=False, ignore_inquiries=1, inquiry_delay=0.2)
+        projector = SecureProjector(sha256=True, md5=False, ignore_inquiries=1, inquiry_delay_seconds=0.2)
         async with raw_tcp_server(projector) as server:
             link = server.client(password=PASSWORD, timeout=1)
             self.assertEqual(await link.power.get(), Power.State.ON)
@@ -383,8 +386,8 @@ class LegacyFallbackTests(unittest.IsolatedAsyncioTestCase):
     async def test_a_wrong_password_is_a_password_error_even_with_a_short_timeout(self) -> None:
         """§5.1: a projector answers a wrong digest after two seconds. That is `PJLinkPassword`, whatever `timeout`."""
         for name, projector in (
-            ("md5", SecureProjector(sha256=False, on_inquiry="ERR1", password="right", md5_reject_delay=1.5)),
-            ("sha256", SecureProjector(md5=False, password="right", sha256_reject_delay=1.5)),
+            ("md5", SecureProjector(sha256=False, on_inquiry="ERR1", password="right", md5_reject_delay_seconds=1.5)),
+            ("sha256", SecureProjector(md5=False, password="right", sha256_reject_delay_seconds=1.5)),
         ):
             with self.subTest(procedure=name):
                 async with raw_tcp_server(projector) as server:
@@ -395,7 +398,7 @@ class LegacyFallbackTests(unittest.IsolatedAsyncioTestCase):
     async def test_wrong_password_on_the_second_try_is_a_password_error_not_a_timeout(self) -> None:
         """The projector sits on a wrong SHA256 digest past the deadline (§5.1: two seconds): still `PJLinkPassword`."""
         projector = SecureProjector(
-            sha256=True, md5=False, ignore_inquiries=1, sha256_reject_delay=10, password="right"
+            sha256=True, md5=False, ignore_inquiries=1, sha256_reject_delay_seconds=10, password="right"
         )
         async with raw_tcp_server(projector) as server:
             link = server.client(password="wrong", timeout=3)

@@ -37,21 +37,21 @@ class Errors(CommandGroup):
         Returns:
             dict[Category]: Level: Table of error categories to states.
         """
-        return parse_error_levels(await self._transmit_state("ERST", PJClass.ONE))
+        return parse_error_levels(await self._query_status("ERST", PJClass.ONE))
 
 
-def parse_error_levels(text: str) -> dict[Errors.Category, Errors.Level]:
+def parse_error_levels(levels_text: str) -> dict[Errors.Category, Errors.Level]:
     """Parse the six error levels of an `ERST` query response (§4.7) or status notification (§3.3.2)."""
-    if len(text) != 6:
+    if len(levels_text) != 6:
         raise PJLinkUnexpectedResponseParameter("unexpected number of error types reported")
     try:
         return {
-            Errors.Category.FAN: Errors.Level(text[0]),
-            Errors.Category.LAMP: Errors.Level(text[1]),
-            Errors.Category.TEMP: Errors.Level(text[2]),
-            Errors.Category.COVER: Errors.Level(text[3]),
-            Errors.Category.FILTER: Errors.Level(text[4]),
-            Errors.Category.OTHER: Errors.Level(text[5]),
+            Errors.Category.FAN: Errors.Level(levels_text[0]),
+            Errors.Category.LAMP: Errors.Level(levels_text[1]),
+            Errors.Category.TEMP: Errors.Level(levels_text[2]),
+            Errors.Category.COVER: Errors.Level(levels_text[3]),
+            Errors.Category.FILTER: Errors.Level(levels_text[4]),
+            Errors.Category.OTHER: Errors.Level(levels_text[5]),
         }
     except ValueError as err:
         raise PJLinkUnexpectedResponseParameter("unknown error level") from err

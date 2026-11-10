@@ -21,34 +21,34 @@ class Mute(CommandGroup):
         Returns:
             tuple(video: bool, audio: bool): True if the track is muted.  False if not.
         """
-        status = await self._transmit_state("AVMT", PJClass.ONE)
-        if status == "11":
+        mute_code = await self._query_status("AVMT", PJClass.ONE)
+        if mute_code == "11":
             return True, False
-        if status == "21":
+        if mute_code == "21":
             return False, True
-        if status == "31":
+        if mute_code == "31":
             return True, True
-        if status == "30":
+        if mute_code == "30":
             return False, False
         # Not defined as a query response (§4.6), but some projectors report "not muted" like this
-        if status in ("10", "20"):
+        if mute_code in ("10", "20"):
             return False, False
         raise PJLinkUnexpectedResponseParameter("unexpected mute response")
 
     async def video(self, muted: bool) -> None:
         """Set if the video track should be muted (True to mute, False to unmute)."""
-        cmd = "1" if muted else "0"
-        await self._transmit_ok("AVMT", f"1{cmd}", pjclass=PJClass.ONE)
+        parameter = "1" if muted else "0"
+        await self._transmit_expecting_ok("AVMT", f"1{parameter}", pjclass=PJClass.ONE)
 
     async def audio(self, muted: bool) -> None:
         """Set if the audio track should be muted (True to mute, False to unmute)."""
-        cmd = "1" if muted else "0"
-        await self._transmit_ok("AVMT", f"2{cmd}", pjclass=PJClass.ONE)
+        parameter = "1" if muted else "0"
+        await self._transmit_expecting_ok("AVMT", f"2{parameter}", pjclass=PJClass.ONE)
 
     async def both(self, muted: bool) -> None:
         """Set if the AV tracks should be muted (True to mute, False to unmute)."""
-        cmd = "1" if muted else "0"
-        await self._transmit_ok("AVMT", f"3{cmd}", pjclass=PJClass.ONE)
+        parameter = "1" if muted else "0"
+        await self._transmit_expecting_ok("AVMT", f"3{parameter}", pjclass=PJClass.ONE)
 
     async def set(self, video: bool | None, audio: bool | None) -> None:
         """Enable or disable mute for each track (call mirrors output of `status`).

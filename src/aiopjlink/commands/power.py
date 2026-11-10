@@ -29,13 +29,13 @@ class Power(CommandGroup):
         """Send a power control instruction to power the projector lamp on or off."""
         if state in (Power.State.COOLING, Power.State.WARMING):
             raise ValueError("expected Power.State.ON or Power.State.OFF")
-        await self._transmit_ok("POWR", state.value, pjclass=pjclass)
+        await self._transmit_expecting_ok("POWR", state.value, pjclass=pjclass)
 
     async def get(self, pjclass: PJClass = PJClass.ONE) -> State:
         """Request the power status of the projector."""
-        response = await self._transmit_state("POWR", pjclass)
+        response_parameter = await self._query_status("POWR", pjclass)
         try:
-            return Power.State(response)
+            return Power.State(response_parameter)
         except ValueError as err:
             raise PJLinkUnexpectedResponseParameter("unexpected power state") from err
 
