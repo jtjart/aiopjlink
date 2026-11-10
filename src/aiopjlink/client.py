@@ -28,7 +28,7 @@ class PJLink(Transport):
     One object can safely be shared between several tasks: commands are sent one after
     the other.
 
-    `idle_timeout` is how many seconds a kept connection waits for the next command before it
+    `idle_timeout_seconds` is how long a kept connection waits for the next command before it
     is released (default 25, the projector drops it after 30). A projector that dislikes long
     sessions can be given a short one, e.g. 2: commands sent in quick succession (one poll) then
     share a connection, and it is closed right after.
@@ -42,10 +42,10 @@ class PJLink(Transport):
     with U+FFFD instead of failing, so a name in another encoding is still readable; pass the projector's
     encoding (e.g. `"latin-1"`) to get it exactly.
 
-    Every command is bound by `timeout` seconds in total, including connecting. The exception is a command
+    Every command is bound by `timeout_seconds` in total, including connecting. The exception is a command
     that carries a password: a projector answers a wrong password only after two seconds (§5.1), so such a command
     is given at least 3 seconds to be answered, and a wrong password is reported as `PJLinkPassword`
-    instead of `PJLinkNoConnection`, whatever `timeout` is.
+    instead of `PJLinkNoConnection`, whatever `timeout_seconds` is.
 
     `authentication` chooses the password procedure (§5.1) for a projector that has security on. The default,
     `PJAuth.AUTO`, asks for SHA256 (specification 2.10) and uses MD5 for projectors that do not support it;
@@ -69,21 +69,21 @@ class PJLink(Transport):
         address: str,
         port: int = 4352,
         password: str | None = None,
-        timeout: float = 4,
+        timeout_seconds: float = 4,
         encoding: str = "utf-8",
         *,
         persistent: bool = True,
-        idle_timeout: float = DEFAULT_IDLE_TIMEOUT_SECONDS,
+        idle_timeout_seconds: float = DEFAULT_IDLE_TIMEOUT_SECONDS,
         authentication: PJAuth | str = PJAuth.AUTO,
     ) -> None:
         super().__init__(
             address,
             port,
             password,
-            timeout,
+            timeout_seconds,
             encoding,
             persistent=persistent,
-            idle_timeout=idle_timeout,
+            idle_timeout_seconds=idle_timeout_seconds,
             authentication=authentication,
         )
 

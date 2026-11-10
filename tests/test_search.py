@@ -68,7 +68,7 @@ async def udp_projector(
 def search_arguments(server: UdpProjector, **overrides: Any) -> dict[str, Any]:
     """Arguments that make `search` talk to `server` only, from a port the OS chooses."""
     result: dict[str, Any] = {
-        "duration": 0.4,
+        "duration_seconds": 0.4,
         "broadcast_address": LOCALHOST,
         "port": server.port,
         "local_address": LOCALHOST,
@@ -165,7 +165,7 @@ class ResultTests(unittest.TestCase):
         defaults = {name: p.default for name, p in inspect.signature(aiopjlink.search).parameters.items()}
         self.assertEqual(defaults["port"], 4352)
         self.assertEqual(defaults["local_port"], 4352)
-        self.assertEqual(defaults["duration"], 30.0)
+        self.assertEqual(defaults["duration_seconds"], 30.0)
         self.assertEqual(defaults["broadcast_address"], "255.255.255.255")
 
 
@@ -204,10 +204,10 @@ class SearchTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(results, [aiopjlink.SearchResult(LOCALHOST, MAC)])
 
     async def test_nobody_answers(self) -> None:
-        """The search ends after `duration`, with nothing found."""
+        """The search ends after `duration_seconds`, with nothing found."""
         async with udp_projector() as server:
             start = time.monotonic()
-            results = await aiopjlink.search(**search_arguments(server, duration=0.3))
+            results = await aiopjlink.search(**search_arguments(server, duration_seconds=0.3))
             elapsed = time.monotonic() - start
         self.assertEqual(results, [])
         self.assertGreaterEqual(elapsed, 0.25)
@@ -217,7 +217,7 @@ class SearchTests(unittest.IsolatedAsyncioTestCase):
         """Projectors answer after a random delay (§3.2.1): an answer in the last moments still counts."""
         async with udp_projector(ACKN, delay_seconds=0.5) as server:
             start = time.monotonic()
-            results = await aiopjlink.search(**search_arguments(server, duration=0.9))
+            results = await aiopjlink.search(**search_arguments(server, duration_seconds=0.9))
             elapsed = time.monotonic() - start
         self.assertEqual(len(results), 1)
         self.assertGreaterEqual(elapsed, 0.8)
@@ -225,7 +225,7 @@ class SearchTests(unittest.IsolatedAsyncioTestCase):
     async def test_answer_after_the_duration_is_not_waited_for(self) -> None:
         async with udp_projector(ACKN, delay_seconds=1.5) as server:
             start = time.monotonic()
-            results = await aiopjlink.search(**search_arguments(server, duration=0.3))
+            results = await aiopjlink.search(**search_arguments(server, duration_seconds=0.3))
             elapsed = time.monotonic() - start
         self.assertEqual(results, [])
         self.assertLess(elapsed, 1.2)
@@ -256,7 +256,9 @@ class IterTests(unittest.IsolatedAsyncioTestCase):
     async def test_yields_before_the_duration_is_over(self) -> None:
         async with udp_projector(ACKN) as server:
             start = time.monotonic()
-            async with contextlib.aclosing(aiopjlink.search_iter(**search_arguments(server, duration=5))) as found:
+            async with contextlib.aclosing(
+                aiopjlink.search_iter(**search_arguments(server, duration_seconds=5))
+            ) as found:
                 first = await anext(found)
             elapsed = time.monotonic() - start
         self.assertEqual(first, aiopjlink.SearchResult(LOCALHOST, MAC))
@@ -265,11 +267,11 @@ class IterTests(unittest.IsolatedAsyncioTestCase):
     async def test_slow_consumer_is_left_alone_and_loses_nothing(self) -> None:
         """The time limit is not a timer running against the caller, and answers that came in time are kept.
 
-        Both answers arrive at once, the consumer needs longer than the whole `duration` for each of them.
+        Both answers arrive at once, the consumer needs longer than the whole `duration_seconds` for each of them.
         """
         async with udp_projector(ACKN, b"%2ACKN=AA:BB:CC:DD:EE:FF\r") as server:
             found: list[str] = []
-            async for result in aiopjlink.search_iter(**search_arguments(server, duration=0.3)):
+            async for result in aiopjlink.search_iter(**search_arguments(server, duration_seconds=0.3)):
                 await asyncio.sleep(0.5)
                 found.append(result.mac_address)
         self.assertEqual(found, [MAC, "aa:bb:cc:dd:ee:ff"])
@@ -279,7 +281,7 @@ class IterTests(unittest.IsolatedAsyncioTestCase):
         port = unused_udp_port()
         async with udp_projector(ACKN) as server:
             async with contextlib.aclosing(
-                aiopjlink.search_iter(**search_arguments(server, duration=5, local_port=port))
+                aiopjlink.search_iter(**search_arguments(server, duration_seconds=5, local_port=port))
             ) as found:
                 async for _ in found:
                     break
@@ -289,7 +291,9 @@ class IterTests(unittest.IsolatedAsyncioTestCase):
     async def test_cancelling_releases_the_port_at_once(self) -> None:
         port = unused_udp_port()
         async with udp_projector() as server:
-            task = asyncio.create_task(aiopjlink.search(**search_arguments(server, duration=5, local_port=port)))
+            task = asyncio.create_task(
+                aiopjlink.search(**search_arguments(server, duration_seconds=5, local_port=port))
+            )
             await asyncio.sleep(0.1)
             task.cancel()
             with self.assertRaises(asyncio.CancelledError):
@@ -302,7 +306,7 @@ class IterTests(unittest.IsolatedAsyncioTestCase):
         port = unused_udp_port()
         async with udp_projector(ACKN) as server:
             for _ in range(3):
-                results = await aiopjlink.search(**search_arguments(server, duration=0.2, local_port=port))
+                results = await aiopjlink.search(**search_arguments(server, duration_seconds=0.2, local_port=port))
                 self.assertEqual(len(results), 1)
 
     async def test_nothing_happens_before_the_first_iteration(self) -> None:
@@ -332,13 +336,13 @@ class SearchErrorTests(unittest.IsolatedAsyncioTestCase):
                 await aiopjlink.search(**search_arguments(server, local_address="192.0.2.1"))
 
     async def test_nothing_can_be_sent(self) -> None:
-        """No network: reported at once, not after `duration`."""
+        """No network: reported at once, not after `duration_seconds`."""
         unreachable = OSError(errno.ENETUNREACH, "Network is unreachable")
         async with udp_projector() as server:
             with mock.patch.object(socket.socket, "sendto", side_effect=unreachable):
                 start = time.monotonic()
                 with self.assertRaises(aiopjlink.PJLinkNoConnection) as err:
-                    await aiopjlink.search(**search_arguments(server, duration=5))
+                    await aiopjlink.search(**search_arguments(server, duration_seconds=5))
         self.assertLess(time.monotonic() - start, 1)
         self.assertIn("Network is unreachable", str(err.exception))
 
@@ -388,8 +392,8 @@ class SearchErrorTests(unittest.IsolatedAsyncioTestCase):
     async def test_invalid_arguments(self) -> None:
         """Rejected before anything is sent."""
         cases: dict[str, dict[str, Any]] = {
-            "duration is zero": {"duration": 0},
-            "duration is negative": {"duration": -1},
+            "duration is zero": {"duration_seconds": 0},
+            "duration is negative": {"duration_seconds": -1},
             "broadcast address is not an address": {"broadcast_address": "not-an-address"},
             "broadcast address is a host name": {"broadcast_address": "localhost"},
             "broadcast address is empty": {"broadcast_address": ""},

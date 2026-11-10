@@ -27,20 +27,20 @@ class Volume(CommandGroup):
     to the model, etc.) is referred to as the microphone volume.
     """
 
-    def __init__(self, link: Transport, instruction: str) -> None:
+    def __init__(self, link: Transport, command: str) -> None:
         super().__init__(link)
-        self.instruction = instruction
+        self.command = command
         # ERR1 means the device is not installed (§4.23, §4.24).
-        self._not_installed_message = _NOT_INSTALLED_MESSAGES.get(instruction)
+        self._not_installed_message = _NOT_INSTALLED_MESSAGES.get(command)
 
     async def turn_up(self) -> None:
         """Increase the volume by one unit."""
         await self._transmit_expecting_ok(
-            self.instruction, "1", PJClass.TWO, not_supported_message=self._not_installed_message
+            self.command, "1", PJClass.TWO, not_supported_message=self._not_installed_message
         )
 
     async def turn_down(self) -> None:
         """Decrease the volume by one unit."""
         await self._transmit_expecting_ok(
-            self.instruction, "0", PJClass.TWO, not_supported_message=self._not_installed_message
+            self.command, "0", PJClass.TWO, not_supported_message=self._not_installed_message
         )

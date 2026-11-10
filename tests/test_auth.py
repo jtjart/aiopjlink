@@ -71,7 +71,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
 
             # Expect the same error as for a missing response to a command.
             with self.assertRaises(aiopjlink.PJLinkNoConnection) as err:
-                link = server.client(timeout=0.5)
+                link = server.client(timeout_seconds=0.5)
                 await link.power.get()
 
             self.assertIn("welcome message", str(err.exception))
@@ -81,7 +81,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
 
         # CONDITION 1: The host can be reached by the OS but no response (aiotimeout).
         with self.assertRaises(aiopjlink.PJLinkNoConnection) as err:
-            link = client_for(unused_port(), timeout=0.5)
+            link = client_for(unused_port(), timeout_seconds=0.5)
             await link.power.get()
         # Accept either error message for compatibility
         self.assertTrue(
@@ -92,7 +92,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
 
         # CONDITION 2: The host cannot be reached by the OS.
         with self.assertRaises(aiopjlink.PJLinkNoConnection) as err:
-            link = aiopjlink.PJLink(address="0.0.0.0", port=unused_port(), password=None, timeout=0.5)
+            link = aiopjlink.PJLink(address="0.0.0.0", port=unused_port(), password=None, timeout_seconds=0.5)
             await link.power.get()
         self.assertIn("connection failed", str(err.exception))
 
@@ -151,7 +151,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             writer.close()
 
         async with raw_tcp_server(hang_up) as server:
-            link = server.client(password="wrong", timeout=2.0)
+            link = server.client(password="wrong", timeout_seconds=2.0)
             with self.assertRaises(aiopjlink.PJLinkPassword):
                 await link.power.get()
 
@@ -169,7 +169,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             raise aiopjlink.PJLinkConnectionClosed("simulated send failure")
 
         async with raw_tcp_server(handler) as server:
-            link = server.client(timeout=0.5)
+            link = server.client(timeout_seconds=0.5)
             with (
                 patch.object(Transport, "_send", fail_send),
                 self.assertRaises(aiopjlink.PJLinkConnectionClosed),
@@ -192,7 +192,9 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             writer.close()
 
         async with raw_tcp_server(handler) as server:
-            link = server.client(password="abc123", timeout=0.5, persistent=False, authentication=aiopjlink.PJAuth.MD5)
+            link = server.client(
+                password="abc123", timeout_seconds=0.5, persistent=False, authentication=aiopjlink.PJAuth.MD5
+            )
             await link.power.get()
             with self.assertRaises(aiopjlink.PJLinkConnectionClosed):
                 await link.power.get()

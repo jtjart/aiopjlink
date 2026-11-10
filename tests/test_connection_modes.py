@@ -82,8 +82,8 @@ class FakeProjector:
             self.connection_closed.set()
 
 
-def client_for_server(server: RawServer, timeout: float = TIMEOUT_SECONDS, **options: Any) -> aiopjlink.PJLink:
-    return server.client(timeout=timeout, **options)
+def client_for_server(server: RawServer, timeout_seconds: float = TIMEOUT_SECONDS, **options: Any) -> aiopjlink.PJLink:
+    return server.client(timeout_seconds=timeout_seconds, **options)
 
 
 class PersistentTests(unittest.IsolatedAsyncioTestCase):
@@ -113,7 +113,9 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
         projector = FakeProjector(token=b"21d0e96e")
         digest = hashlib.md5(b"21d0e96eabc123").hexdigest().encode()
         async with raw_tcp_server(projector) as server:
-            link = server.client(password="abc123", timeout=TIMEOUT_SECONDS, authentication=aiopjlink.PJAuth.MD5)
+            link = server.client(
+                password="abc123", timeout_seconds=TIMEOUT_SECONDS, authentication=aiopjlink.PJAuth.MD5
+            )
             await link.power.get()
             await link.power.get()
             self.assertEqual(projector.lines, [digest + b"%1POWR ?\r", b"%1POWR ?\r"])
@@ -147,7 +149,7 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
         """Same for a command whose caller gave up (e.g. a cancelled service call)."""
         response_gate = asyncio.Event()
         projector = FakeProjector(replies=[b"%1POWR=0\r"], response_gate=response_gate)
-        async with raw_tcp_server(projector) as server, client_for_server(server, timeout=10) as link:
+        async with raw_tcp_server(projector) as server, client_for_server(server, timeout_seconds=10) as link:
             task = asyncio.create_task(link.power.get())
             await asyncio.wait_for(projector.command_received.wait(), timeout=5)
             task.cancel()
@@ -196,7 +198,7 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
     async def test_idle_connection_is_released(self) -> None:
         """A connection nobody uses is given back, so another controller can get in."""
         projector = FakeProjector()
-        async with raw_tcp_server(projector) as server, client_for_server(server, idle_timeout=0.1) as link:
+        async with raw_tcp_server(projector) as server, client_for_server(server, idle_timeout_seconds=0.1) as link:
             await link.power.get()
             self.assertEqual(projector.open_connections, 1)
             await projector.wait_for_closed_connections(1)
@@ -207,7 +209,7 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
     async def test_idle_timeout_must_be_positive(self) -> None:
         for bad in (0, -1):
             with self.assertRaises(ValueError):
-                aiopjlink.PJLink(address="127.0.0.1", idle_timeout=bad)
+                aiopjlink.PJLink(address="127.0.0.1", idle_timeout_seconds=bad)
 
     async def test_short_idle_timeout_gives_one_connection_per_burst(self) -> None:
         """Three commands at once share a connection, which is closed before the next poll.
@@ -219,7 +221,10 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
         digest = hashlib.md5(b"21d0e96eabc123").hexdigest().encode()
         async with raw_tcp_server(projector) as server:
             link = server.client(
-                password="abc123", timeout=TIMEOUT_SECONDS, idle_timeout=0.2, authentication=aiopjlink.PJAuth.MD5
+                password="abc123",
+                timeout_seconds=TIMEOUT_SECONDS,
+                idle_timeout_seconds=0.2,
+                authentication=aiopjlink.PJAuth.MD5,
             )
             for poll in range(3):  # Three polls.
                 for _ in range(3):  # Three commands per poll.
@@ -283,7 +288,7 @@ class PerCommandTests(unittest.IsolatedAsyncioTestCase):
     async def test_idle_timeout_does_not_apply(self) -> None:
         projector = FakeProjector()
         async with raw_tcp_server(projector) as server:
-            link = client_for_server(server, persistent=False, idle_timeout=30)
+            link = client_for_server(server, persistent=False, idle_timeout_seconds=30)
             await link.power.get()
             await link.power.get()
             await projector.wait_for_closed_connections(2)
@@ -295,7 +300,10 @@ class PerCommandTests(unittest.IsolatedAsyncioTestCase):
         digest = hashlib.md5(b"21d0e96eabc123").hexdigest().encode()
         async with raw_tcp_server(projector) as server:
             link = server.client(
-                password="abc123", timeout=TIMEOUT_SECONDS, persistent=False, authentication=aiopjlink.PJAuth.MD5
+                password="abc123",
+                timeout_seconds=TIMEOUT_SECONDS,
+                persistent=False,
+                authentication=aiopjlink.PJAuth.MD5,
             )
             await link.power.get()
             await link.power.get()

@@ -23,7 +23,7 @@ from ._protocol import SEARCH_REQUEST, parse_search_response
 from ._udp import PJLINK_UDP_PORT, open_socket, resolve_address, source_address
 from .exceptions import PJLinkNoConnection, PJLinkProtocolError
 
-DEFAULT_SEARCH_DURATION = 30.0
+DEFAULT_SEARCH_DURATION_SECONDS = 30.0
 """How long the controller listens for answers (§3.2.1, step 2), in seconds."""
 
 DEFAULT_BROADCAST_ADDRESS = "255.255.255.255"
@@ -114,7 +114,7 @@ def _send_requests(udp_socket: socket.socket, targets: list[tuple[Any, ...]]) ->
 
 async def search_iter(
     *,
-    duration: float = DEFAULT_SEARCH_DURATION,
+    duration_seconds: float = DEFAULT_SEARCH_DURATION_SECONDS,
     broadcast_address: str | Sequence[str] = DEFAULT_BROADCAST_ADDRESS,
     port: int = PJLINK_UDP_PORT,
     local_address: str | None = None,
@@ -122,7 +122,7 @@ async def search_iter(
 ) -> AsyncGenerator[SearchResult, None]:
     """Search for projectors and yield each one as soon as it answers (§3.2).
 
-    Sends the search start instruction, then listens for `duration` seconds. A projector that answers more than
+    Sends the search start instruction, then listens for `duration_seconds`. A projector that answers more than
     once is yielded once. Datagrams that are not search responses are ignored.
 
     To stop early, leave the loop and close the generator, so the socket is released at once::
@@ -133,7 +133,7 @@ async def search_iter(
                     break
 
     Args:
-        duration: How long to listen, in seconds. The spec says 30. Projectors answer after a random delay of
+        duration_seconds: How long to listen. The spec says 30. Projectors answer after a random delay of
             up to 10 seconds, so a shorter time than about 11 may miss some of them.
         broadcast_address: Where to send the search: the broadcast address of the network
             (e.g. `192.168.0.255`, which is `255.255.255.255` on the network 192.168.0.0/24), `ff02::1` for IPv6
@@ -157,8 +157,8 @@ async def search_iter(
         PJLinkNoConnection: The socket could not be opened or bound (e.g. the local port is in use), or the
             search start instruction could not be sent at all (e.g. there is no network).
     """
-    if duration <= 0:
-        raise ValueError("duration must be positive")
+    if duration_seconds <= 0:
+        raise ValueError("duration_seconds must be positive")
     if not 0 < port < 65536:
         raise ValueError("port must be between 1 and 65535")
     if not 0 <= local_port < 65536:
@@ -180,7 +180,7 @@ async def search_iter(
 
     try:
         _send_requests(udp_socket, targets)
-        deadline = loop.time() + duration
+        deadline = loop.time() + duration_seconds
         while True:
             try:
                 result = answers.get_nowait()
@@ -201,13 +201,13 @@ async def search_iter(
 
 async def search(
     *,
-    duration: float = DEFAULT_SEARCH_DURATION,
+    duration_seconds: float = DEFAULT_SEARCH_DURATION_SECONDS,
     broadcast_address: str | Sequence[str] = DEFAULT_BROADCAST_ADDRESS,
     port: int = PJLINK_UDP_PORT,
     local_address: str | None = None,
     local_port: int = PJLINK_UDP_PORT,
 ) -> list[SearchResult]:
-    """Search for projectors, wait `duration` seconds and return all that answered (§3.2).
+    """Search for projectors, wait `duration_seconds` and return all that answered (§3.2).
 
     This is `search_iter` collected into a list; see there for the arguments and the exceptions.
     Use `search_iter` instead to react to a projector as soon as it answers.
@@ -215,7 +215,7 @@ async def search(
     return [
         result
         async for result in search_iter(
-            duration=duration,
+            duration_seconds=duration_seconds,
             broadcast_address=broadcast_address,
             port=port,
             local_address=local_address,

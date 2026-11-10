@@ -37,17 +37,17 @@ class ConcurrencyTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_lock_released_after_deadline(self) -> None:
         """A command that hits the deadline does not hold up the one queued behind it."""
-        timeout = 0.3
+        timeout_seconds = 0.3
 
         async def silent(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             await until_hung_up(reader, writer)
 
         async with raw_tcp_server(silent) as server:
-            client = server.client(timeout=timeout)
+            client = server.client(timeout_seconds=timeout_seconds)
             start = time.monotonic()
             results = await asyncio.gather(client.power.get(), client.power.get(), return_exceptions=True)
             elapsed = time.monotonic() - start
 
         self.assertTrue(all(isinstance(r, aiopjlink.PJLinkException) for r in results), results)
-        self.assertGreaterEqual(elapsed, timeout * 2 * 0.9)  # One after the other.
-        self.assertLess(elapsed, timeout * 2 + 1)  # One deadline each.
+        self.assertGreaterEqual(elapsed, timeout_seconds * 2 * 0.9)  # One after the other.
+        self.assertLess(elapsed, timeout_seconds * 2 + 1)  # One deadline each.

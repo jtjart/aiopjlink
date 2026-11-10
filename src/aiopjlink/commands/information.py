@@ -38,7 +38,7 @@ class Information(CommandGroup):
         except ValueError as err:
             raise PJLinkUnexpectedResponseParameter("unexpected PJLink class") from err
 
-    async def other(self) -> str:
+    async def other_information(self) -> str:
         """Query the projector for other information about the projector/display
         described by the manufacture. Defined as in (§4.13).
 

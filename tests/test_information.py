@@ -60,15 +60,15 @@ class InfoGroup(unittest.IsolatedAsyncioTestCase):
         async with mock_client_server_noauth() as (server, client):
             # Test from spec excel sheet.
             async with server.when(b"%1INFO ?\r", respond_with=b"%1INFO=PJLink\r"):
-                self.assertEqual(await client.info.other(), "PJLink")
+                self.assertEqual(await client.info.other_information(), "PJLink")
 
             # Test actual projector response.
             async with server.when(b"%1INFO ?\r", respond_with=b"%1INFO=105.105.---\r"):
-                self.assertEqual(await client.info.other(), "105.105.---")
+                self.assertEqual(await client.info.other_information(), "105.105.---")
 
             # Test no extra info.
             async with server.when(b"%1INFO ?\r", respond_with=b"%1INFO=\r"):
-                self.assertEqual(await client.info.other(), "")
+                self.assertEqual(await client.info.other_information(), "")
 
     async def test_product_name(self) -> None:
         """Query the product name information."""

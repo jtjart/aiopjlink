@@ -384,7 +384,7 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.sleep(0)
             with self.assertRaises(aiopjlink.PJLinkNoConnection):
                 await aiopjlink.search(
-                    duration=0.1, broadcast_address=LOCALHOST, local_address=LOCALHOST, local_port=port
+                    duration_seconds=0.1, broadcast_address=LOCALHOST, local_address=LOCALHOST, local_port=port
                 )
             pending.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -424,7 +424,7 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
                     if argument == "local_address":
                         await start_listening(local_address="", local_port=unused_udp_port())
                     else:
-                        await aiopjlink.search(broadcast_address="", duration=0.1, local_port=0)
+                        await aiopjlink.search(broadcast_address="", duration_seconds=0.1, local_port=0)
                 self.assertIn("is not a usable IP address", str(err.exception))
 
     async def test_invalid_arguments(self) -> None:

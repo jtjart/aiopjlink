@@ -16,18 +16,18 @@ connection that stays silent for 30 seconds (§5.4, §6).
 By default (`persistent=True`) a `Transport` therefore keeps the connection of the last
 command and reuses it for the next one. That saves the connect, greeting and
 authentication round trips for every command after the first. The connection is opened
-lazily, replaced transparently when it is gone, and released after `idle_timeout`
-seconds without traffic so that a projector which accepts a single controller is not
+lazily, replaced transparently when it is gone, and released after `idle_timeout_seconds`
+without traffic so that a projector which accepts a single controller is not
 blocked longer than necessary.
 
-`idle_timeout` also sets how long the connection lives for a projector that dislikes long
+`idle_timeout_seconds` also sets how long the connection lives for a projector that dislikes long
 sessions: a short one (a second or two) makes it "one connection per burst of commands",
 e.g. one per poll of a Home Assistant integration that sends three commands at once.
 With `persistent=False` every command gets a connection of its own, which is what §5.4
 literally asks for and the safe choice for projectors that cannot handle a second
 command on one connection.
 
-Either way a command has one deadline (`timeout`) that covers everything it does:
+Either way a command has one deadline (`timeout_seconds`) that covers everything it does:
 connecting, the greeting, sending and waiting for the answer.
 
 A kept connection can hold data nobody asked for: some projectors volunteer a status line (e.g. `%1powr=0` a moment
@@ -55,10 +55,10 @@ repeating it is safe whatever it does.
 
 Deadline
 --------
-`timeout` is how long a projector may take to answer. The exception is a command that carries a password digest:
+`timeout_seconds` is how long a projector may take to answer. The exception is a command that carries a password digest:
 a projector that dislikes it waits two seconds before saying so (§5.1), and that must come out as
 `PJLinkPassword`, not as a dead connection, so such a command is given at least `_MINIMUM_DIGEST_ANSWER_SECONDS`
-to be answered, whatever `timeout` is.
+to be answered, whatever `timeout_seconds` is.
 """
 
 import asyncio
@@ -102,7 +102,7 @@ _DISCARD_CHUNK_SIZE_BYTES = 2**16
 _SHA256_INQUIRY_TIMEOUT_SECONDS = 2.0
 
 # How long the answer to a command that carries a password digest may take: the two seconds a projector may wait
-# before rejecting a digest (§5.1), and a second more. If `timeout` ends sooner, the deadline is moved to this.
+# before rejecting a digest (§5.1), and a second more. If `timeout_seconds` ends sooner, the deadline is moved to this.
 _MINIMUM_DIGEST_ANSWER_SECONDS = 3.0
 
 
@@ -153,23 +153,25 @@ class Transport:
         address: str,
         port: int = 4352,
         password: str | None = None,
-        timeout: float = 4,
+        timeout_seconds: float = 4,
         encoding: str = "utf-8",
         *,
         persistent: bool = True,
-        idle_timeout: float = DEFAULT_IDLE_TIMEOUT_SECONDS,
+        idle_timeout_seconds: float = DEFAULT_IDLE_TIMEOUT_SECONDS,
         authentication: PJAuth | str = PJAuth.AUTO,
     ) -> None:
-        if idle_timeout <= 0:
-            raise ValueError("idle_timeout must be positive (use persistent=False for one connection per command)")
+        if idle_timeout_seconds <= 0:
+            raise ValueError(
+                "idle_timeout_seconds must be positive (use persistent=False for one connection per command)"
+            )
         self._authentication = PJAuth(authentication)
         self._address = address
         self._port = port
         self._encoding = encoding
-        self._timeout_seconds = timeout
+        self._timeout_seconds = timeout_seconds
         self._password = password
         self._persistent = persistent
-        self._idle_timeout_seconds = idle_timeout
+        self._idle_timeout_seconds = idle_timeout_seconds
 
         # One command at a time: many projectors only accept a single connection, and the
         # answer to a command must not be mixed up with the answer to another one.
@@ -209,7 +211,7 @@ class Transport:
         """Close the connection kept for reuse, if there is one.
 
         Safe to call at any time and more than once. A command that is still running
-        finishes first (it is bounded by `timeout`). The object stays usable: the next
+        finishes first (it is bounded by `timeout_seconds`). The object stays usable: the next
         command simply connects again. Does nothing if `persistent` is False.
         """
         async with self._command_lock:
@@ -244,7 +246,7 @@ class Transport:
 
         Calls on the same `PJLink` object are serialised, so this can be called
         from several tasks at once. The whole call, from connecting to the answer,
-        is bound by `timeout`.
+        is bound by `timeout_seconds`.
 
         Raises a subclass of `PJLinkException` for anything that goes wrong
         while talking to the projector (see the module documentation).
@@ -553,7 +555,7 @@ class Transport:
             await self._close_session(session)
 
     def _close_idle_session(self) -> None:
-        """Timer callback: nothing was sent for `idle_timeout` seconds, so let go of the projector."""
+        """Timer callback: nothing was sent for `idle_timeout_seconds`, so let go of the projector."""
         self._idle_close_timer = None
         session, self._kept_session = self._kept_session, None
         if session is not None:

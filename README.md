@@ -81,7 +81,7 @@ from aiopjlink import PJLink, search
 
 
 async def main() -> None:
-    for found in await search(duration=12):
+    for found in await search(duration_seconds=12):
         print(found.address, found.mac_address)  # 192.168.1.120 00:11:22:33:44:55
     ...
 
@@ -106,7 +106,7 @@ async def find_address(mac_address: str) -> str | None:
     return None
 ```
 
-**Time.** The spec has the controller listen for 30 seconds, and that is the default `duration`. Projectors wait a random time of up to 10 seconds before they answer, so about 12 seconds is enough for a person who is waiting, and shorter risks missing some.
+**Time.** The spec has the controller listen for 30 seconds, and that is the default `duration_seconds`. Projectors wait a random time of up to 10 seconds before they answer, so about 12 seconds is enough for a person who is waiting, and shorter risks missing some.
 
 **Networks.** The default target, `255.255.255.255`, only reaches the one network the operating system chooses. On a machine with several (Home Assistant often has), give the broadcast address of each, or `ff02::1` for IPv6, with the interface (`ff02::1%eth0`) when there are several:
 
@@ -168,14 +168,14 @@ If more than 256 notifications are waiting to be taken, the newest are dropped, 
 
 ```python
 PJLink(address)  # reuse the connection, release it after 25 s idle
-PJLink(address, idle_timeout=2)  # one connection per burst of commands (e.g. per poll)
+PJLink(address, idle_timeout_seconds=2)  # one connection per burst of commands (e.g. per poll)
 PJLink(address, persistent=False)  # one connection per command
 ```
 
 | Mode | Behaviour | Use it for |
 |---|---|---|
-| Default (`idle_timeout=25`) | One connection reused across polls; authentication sent once per connection. | Long-running programs polling every few seconds. |
-| `idle_timeout=2` | One connection per poll, closed 2 s after the last command. | Freeing the projector between polls. |
+| Default (`idle_timeout_seconds=25`) | One connection reused across polls; authentication sent once per connection. | Long-running programs polling every few seconds. |
+| `idle_timeout_seconds=2` | One connection per poll, closed 2 s after the last command. | Freeing the projector between polls. |
 | `persistent=False` | One connection and one authentication per command; nothing to close. | Projectors that cannot handle several commands per connection. |
 
 The spec allows both styles (§5.3, §5.4). With `persistent=True`:
@@ -185,9 +185,9 @@ The spec allows both styles (§5.3, §5.4). With `persistent=True`:
 * **Data the projector sends unasked is discarded.** Some projectors volunteer a status line of their own (one was seen to send `%1powr=0` after a power-on command). Nothing can be the answer to a command that has not been sent yet, so whatever has arrived by then is thrown away before the next command goes out, and shows up in the debug log as `discarded unsolicited data`.
 * **Queries are repeated once** on a new connection if the kept one turns out to be dead. Commands that change something (power, input, volume, ...) are not: the projector may already have carried them out, so you get `PJLinkConnectionClosed` and decide.
 
-Every command has a single deadline, `timeout` (default 4 s), covering connect, greeting, send and answer. A command waiting behind others in the queue is bound by `timeout` for each of them.
+Every command has a single deadline, `timeout_seconds` (default 4), covering connect, greeting, send and answer. A command waiting behind others in the queue is bound by `timeout_seconds` for each of them.
 
-`timeout` is how long a projector may take to answer. The exception is a command that carries a password: a projector answers a wrong password only after two seconds (§5.1), so such a command is given at least 3 s to be answered, whatever `timeout` is, and a wrong password is reported as `PJLinkPassword` rather than as a dead connection. There is therefore no minimum for `timeout`.
+`timeout_seconds` is how long a projector may take to answer. The exception is a command that carries a password: a projector answers a wrong password only after two seconds (§5.1), so such a command is given at least 3 s to be answered, whatever `timeout_seconds` is, and a wrong password is reported as `PJLinkPassword` rather than as a dead connection. There is therefore no minimum for `timeout_seconds`.
 
 ## Authentication
 
@@ -200,8 +200,8 @@ PJLink(address, password="secret", authentication=PJAuth.MD5)  # never asks for 
 ```
 
 * **The answer is remembered.** Once a projector has not said yes to the question (it answered with an error, hung up, or stayed silent), MD5 is assumed from then on and new connections go straight to MD5, so only the first one pays for the question. That also protects a projector that cannot cope with the question (it may lock up for 30 s, guideline behaviour 6) from being put out of action again by every new connection.
-* **A rejected MD5 digest is retried at once.** If MD5 is rejected by a projector that never said it lacks SHA256 (the question was skipped because MD5 was assumed or worked before, or went unanswered), it may have been switched to SHA256 or just missed the question. The same command then asks again on a new connection, for SHA256 only, with a deadline of its own (a command can thus make two attempts, each bounded by `timeout`). A projector that did answer the question with an error is not asked again, and a wrong password is never tried twice. A rejected command was not carried out, so this is safe for commands that change something.
-* **A silent projector costs time once.** The question is bound by 2 s, and by half of `timeout`, so that the command can still reconnect. For a projector that cannot cope with the question at all, use `PJAuth.MD5`.
+* **A rejected MD5 digest is retried at once.** If MD5 is rejected by a projector that never said it lacks SHA256 (the question was skipped because MD5 was assumed or worked before, or went unanswered), it may have been switched to SHA256 or just missed the question. The same command then asks again on a new connection, for SHA256 only, with a deadline of its own (a command can thus make two attempts, each bounded by `timeout_seconds`). A projector that did answer the question with an error is not asked again, and a wrong password is never tried twice. A rejected command was not carried out, so this is safe for commands that change something.
+* **A silent projector costs time once.** The question is bound by 2 s, and by half of `timeout_seconds`, so that the command can still reconnect. For a projector that cannot cope with the question at all, use `PJAuth.MD5`.
 * **`ERRA` in answer to the question is not a wrong password.** Some MD5-only projectors answer it that way. A wrong password is reported as `PJLinkPassword` once the digest has been sent.
 * **With `persistent=False`** every command does the whole handshake (question included) on its own connection.
 * **Security note.** The fallback can be provoked by anyone who can tamper with the traffic. If all your projectors support SHA256, use `PJAuth.SHA256`.

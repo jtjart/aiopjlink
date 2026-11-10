@@ -11,9 +11,9 @@ from .base import CommandGroup
 class Freeze(CommandGroup):
     """Controls freezing and unfreezing the current frame (§4.25, §4.26)."""
 
-    async def set(self, freeze: bool) -> None:
+    async def set(self, frozen: bool) -> None:
         """Freeze or unfreeze the screen (§4.25)."""
-        parameter = "1" if bool(freeze) else "0"
+        parameter = "1" if bool(frozen) else "0"
         await self._transmit_expecting_ok("FREZ", parameter, PJClass.TWO, not_supported_message="freeze not supported")
 
     async def get(self) -> bool:

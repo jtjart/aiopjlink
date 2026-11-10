@@ -76,14 +76,14 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
 
         # No server is running: if the library tried to connect first,
         # this would be a `PJLinkNoConnection` instead.
-        link = client_for(unused_port(), timeout=0.5)
+        link = client_for(unused_port(), timeout_seconds=0.5)
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
             await link.transmit("abcd", "?", pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "command is not uppercase")
 
     async def test_oversized_or_unencodable_command_rejected_before_connecting(self) -> None:
         """The byte limit is checked in the link's encoding, and bad input never reaches the network."""
-        link = client_for(unused_port(), timeout=0.5)
+        link = client_for(unused_port(), timeout_seconds=0.5)
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
             await link.transmit("NAME", "é" * 65, pjclass=aiopjlink.PJClass.ONE)
         self.assertEqual(str(err.exception), "command param is larger than 128 bytes")
@@ -93,7 +93,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             await link.transmit("NAME", "?", pjclass="3")  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
 
         # Text the encoding cannot represent is a `ValueError` too (`UnicodeEncodeError` is one).
-        ascii_link = client_for(unused_port(), timeout=0.5, encoding="ascii")
+        ascii_link = client_for(unused_port(), timeout_seconds=0.5, encoding="ascii")
         with self.assertRaises(ValueError):
             await ascii_link.transmit("NAME", "é", pjclass=aiopjlink.PJClass.ONE)
 
@@ -182,7 +182,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         """A projector that accepts the connection but never answers the command is a `PJLinkNoConnection`."""
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK 0\r")
-            client = server.client(timeout=0.5)
+            client = server.client(timeout_seconds=0.5)
 
             # The mock reads the command but sends nothing back.
             async with server.when(b"%1POWR ?\r", respond_with=b""):
@@ -194,7 +194,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         """A projector that sends CRLF keeps the later command from choking on the leftover LF."""
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK 0\r\n")
-            client = server.client(timeout=0.5)
+            client = server.client(timeout_seconds=0.5)
 
             async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=1\r\n"):
                 self.assertTrue(await client.power.get())
@@ -212,7 +212,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             writer.close()
 
         async with raw_tcp_server(hang_up) as server:
-            client = server.client(timeout=0.5)
+            client = server.client(timeout_seconds=0.5)
             with self.assertRaises(aiopjlink.PJLinkConnectionClosed):
                 await client.power.get()
 
@@ -252,6 +252,6 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             writer.close()
 
         async with raw_tcp_server(send_garbage) as server:
-            client = server.client(timeout=0.5)
+            client = server.client(timeout_seconds=0.5)
             with self.assertRaises(aiopjlink.PJLinkProtocolError):
                 await client.power.get()

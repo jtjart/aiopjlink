@@ -17,7 +17,7 @@ async def hang(*_args: object, **_kwargs: object) -> None:
 
 
 def make_client(port: int, **options: Any) -> aiopjlink.PJLink:
-    return client_for(port, timeout=TIMEOUT_SECONDS, **options)
+    return client_for(port, timeout_seconds=TIMEOUT_SECONDS, **options)
 
 
 class TimeoutTests(unittest.IsolatedAsyncioTestCase):

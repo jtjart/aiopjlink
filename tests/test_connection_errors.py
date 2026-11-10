@@ -26,7 +26,9 @@ class ConnectionErrorTests(unittest.IsolatedAsyncioTestCase):
         """Run a command on `server` (default: nothing listens) and check it fails with `expected`,
         which is also a `PJLinkConnectionError`.
         """
-        client = client_for(unused_port(), timeout=0.5) if server is None else server.client(timeout=0.5)
+        client = (
+            client_for(unused_port(), timeout_seconds=0.5) if server is None else server.client(timeout_seconds=0.5)
+        )
         with self.assertRaises(aiopjlink.PJLinkConnectionError) as ctx:
             await client.power.get()
         self.assertIsInstance(ctx.exception, expected)
@@ -106,7 +108,7 @@ class ConnectionErrorTests(unittest.IsolatedAsyncioTestCase):
         """A projector that talks nonsense is reachable: that is a `PJLinkProtocolError`."""
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK 0\r")
-            client = server.client(timeout=0.5)
+            client = server.client(timeout_seconds=0.5)
             async with server.when(b"%1POWR ?\r", respond_with=b"%\r"):
                 with self.assertRaises(aiopjlink.PJLinkProtocolError) as ctx:
                     await client.power.get()
