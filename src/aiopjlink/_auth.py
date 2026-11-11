@@ -8,7 +8,6 @@ Pure functions only: nothing here touches the network.
 import hashlib
 import re
 import secrets
-from typing import NamedTuple
 
 from .exceptions import PJLinkPassword, PJLinkProtocolError
 
@@ -18,14 +17,7 @@ SHA256_INQUIRY = "PJLINK 2\r"
 _SHA256_NONCE_PATTERN = re.compile(r"[0-9a-fA-F]{32}")
 
 
-class Welcome(NamedTuple):
-    """What the projector's first line says."""
-
-    secured: bool
-    """True if the projector wants a password (`PJLINK 1 <token>`), False for `PJLINK 0`."""
-
-
-def parse_welcome(welcome_line: str) -> Welcome:
+def authentication_required(welcome_line: str) -> bool:
     """Check the projector's welcome line (§5.1, §5.2) and say whether it wants a password.
 
     Raises `PJLinkProtocolError` if the line is not valid.
@@ -39,32 +31,24 @@ def parse_welcome(welcome_line: str) -> Welcome:
 
     # No authentication required.
     if security_flag == "0":
-        return Welcome(secured=False)
+        return False
 
     # Connection requires auth: `PJLINK 1 <token>`.
     if security_flag != "1" or separator != " ":
         raise PJLinkProtocolError("unexpected opening security message from projector - unrecognised auth method")
 
-    return Welcome(secured=True)
+    return True
 
 
 def build_md5_request(welcome_line: str, command_line: str, password: str | None, encoding: str = "utf-8") -> bytes:
     """Turn the projector's welcome line and a command line into the bytes to send (§5.1, §5.2).
 
-    `welcome_line` is the first line the projector sends after the connection is made:
-        * `PJLINK 0` - security is off, the command is sent as it is.
-        * `PJLINK 1 <token>` - security is on, the command is prefixed with
-          `md5(token + password)` as a hex string.
-
-    This is the MD5 procedure; for SHA256 see `build_sha256_request`.
-
-    Raises `PJLinkProtocolError` if the welcome line is not valid, and `PJLinkPassword`
-    if the projector wants a password and none was given.
+    Raises `PJLinkProtocolError` if the welcome line is not valid,
+    and `PJLinkPassword` if the projector wants a password and none was given.
     """
-    if not parse_welcome(welcome_line).secured:
+    if not authentication_required(welcome_line):
         return command_line.encode(encoding)
 
-    # Check we have a password specified.
     if password is None:
         raise PJLinkPassword("password required")
 
@@ -94,21 +78,12 @@ def parse_security_reply(reply: str) -> str | None:
     return None
 
 
-def build_sha256_request(
-    projector_nonce: str,
-    command_line: str,
-    password: str,
-    encoding: str = "utf-8",
-    *,
-    controller_nonce: bytes | None = None,
-) -> bytes:
+def build_sha256_request(projector_nonce: str, command_line: str, password: str, encoding: str = "utf-8") -> bytes:
     """The bytes to send for the first command of a SHA256 connection (§5.1, (1-4) and (1-5)).
 
-    `projector_nonce` is the 32 hex characters the projector answered with. A random number of our own (16 bytes,
-    `controller_nonce`, only fixed by tests) is XORed with it; the digest is
-    `sha256(hex(xor) + password)`, and the line is `hex(our number) + digest + command`.
+    `projector_nonce` is the 32 hex characters the projector answered with.
     """
-    own_nonce = secrets.token_bytes(16) if controller_nonce is None else controller_nonce
+    own_nonce = secrets.token_bytes(16)
     combined_nonce = bytes(
         projector_byte ^ controller_byte
         for projector_byte, controller_byte in zip(bytes.fromhex(projector_nonce), own_nonce, strict=True)

@@ -66,7 +66,13 @@ import dataclasses
 from types import TracebackType
 from typing import Self
 
-from ._auth import SHA256_INQUIRY, build_md5_request, build_sha256_request, parse_security_reply, parse_welcome
+from ._auth import (
+    SHA256_INQUIRY,
+    authentication_required,
+    build_md5_request,
+    build_sha256_request,
+    parse_security_reply,
+)
 from ._debug import LOGGER, redact_debug_payload
 from ._protocol import format_command, parse_response
 from .enums import PJAuth, PJClass
@@ -456,7 +462,7 @@ class Transport:
         (None: it said nothing, which proves little, since a projector may just be having a bad moment).
         Raises `PJLinkProtocolError` for a welcome line that is not valid, before anything is sent.
         """
-        if session.greeting is None or not parse_welcome(session.greeting).secured or self._password is None:
+        if session.greeting is None or not authentication_required(session.greeting) or self._password is None:
             # Nothing to ask: no password is needed, or none was given (`_send` reports that).
             return True
 

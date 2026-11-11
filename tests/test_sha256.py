@@ -12,10 +12,11 @@ import hashlib
 import time
 import unittest
 from collections.abc import Iterable
+from unittest.mock import patch
 
 import aiopjlink
 from aiopjlink import PJAuth, Power
-from aiopjlink._auth import build_sha256_request, parse_security_reply, parse_welcome
+from aiopjlink._auth import authentication_required, build_sha256_request, parse_security_reply
 from mock_projector import raw_tcp_server
 
 PASSWORD = "abc123"
@@ -168,9 +169,8 @@ class SpecExampleTests(unittest.TestCase):
     DIGEST = b"70ab129eac6924d4c129c9c4fcf45be42e1e776325a66db67e5b6eee50f2a692"
 
     def test_first_command_of_the_example(self) -> None:
-        request = build_sha256_request(
-            self.PROJECTOR_NONCE, "%1POWR 1\r", "JBMIAProjectorLink", controller_nonce=self.CONTROLLER_NONCE
-        )
+        with patch("aiopjlink._auth.secrets.token_bytes", return_value=self.CONTROLLER_NONCE):
+            request = build_sha256_request(self.PROJECTOR_NONCE, "%1POWR 1\r", "JBMIAProjectorLink")
         self.assertEqual(request, b"c14b279e603d8a5f17e849ba360f2dc5" + self.DIGEST + b"%1POWR 1\r")
 
     def test_the_controller_number_is_random_and_16_bytes(self) -> None:
@@ -179,10 +179,9 @@ class SpecExampleTests(unittest.TestCase):
         self.assertEqual(len(first), 32 + 64 + len(b"%1POWR ?\r"))
 
     def test_upper_case_projector_number_is_accepted(self) -> None:
-        lower = build_sha256_request(self.PROJECTOR_NONCE, "%1POWR 1\r", "pw", controller_nonce=self.CONTROLLER_NONCE)
-        upper = build_sha256_request(
-            self.PROJECTOR_NONCE.upper(), "%1POWR 1\r", "pw", controller_nonce=self.CONTROLLER_NONCE
-        )
+        with patch("aiopjlink._auth.secrets.token_bytes", return_value=self.CONTROLLER_NONCE):
+            lower = build_sha256_request(self.PROJECTOR_NONCE, "%1POWR 1\r", "pw")
+            upper = build_sha256_request(self.PROJECTOR_NONCE.upper(), "%1POWR 1\r", "pw")
         self.assertEqual(lower, upper)
 
     def test_security_reply(self) -> None:
@@ -204,11 +203,11 @@ class SpecExampleTests(unittest.TestCase):
                 self.assertIsNone(parse_security_reply(bad))
 
     def test_welcome(self) -> None:
-        self.assertTrue(parse_welcome("PJLINK 1 21d0e96e\r").secured)
-        self.assertFalse(parse_welcome("PJLINK 0\r").secured)
+        self.assertTrue(authentication_required("PJLINK 1 21d0e96e\r"))
+        self.assertFalse(authentication_required("PJLINK 0\r"))
         for bad in ("PJLINK\r", "PJLINK X\r", "PJLINK 1X21d0e96e\r", "PJLINK 2 21d0e96e\r", "HELLO WORLD\r"):
             with self.subTest(welcome=bad), self.assertRaises(aiopjlink.PJLinkProtocolError):
-                parse_welcome(bad)
+                authentication_required(bad)
 
 
 class Sha256Tests(unittest.IsolatedAsyncioTestCase):

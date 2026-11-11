@@ -26,15 +26,7 @@ _MAC_ADDRESS_PATTERN = re.compile(r"[0-9a-f]{2}(?::[0-9a-f]{2}){5}", re.IGNORECA
 
 
 def format_command(command: str, parameter: str, pjclass: PJClass, encoding: str = "utf-8") -> str:
-    """Build a command line: `%<class><COMMAND> <param>\\r` (§2.1).
-
-    The spec limits the command to 4 bytes and the parameter to 128 bytes, so both are measured in
-    bytes of `encoding`, the encoding the line is sent in.
-
-    Raises `PJLinkProtocolError` if the command is not four upper-case characters or the
-    parameter exceeds 128 bytes, and `ValueError` if `pjclass` is not a valid `PJClass`
-    or the text cannot be encoded.
-    """
+    """Build a command line: `%<class><COMMAND> <param>\\r` (§2.1)."""
     pjclass = PJClass(pjclass)
     if not command.isupper():
         raise PJLinkProtocolError("command is not uppercase")
@@ -49,39 +41,27 @@ def format_command(command: str, parameter: str, pjclass: PJClass, encoding: str
 def parse_response(
     response_line: str, expect_command: str | None = None, expect_pjclass: PJClass = PJClass.ONE
 ) -> tuple[str, str]:
-    """Split a response line into `(COMMAND, parameter)` (§2.2).
-
-    Raises the matching exception (`PJLinkNotSupported` ... `PJLinkDeviceFailure`) if the projector
-    answered with `ERR1` ... `ERR4`, and `PJLinkProtocolError` if the line is not a valid response to
-    `expect_command`.
-    """
-    # NOTE: Postels robustness principle - be conservative in what you do, be liberal in what you accept from others
+    """Split a response line into `(COMMAND, parameter)` (§2.2)."""
     LOGGER.debug("received response: %s", redact_debug_payload(response_line.strip()))
-    expect_pjclass = PJClass(expect_pjclass)
 
-    # Shortest valid response: header, class, 4 command characters, separator, CR (e.g. `%1INF2=\r`).
     if len(response_line) < 8:
         raise PJLinkProtocolError("unexpected response - too short")
 
-    # Check header and class version.
-    header_character, class_digit = response_line[0], response_line[1]
-    if header_character != "%":
-        raise PJLinkProtocolError("unexpected response header")
-    if class_digit != expect_pjclass.value:
-        raise PJLinkProtocolError("unexpected response protocol class")
-
-    # Grab the command body, separator, and parameter.
+    header_character = response_line[0]
+    class_digit = response_line[1]
     command = response_line[2:6].upper()
     separator = response_line[6]
     parameter = response_line[7:-1]
 
-    # Check them for correctness.
+    if header_character != "%":
+        raise PJLinkProtocolError("unexpected response header")
+    if class_digit != expect_pjclass.value:
+        raise PJLinkProtocolError("unexpected response protocol class")
     if separator != "=":
         raise PJLinkProtocolError("unexpected response separator")
     if expect_command is not None and command != expect_command:
         raise PJLinkProtocolError("unexpected response command")
 
-    # Handle for protocol and projector errors.
     parameter_uppercase = parameter.upper()
     if parameter_uppercase == "ERR1":
         raise PJLinkNotSupported("unsupported command", command=command)
@@ -105,8 +85,6 @@ def parse_search_response(datagram_text: str) -> str:
 
     The address is returned in lower case (`aa:bb:cc:dd:ee:ff`), whatever case the projector used.
     A datagram is delimited by the network, so a missing CR (or a CRLF) is accepted.
-
-    Raises `PJLinkProtocolError` if `datagram_text` is not a search response.
     """
     line = datagram_text.rstrip("\r\n")
     if not line.upper().startswith(_SEARCH_RESPONSE_PREFIX):
@@ -124,10 +102,8 @@ def split_notification(datagram_text: str) -> tuple[str, str]:
     to the command, so it is not looked at here. A datagram is delimited by the network, so a missing CR (or a
     CRLF) is accepted, as it is for the search response.
 
-    Raises `PJLinkProtocolError` if `datagram_text` is not a notification line.
     """
     line = datagram_text.rstrip("\r\n")
-    # Shortest valid line: header, class, 4 command characters and the separator (e.g. `%2POWR=`).
     if len(line) < 7 or line[:2] != "%2" or line[6] != "=":
         raise PJLinkProtocolError(f"unexpected status notification: {line}")
     return line[2:6].upper(), line[7:]

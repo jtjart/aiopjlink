@@ -66,7 +66,6 @@ class _SearchProtocol(asyncio.DatagramProtocol):
         self._results_queue.put_nowait(result)
 
     def error_received(self, exc: Exception) -> None:
-        # The operating system reporting an earlier datagram as undeliverable (ICMP). Nothing to do about it.
         LOGGER.debug("search datagram error: %s", exc)
 
 
@@ -186,15 +185,12 @@ async def search_iter(
                 result = answers.get_nowait()
             except asyncio.QueueEmpty:
                 try:
-                    # The timeout only covers the wait, never a `yield`: it would otherwise cancel the caller.
                     async with asyncio.timeout_at(deadline):
                         result = await answers.get()
                 except TimeoutError:
                     return
             yield result
     finally:
-        # The transport gives the socket back on the next iteration of the event loop. Let that happen, so that
-        # whoever searches next (on the same local port) does not find it still in use.
         transport.close()
         await asyncio.sleep(0)
 
