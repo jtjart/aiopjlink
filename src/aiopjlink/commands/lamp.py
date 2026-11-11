@@ -29,14 +29,14 @@ class Lamp(CommandGroup):
         Returns:
             A list of ``(hours, state)`` tuples for each lamp.
         """
-        response = await self._transmit_state("LAMP", PJClass.ONE, err1="no lamp")
+        response_parameter = await self._query_status("LAMP", PJClass.ONE, not_supported_message="no lamp")
 
         try:
-            values = response.split()
-            if not values:
+            tokens = response_parameter.split()
+            if not tokens:
                 raise ValueError("empty lamp status")
-            pairs = zip(values[::2], values[1::2], strict=True)
-            return [(int(hours), Lamp.State(state)) for hours, state in pairs]
+            hours_and_states = zip(tokens[::2], tokens[1::2], strict=True)
+            return [(int(hours), Lamp.State(state)) for hours, state in hours_and_states]
         except ValueError as err:
             raise PJLinkUnexpectedResponseParameter("unparsable lamp status") from err
 
@@ -53,4 +53,4 @@ class Lamp(CommandGroup):
         There may be more than one model number, so they are returned in a list.
         """
         models = await self._link.transmit("RLMP", "?", pjclass=PJClass.TWO)
-        return [m for m in models.split(" ") if m]
+        return [model for model in models.split(" ") if model]

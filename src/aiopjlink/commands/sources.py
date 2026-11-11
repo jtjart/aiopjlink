@@ -15,15 +15,15 @@ from ..exceptions import (
 )
 from .base import CommandGroup
 
-_RESOLUTION = re.compile(r"([0-9]+)x([0-9]+)", re.IGNORECASE)
+_RESOLUTION_PATTERN = re.compile(r"([0-9]+)x([0-9]+)", re.IGNORECASE)
 
 
-def _parse_resolution(text: str) -> tuple[int, int]:
+def _parse_resolution(resolution_text: str) -> tuple[int, int]:
     """Parse `<width>x<height>` (§4.18, §4.19) into `(width, height)`."""
-    match = _RESOLUTION.fullmatch(text)
-    if match is None:
-        raise PJLinkUnexpectedResponseParameter(f"unable to parse resolution: {text}")
-    return int(match[1]), int(match[2])
+    resolution_match = _RESOLUTION_PATTERN.fullmatch(resolution_text)
+    if resolution_match is None:
+        raise PJLinkUnexpectedResponseParameter(f"unable to parse resolution: {resolution_text}")
+    return int(resolution_match[1]), int(resolution_match[2])
 
 
 class Sources(CommandGroup):
@@ -46,27 +46,29 @@ class Sources(CommandGroup):
         `mode` is a `Sources.Mode`
         `index` is 1-9 for both Class 1 and Class 2 projectors, and A-Z (or the integer 10-35) for a Class 2 projector.
         """
-        await self._transmit_ok(command="INPT", param=f"{mode.value}{self._check_index(index)}", pjclass=pjclass)
+        await self._transmit_expecting_ok(
+            command="INPT", parameter=f"{mode.value}{self._to_index_character(index)}", pjclass=pjclass
+        )
 
     async def get(self, pjclass: PJClass = PJClass.ONE) -> tuple[Mode, str]:
         """Get the current source input selection (§4.4)."""
-        return parse_input_source(await self._transmit_state("INPT", pjclass))
+        return parse_input_source(await self._query_status("INPT", pjclass))
 
-    _INDEX_CHARS = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    _INDEX_CHARACTERS = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
     @staticmethod
-    def _check_index(index: int | str) -> str:
+    def _to_index_character(index: int | str) -> str:
         """Return the single character the protocol uses for an input index (1-9, A-Z).
 
         An int maps onto that alphabet (11 is "B"). A string must already be a single
         character, so "11" is rejected. Lower case is accepted.
         """
-        chars = Sources._INDEX_CHARS
+        valid_characters = Sources._INDEX_CHARACTERS
         if isinstance(index, int):
-            if 1 <= index <= len(chars):
-                return chars[index - 1]
-            raise ValueError(f'index must be between 1 and {len(chars)}')
-        if len(index) == 1 and index.isascii() and index.upper() in chars:
+            if 1 <= index <= len(valid_characters):
+                return valid_characters[index - 1]
+            raise ValueError(f'index must be between 1 and {len(valid_characters)}')
+        if len(index) == 1 and index.isascii() and index.upper() in valid_characters:
             return index.upper()
         raise ValueError('index must be a single character (1-9 for Class 1, and 1-9A-Z for Class 2)')
 
@@ -77,12 +79,12 @@ class Sources(CommandGroup):
             A list of available input sources in the format: (Sources.Mode, index str).  For example:
                 [(<Mode.RGB: '1'>, '1'), (<Mode.DIGITAL: '3'>, '1'), ...]
         """
-        response = await self._transmit_state("INST", pjclass)
+        response_parameter = await self._query_status("INST", pjclass)
         try:
-            sources = response.split()
-            if not sources or any(len(source) != 2 for source in sources):
+            source_tokens = response_parameter.split()
+            if not source_tokens or any(len(source_token) != 2 for source_token in source_tokens):
                 raise ValueError("invalid source format")
-            return [(Sources.Mode(source[0]), source[1]) for source in sources]
+            return [(Sources.Mode(source_token[0]), source_token[1]) for source_token in source_tokens]
         except (ValueError, IndexError) as err:
             raise PJLinkUnexpectedResponseParameter("unable to parse available sources") from err
 
@@ -92,7 +94,7 @@ class Sources(CommandGroup):
         :param index str: A single character.
         """
         return await self._link.transmit(
-            command="INNM", param=f"?{mode.value}{self._check_index(index)}", pjclass=PJClass.TWO
+            command="INNM", parameter=f"?{mode.value}{self._to_index_character(index)}", pjclass=PJClass.TWO
         )
 
     async def available_with_names(self) -> list[tuple[Mode, str, str | None]]:
@@ -102,41 +104,41 @@ class Sources(CommandGroup):
             For example:
                 [(<Mode.RGB: '1'>, '1', 'Computer'), (<Mode.DIGITAL: '3'>, '1', 'DVI-D'), ...]
         """
-        sources = await self.available(pjclass=PJClass.TWO)
-        output: list[tuple[Sources.Mode, str, str | None]] = []
-        for mode, index in sources:
+        available_sources = await self.available(pjclass=PJClass.TWO)
+        named_sources: list[tuple[Sources.Mode, str, str | None]] = []
+        for mode, index in available_sources:
             try:
                 name = await self.get_source_name(mode, index)
             except PJLinkInvalidParameter:
                 name = None
-            output.append((mode, index, name))
-        return output
+            named_sources.append((mode, index, name))
+        return named_sources
 
     async def resolution(self) -> tuple[int, int]:
         """Get the current projector resolution (§4.18)
         Returns:
             (x:int, y:int) tuple: Horizontal and vertical resolutions of input signal respectively.
         """
-        response = await self._transmit_state("IRES", PJClass.TWO)
-        if response == "-":
+        response_parameter = await self._query_status("IRES", PJClass.TWO)
+        if response_parameter == "-":
             raise PJLinkProjectorError("no signal input")
-        if response == "*":
+        if response_parameter == "*":
             raise PJLinkProjectorError("unknown signal")
-        return _parse_resolution(response)
+        return _parse_resolution(response_parameter)
 
     async def recommended_resolution(self) -> tuple[int, int]:
         """Get the current recommended resolution (§4.19)
         Returns:
             (x:int, y:int) tuple: Horizontal and vertical resolutions of input signal respectively.
         """
-        return _parse_resolution(await self._transmit_state("RRES", PJClass.TWO))
+        return _parse_resolution(await self._query_status("RRES", PJClass.TWO))
 
 
-def parse_input_source(text: str) -> tuple[Sources.Mode, str]:
+def parse_input_source(input_parameter: str) -> tuple[Sources.Mode, str]:
     """Parse `<mode><index>` of an `INPT` query response (§4.4) or status notification (§3.3.2)."""
-    if len(text) != 2:
+    if len(input_parameter) != 2:
         raise PJLinkUnexpectedResponseParameter("expected 2 INPT response characters")
     try:
-        return Sources.Mode(text[0]), text[1]
+        return Sources.Mode(input_parameter[0]), input_parameter[1]
     except ValueError as err:
         raise PJLinkUnexpectedResponseParameter("unexpected input source mode") from err

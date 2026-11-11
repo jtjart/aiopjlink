@@ -158,9 +158,9 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
         async with mock_client_server_noauth() as (server, client):
             # Get resolution.
             async with server.when(b"%2IRES ?\r", respond_with=b"%2IRES=100x200\r"):
-                x, y = await client.sources.resolution()
-                self.assertEqual(x, 100)
-                self.assertEqual(y, 200)
+                width, height = await client.sources.resolution()
+                self.assertEqual(width, 100)
+                self.assertEqual(height, 200)
 
             # Handle spec edge cases.
             with self.assertRaises(aiopjlink.PJLinkProjectorError) as err:
@@ -177,7 +177,7 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
             # Bad response from the projecetor.
             with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err_unexpected_response_parameter:
                 async with server.when(b"%2IRES ?\r", respond_with=b"%2IRES=\r"):
-                    x, y = await client.sources.resolution()
+                    width, height = await client.sources.resolution()
             self.assertIn("unable to parse resolution", str(err_unexpected_response_parameter.exception))
 
     async def test_rres(self) -> None:
@@ -185,14 +185,14 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
         async with mock_client_server_noauth() as (server, client):
             # Get resolution.
             async with server.when(b"%2RRES ?\r", respond_with=b"%2RRES=1920x1080\r"):
-                x, y = await client.sources.recommended_resolution()
-                self.assertEqual(x, 1920)
-                self.assertEqual(y, 1080)
+                width, height = await client.sources.recommended_resolution()
+                self.assertEqual(width, 1920)
+                self.assertEqual(height, 1080)
 
             # Bad response from the projecetor.
             with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
                 async with server.when(b"%2RRES ?\r", respond_with=b"%2RRES=\r"):
-                    x, y = await client.sources.recommended_resolution()
+                    width, height = await client.sources.recommended_resolution()
             self.assertIn("unable to parse resolution", str(err.exception))
 
     async def test_resolution_is_exactly_two_numbers(self) -> None:

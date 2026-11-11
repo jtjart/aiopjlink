@@ -16,7 +16,7 @@ class Filter(CommandGroup):
         Filter usage time is always 0 when it is not counted by the projector.
         """
         try:
-            return int(await self._transmit_state("FILT", PJClass.TWO, err1="no filter"))
+            return int(await self._query_status("FILT", PJClass.TWO, not_supported_message="no filter"))
         except ValueError as err:
             raise PJLinkUnexpectedResponseParameter("filter usage not parsable") from err
 
@@ -25,4 +25,4 @@ class Filter(CommandGroup):
         There may be more than one model number, so they are returned in a list.
         """
         models = await self._link.transmit("RFIL", "?", pjclass=PJClass.TWO)
-        return [m for m in models.split(" ") if m]
+        return [model for model in models.split(" ") if model]

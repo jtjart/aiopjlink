@@ -9,7 +9,7 @@ Create one `PJLink` and use its command groups (`power`, `sources`, `mute`, `err
 
 Projectors on the network are found with `search` (or `search_iter`, which yields each one as it answers)::
 
-    for found in await search(duration=12):
+    for found in await search(duration_seconds=12):
         print(found.address, found.mac_address)
 
 A projector that has been set up to do so reports changes of its state by itself (power, errors, input).

@@ -8,7 +8,7 @@ from unittest import mock
 import aiopjlink
 from mock_projector import client_for, raw_tcp_server, until_hung_up, unused_port
 
-TIMEOUT = 0.5
+TIMEOUT_SECONDS = 0.5
 
 
 async def hang(*_args: object, **_kwargs: object) -> None:
@@ -17,7 +17,7 @@ async def hang(*_args: object, **_kwargs: object) -> None:
 
 
 def make_client(port: int, **options: Any) -> aiopjlink.PJLink:
-    return client_for(port, timeout=TIMEOUT, **options)
+    return client_for(port, timeout_seconds=TIMEOUT_SECONDS, **options)
 
 
 class TimeoutTests(unittest.IsolatedAsyncioTestCase):
@@ -28,7 +28,7 @@ class TimeoutTests(unittest.IsolatedAsyncioTestCase):
         start = time.monotonic()
         with self.assertRaises(exc_type) as err:
             await make_client(port).power.get()
-        self.assertLess(time.monotonic() - start, TIMEOUT * 2)
+        self.assertLess(time.monotonic() - start, TIMEOUT_SECONDS * 2)
         return str(err.exception)
 
     async def test_connect_phase(self) -> None:
@@ -64,13 +64,13 @@ class TimeoutTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_deadline_covers_the_whole_command(self) -> None:
         """Phases that are each within the timeout, but together exceed it, still time out."""
-        delay = TIMEOUT * 0.7
+        stage_delay_seconds = TIMEOUT_SECONDS * 0.7
 
         async def slow(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-            await asyncio.sleep(delay)
+            await asyncio.sleep(stage_delay_seconds)
             writer.write(b"PJLINK 0\r")
             await reader.readuntil(b"\r")
-            await asyncio.sleep(delay)
+            await asyncio.sleep(stage_delay_seconds)
             with contextlib.suppress(ConnectionError):
                 writer.write(b"%1POWR=0\r")
                 await writer.drain()
