@@ -62,7 +62,7 @@ to be answered, whatever `timeout_seconds` is.
 """
 
 import asyncio
-import dataclasses
+from dataclasses import dataclass
 from enum import Enum
 from types import TracebackType
 from typing import NoReturn, Self
@@ -75,7 +75,7 @@ from ._auth import (
     parse_security_reply,
 )
 from ._debug import LOGGER, redact_debug_payload
-from ._protocol import format_command, parse_response
+from ._protocol import PJCommand, parse_response
 from .enums import PJAuth, PJClass
 from .exceptions import (
     PJLinkConnectionClosed,
@@ -128,7 +128,7 @@ class _Sha256Refused(PJLinkNotSupported):
     """The projector does not do SHA256, found out on the second try. Never leaves `Transport.transmit`."""
 
 
-@dataclasses.dataclass(slots=True)
+@dataclass(slots=True)
 class _Session:
     """One open TCP connection to the projector."""
 
@@ -168,7 +168,7 @@ class Transport:
     done, so that a connection kept for reuse is released.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         address: str,
         port: int = 4352,
@@ -178,13 +178,13 @@ class Transport:
         *,
         persistent: bool = True,
         idle_timeout_seconds: float = DEFAULT_IDLE_TIMEOUT_SECONDS,
-        authentication: PJAuth | str = PJAuth.AUTO,
+        authentication: PJAuth = PJAuth.AUTO,
     ) -> None:
         if idle_timeout_seconds <= 0:
             raise ValueError(
                 "idle_timeout_seconds must be positive (use persistent=False for one connection per command)"
             )
-        self._authentication = PJAuth(authentication)
+        self._authentication = authentication
         self._address = address
         self._port = port
         self._encoding = encoding
@@ -263,7 +263,7 @@ class Transport:
         # validated by their parsers anyway, so garbage still ends up as an error there.
         return raw_line.decode(self._encoding, errors="replace").lstrip("\n")
 
-    async def transmit(self, command: str, parameter: str, pjclass: PJClass) -> str:
+    async def transmit(self, command: PJCommand) -> str:
         """Send a command, authenticating and connecting first if needed, and return the response parameter.
 
         Calls on the same `PJLink` object are serialised, so this can be called
@@ -274,29 +274,18 @@ class Transport:
         while talking to the projector (see the module documentation).
         """
 
-        # Reject malformed commands before touching the network.
-        command_line = format_command(command, parameter, pjclass, self._encoding)
-
         async with self._command_lock:
             # Queries have no side effects, so they may be repeated if a reused connection turns out to be dead.
-            is_query = parameter.startswith("?")
+            is_query = command.parameter.startswith("?")
             try:
                 return await self._attempt_transmit(
-                    command,
-                    command_line,
-                    pjclass,
-                    may_retry_on_new_connection=is_query,
-                    budget_seconds=self._timeout_seconds,
+                    command, may_retry_on_new_connection=is_query, budget_seconds=self._timeout_seconds
                 )
             except _Md5Rejected:
                 LOGGER.debug("MD5 was rejected by a projector that may do SHA256, asking again")
-            return await self._attempt_transmit_sha256_only(
-                command, command_line, pjclass, may_retry_on_new_connection=is_query
-            )
+            return await self._attempt_transmit_sha256_only(command, may_retry_on_new_connection=is_query)
 
-    async def _attempt_transmit_sha256_only(
-        self, command: str, command_line: str, pjclass: PJClass, *, may_retry_on_new_connection: bool
-    ) -> str:
+    async def _attempt_transmit_sha256_only(self, command: PJCommand, may_retry_on_new_connection: bool) -> str:
         """The second try after a rejected MD5 digest. Must only be called with the lock held.
 
         The projector rejected the digest, so it did not carry out the command: asking again is safe even for a
@@ -306,8 +295,6 @@ class Transport:
         try:
             return await self._attempt_transmit(
                 command,
-                command_line,
-                pjclass,
                 may_retry_on_new_connection=may_retry_on_new_connection,
                 budget_seconds=self._timeout_seconds,
                 sha256_only=True,
@@ -317,9 +304,7 @@ class Transport:
 
     async def _attempt_transmit(
         self,
-        command: str,
-        command_line: str,
-        pjclass: PJClass,
+        command: PJCommand,
         *,
         may_retry_on_new_connection: bool,
         budget_seconds: float,
@@ -339,12 +324,12 @@ class Transport:
         try:
             async with asyncio.timeout(budget_seconds) as deadline:
                 session, response_line = await self._send_until_answered(
-                    command_line,
+                    command.line,
                     deadline,
                     may_retry_on_new_connection=may_retry_on_new_connection,
                     sha256_only=sha256_only,
                 )
-                return self._parse_answer(session, response_line, command, pjclass)
+                return self._parse_answer(session, response_line, command.name, command.pjclass)
         except TimeoutError as err:
             raise self._timeout_error(sha256_only=sha256_only) from err
         finally:

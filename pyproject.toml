@@ -66,19 +66,28 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = [
-    "E",     # pycodestyle
-    "W",     # pycodestyle warnings
-    "F",     # pyflakes
-    "I",     # isort
-    "B",     # flake8-bugbear
-    "UP",    # pyupgrade
-    "ASYNC", # flake8-async
-    "SIM",   # flake8-simplify
-    "C4",    # flake8-comprehensions
-    "PIE",   # flake8-pie
-    "RET",   # flake8-return
-    "RUF",   # Ruff-specific
-    "C90",   # mccabe
+    "E",       # pycodestyle
+    "W",       # pycodestyle warnings
+    "F",       # pyflakes
+    "I",       # isort
+    "B",       # flake8-bugbear
+    "UP",      # pyupgrade
+    "ASYNC",   # flake8-async
+    "SIM",     # flake8-simplify
+    "C4",      # flake8-comprehensions
+    "PIE",     # flake8-pie
+    "RET",     # flake8-return
+    "RUF",     # Ruff-specific
+    "C90",     # mccabe
+    "TRY",     # tryceratops
+    "PL",      # pylint
+    "PLR1702", # pylint: too-many-nested-blocks
+]
+preview = true
+explicit-preview-rules = true
+
+ignore = [
+    "TRY003", # tryceratops: raise-vanilla-args
 ]
 
 [tool.ruff.format]

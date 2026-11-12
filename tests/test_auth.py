@@ -4,6 +4,8 @@ import unittest
 from unittest.mock import patch
 
 import aiopjlink
+from aiopjlink._debug import redact_debug_payload
+from aiopjlink._protocol import PJCommand
 from aiopjlink._transport import Transport, _Session
 from aiopjlink.enums import PJClass
 from mock_projector import client_for, mock_tcp_pjlink, raw_tcp_server, unused_port
@@ -13,8 +15,6 @@ class DebugLoggingTests(unittest.TestCase):
     """The redaction helper hides the one-time auth token in debug logs."""
 
     def test_debug_redaction(self) -> None:
-        from aiopjlink._debug import redact_debug_payload
-
         self.assertEqual(redact_debug_payload("PJLINK 1 123456"), "PJLINK 1 <redacted>")
         self.assertEqual(redact_debug_payload("PJLINK 0\r"), "PJLINK 0\r")
 
@@ -34,7 +34,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
                 # Send the power request and check the response is expected.
                 client = server.client()
                 self.addAsyncCleanup(client.close)
-                value = await client.transmit("POWR", "?", pjclass=PJClass.ONE)
+                value = await client.transmit(PJCommand("POWR", "?", PJClass.ONE))
                 self.assertEqual(value, "0")
 
     async def test_auth_malformed(self) -> None:

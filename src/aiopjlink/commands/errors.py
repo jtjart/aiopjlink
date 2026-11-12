@@ -9,6 +9,8 @@ from ..enums import PJClass
 from ..exceptions import PJLinkUnexpectedResponseParameter
 from .base import CommandGroup
 
+_NUMBER_OF_ERROR_CATEGORIES = 6
+
 
 class Errors(CommandGroup):
     """Provide information about errors occuring within the projector (§4.7)."""
@@ -42,7 +44,7 @@ class Errors(CommandGroup):
 
 def parse_error_levels(levels_text: str) -> dict[Errors.Category, Errors.Level]:
     """Parse the six error levels of an `ERST` query response (§4.7) or status notification (§3.3.2)."""
-    if len(levels_text) != 6:
+    if len(levels_text) != _NUMBER_OF_ERROR_CATEGORIES:
         raise PJLinkUnexpectedResponseParameter("unexpected number of error types reported")
     try:
         return {

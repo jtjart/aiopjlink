@@ -46,7 +46,7 @@ class SecureProjector:
     seconds).
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         *,
         sha256: bool = True,
@@ -545,14 +545,6 @@ class ModeTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_default_is_auto(self) -> None:
         self.assertIs(aiopjlink.PJLink(address="127.0.0.1").authentication, PJAuth.AUTO)
-
-    async def test_strings_are_accepted(self) -> None:
-        self.assertIs(aiopjlink.PJLink(address="127.0.0.1", authentication="sha256").authentication, PJAuth.SHA256)
-        self.assertIs(aiopjlink.PJLink(address="127.0.0.1", authentication=PJAuth.MD5).authentication, PJAuth.MD5)
-
-    async def test_unknown_mode_is_a_value_error(self) -> None:
-        with self.assertRaises(ValueError):
-            aiopjlink.PJLink(address="127.0.0.1", authentication="sha512")
 
     async def test_exported(self) -> None:
         self.assertIn("PJAuth", aiopjlink.__all__)

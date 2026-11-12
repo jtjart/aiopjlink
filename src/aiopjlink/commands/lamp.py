@@ -5,6 +5,8 @@ Lamp status and replacement models (§4.8 LAMP ?, §4.21 RLMP ?).
 
 from enum import Enum
 
+from aiopjlink._protocol import PJCommand
+
 from ..enums import PJClass
 from ..exceptions import PJLinkUnexpectedResponseParameter
 from .base import CommandGroup
@@ -53,5 +55,5 @@ class Lamp(CommandGroup):
         """Get the lamp replacement models listed in the projector.
         There may be more than one model number, so they are returned in a list.
         """
-        models = await self._link.transmit("RLMP", "?", pjclass=PJClass.TWO)
+        models = await self._link.transmit(PJCommand("RLMP", "?", PJClass.TWO))
         return [model for model in models.split(" ") if model]

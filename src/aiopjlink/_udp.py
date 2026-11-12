@@ -12,6 +12,9 @@ from typing import Any
 PJLINK_UDP_PORT = 4352
 """The UDP port of the PJLink search and status notification protocols (§3.2, §3.3)."""
 
+MAX_PORT_NUMBER = 65535
+IPV6_SCOPE_ID_INDEX = 3
+
 
 def source_address(datagram_sender: tuple[Any, ...]) -> str:
     """The IP address a datagram came from, as a string that can be connected to.
@@ -21,8 +24,8 @@ def source_address(datagram_sender: tuple[Any, ...]) -> str:
     added here when it is missing: `fe80::1%3`.
     """
     host = str(datagram_sender[0])
-    if len(datagram_sender) >= 4 and datagram_sender[3] and "%" not in host:
-        return f"{host}%{datagram_sender[3]}"
+    if len(datagram_sender) > IPV6_SCOPE_ID_INDEX and datagram_sender[IPV6_SCOPE_ID_INDEX] and "%" not in host:
+        return f"{host}%{datagram_sender[IPV6_SCOPE_ID_INDEX]}"
     return host
 
 

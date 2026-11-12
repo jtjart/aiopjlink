@@ -3,6 +3,7 @@
 Base class for the groups of related PJLink commands.
 """
 
+from .._protocol import PJCommand
 from .._transport import Transport
 from ..enums import PJClass
 from ..exceptions import PJLinkNotReady, PJLinkNotSupported, PJLinkUnexpectedResponseParameter
@@ -24,7 +25,7 @@ class CommandGroup:
         as its message.
         """
         try:
-            return await self._link.transmit(command, parameter, pjclass)
+            return await self._link.transmit(PJCommand(command, parameter, pjclass))
         except PJLinkNotSupported as err:
             if not_supported_message is None:
                 raise

@@ -20,7 +20,7 @@ from typing import Any
 
 from ._debug import LOGGER
 from ._protocol import SEARCH_REQUEST, parse_search_response
-from ._udp import PJLINK_UDP_PORT, open_socket, resolve_address, source_address
+from ._udp import MAX_PORT_NUMBER, PJLINK_UDP_PORT, open_socket, resolve_address, source_address
 from .exceptions import PJLinkNoConnection, PJLinkProtocolError
 
 DEFAULT_SEARCH_DURATION_SECONDS = 30.0
@@ -172,9 +172,9 @@ async def search_iter(
     """
     if duration_seconds <= 0:
         raise ValueError("duration_seconds must be positive")
-    if not 0 < port < 65536:
+    if not 0 < port < MAX_PORT_NUMBER:
         raise ValueError("port must be between 1 and 65535")
-    if not 0 <= local_port < 65536:
+    if not 0 <= local_port < MAX_PORT_NUMBER:
         raise ValueError("local_port must be between 0 and 65535")
     family, targets = _resolve_targets(broadcast_address, port)
     local_sockaddr = _resolve_local(local_address, local_port, family)

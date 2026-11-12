@@ -2,6 +2,7 @@ import hashlib
 import unittest
 
 import aiopjlink
+from aiopjlink._protocol import PJCommand
 from mock_projector import (
     NoClientMessage,
     UnexpectedClientMessage,
@@ -72,18 +73,18 @@ class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
 
             # Check that the test framework recieves the expected message.
             async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r"):
-                value = await client.transmit("POWR", "?", pjclass=aiopjlink.PJClass.ONE)
+                value = await client.transmit(PJCommand("POWR", "?", aiopjlink.PJClass.ONE))
                 self.assertEqual(value, "0")
 
             # Check that the test framework recieves the expected message - 2nd time.
             async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r"):
-                value = await client.transmit("POWR", "?", pjclass=aiopjlink.PJClass.ONE)
+                value = await client.transmit(PJCommand("POWR", "?", aiopjlink.PJClass.ONE))
                 self.assertEqual(value, "0")
 
             # Check that the test framework handles the mistake in the test code.
             with self.assertRaises(UnexpectedClientMessage):
                 async with server.when(b"SOME_MESSAGE\r", respond_with=b"%1POWR=0\r"):
-                    await client.transmit("POWR", "?", pjclass=aiopjlink.PJClass.ONE)
+                    await client.transmit(PJCommand("POWR", "?", aiopjlink.PJClass.ONE))
 
     async def test_mock_response_stacking(self) -> None:
         """The test framework allows expected responses to be queued."""
@@ -94,9 +95,9 @@ class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
                 server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r"),
                 server.when(b"%1CLSS ?\r", respond_with=b"%1CLSS=2\r"),
             ):
-                value = await client.transmit("POWR", "?", pjclass=aiopjlink.PJClass.ONE)
+                value = await client.transmit(PJCommand("POWR", "?", aiopjlink.PJClass.ONE))
                 self.assertEqual(value, "0")
-                value = await client.transmit("CLSS", "?", pjclass=aiopjlink.PJClass.ONE)
+                value = await client.transmit(PJCommand("CLSS", "?", aiopjlink.PJClass.ONE))
                 self.assertEqual(value, "2")
 
             # Expect a POWR followed by a CLSS - but don't get it, so we should
@@ -106,5 +107,5 @@ class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
                     server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r"),
                     server.when(b"%1CLSS ?\r", respond_with=b"%1CLSS=2\r"),
                 ):
-                    await client.transmit("CLSS", "?", pjclass=aiopjlink.PJClass.ONE)
-                    await client.transmit("POWR", "?", pjclass=aiopjlink.PJClass.ONE)
+                    await client.transmit(PJCommand("CLSS", "?", aiopjlink.PJClass.ONE))
+                    await client.transmit(PJCommand("POWR", "?", aiopjlink.PJClass.ONE))

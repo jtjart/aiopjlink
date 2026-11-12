@@ -3,6 +3,8 @@
 Filter usage and replacement models (§4.20 FILT ?, §4.22 RFIL ?).
 """
 
+from aiopjlink._protocol import PJCommand
+
 from ..enums import PJClass
 from ..exceptions import PJLinkUnexpectedResponseParameter
 from .base import CommandGroup
@@ -24,5 +26,5 @@ class Filter(CommandGroup):
         """Get the filter replacement models listed in the projector (§4.22).
         There may be more than one model number, so they are returned in a list.
         """
-        models = await self._link.transmit("RFIL", "?", pjclass=PJClass.TWO)
+        models = await self._link.transmit(PJCommand("RFIL", "?", PJClass.TWO))
         return [model for model in models.split(" ") if model]

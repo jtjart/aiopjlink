@@ -7,6 +7,8 @@ Input source selection and information (§4.3 INPT, §4.4 INPT ?, §4.9 INST ?,
 import re
 from enum import Enum
 
+from aiopjlink._protocol import PJCommand
+
 from ..enums import PJClass
 from ..exceptions import (
     PJLinkInvalidParameter,
@@ -18,6 +20,7 @@ from .base import CommandGroup
 _RESOLUTION_PATTERN = re.compile(r"([0-9]+)x([0-9]+)", re.IGNORECASE)
 
 _UNPARSABLE_SOURCES = "unable to parse available sources"
+_SOURCE_TOKEN_LENGTH = 2
 
 
 def _parse_resolution(resolution_text: str) -> tuple[int, int]:
@@ -82,7 +85,7 @@ class Sources(CommandGroup):
                 [(<Mode.RGB: '1'>, '1'), (<Mode.DIGITAL: '3'>, '1'), ...]
         """
         source_tokens = (await self._query_status("INST", pjclass)).split()
-        if not source_tokens or any(len(source_token) != 2 for source_token in source_tokens):
+        if not source_tokens or any(len(source_token) != _SOURCE_TOKEN_LENGTH for source_token in source_tokens):
             raise PJLinkUnexpectedResponseParameter(_UNPARSABLE_SOURCES)
         try:
             return [(Sources.Mode(source_token[0]), source_token[1]) for source_token in source_tokens]
@@ -95,7 +98,7 @@ class Sources(CommandGroup):
         :param index str: A single character.
         """
         return await self._link.transmit(
-            command="INNM", parameter=f"?{mode.value}{self._to_index_character(index)}", pjclass=PJClass.TWO
+            PJCommand("INNM", f"?{mode.value}{self._to_index_character(index)}", PJClass.TWO)
         )
 
     async def available_with_names(self) -> list[tuple[Mode, str, str | None]]:
@@ -137,8 +140,8 @@ class Sources(CommandGroup):
 
 def parse_input_source(input_parameter: str) -> tuple[Sources.Mode, str]:
     """Parse `<mode><index>` of an `INPT` query response (§4.4) or status notification (§3.3.2)."""
-    if len(input_parameter) != 2:
-        raise PJLinkUnexpectedResponseParameter("expected 2 INPT response characters")
+    if len(input_parameter) != _SOURCE_TOKEN_LENGTH:
+        raise PJLinkUnexpectedResponseParameter(f"expected {_SOURCE_TOKEN_LENGTH} INPT response characters")
     try:
         return Sources.Mode(input_parameter[0]), input_parameter[1]
     except ValueError as err:
