@@ -78,61 +78,96 @@ class SecureProjector:
 
     async def __call__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         self.connections += 1
-        nonce = None
-        authenticated = not self.secured
         try:
             if self.connections in self.drop:
                 return
-            writer.write(f"PJLINK 1 {TOKEN}\r".encode() if self.secured else b"PJLINK 0\r")
-            await writer.drain()
-            while True:
-                line = await reader.readuntil(b"\r")
-                self.lines.append(line)
 
-                if line == b"PJLINK 2\r":
-                    self.inquiries += 1
-                    if self.inquiries <= self.ignore_inquiries:
-                        continue
-                    await asyncio.sleep(self.inquiry_delay_seconds)
-                    if self.sha256:
-                        nonce = NONCE
-                        writer.write(f"PJLINK 2 {NONCE}\r".encode())
-                    elif self.on_inquiry in ("ERR1", "ERR2", "ERRA"):
-                        writer.write(f"PJLINK {self.on_inquiry}\r".encode())
-                    elif self.on_inquiry == "echo":
-                        writer.write(b"PJLINK 2\r")
-                    elif self.on_inquiry == "bad number":
-                        writer.write(b"PJLINK 2 12345\r")
-                    elif self.on_inquiry == "hang up":
-                        return
-                    await writer.drain()
-                    continue
-
-                if authenticated:
-                    command = line
-                else:
-                    verified = self._verify(line, nonce)
-                    if verified is None:
-                        reject_delay_seconds = (
-                            self.sha256_reject_delay_seconds if nonce is not None else self.md5_reject_delay_seconds
-                        )
-                        if reject_delay_seconds:
-                            with contextlib.suppress(TimeoutError):
-                                # Ends early if the client hangs up.
-                                await asyncio.wait_for(reader.read(), reject_delay_seconds)
-                        writer.write(b"PJLINK ERRA\r")
-                        await writer.drain()
-                        return
-                    command, method = verified
-                    self.authenticated_with.append(method)
-                    authenticated = True
-                self.executed.append(command)
-                writer.write(self._answer(command))
-                await writer.drain()
+            await self._send_greeting(writer)
+            await self._serve(reader, writer)
         except (asyncio.IncompleteReadError, ConnectionError):
             pass
         finally:
             writer.close()
+
+    async def _send_greeting(self, writer: asyncio.StreamWriter) -> None:
+        greeting = f"PJLINK 1 {TOKEN}\r".encode() if self.secured else b"PJLINK 0\r"
+        writer.write(greeting)
+        await writer.drain()
+
+    async def _serve(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        nonce = None
+        authenticated = not self.secured
+
+        while True:
+            line = await reader.readuntil(b"\r")
+            self.lines.append(line)
+
+            if line == b"PJLINK 2\r":
+                nonce, keep_running = await self._handle_inquiry(writer, nonce)
+                if not keep_running:
+                    return
+                continue
+
+            if not authenticated:
+                command = await self._authenticate(line, nonce, reader, writer)
+                if command is None:
+                    return
+                authenticated = True
+            else:
+                command = line
+
+            self.executed.append(command)
+            writer.write(self._answer(command))
+            await writer.drain()
+
+    async def _handle_inquiry(self, writer: asyncio.StreamWriter, nonce: str | None) -> tuple[str | None, bool]:
+        self.inquiries += 1
+
+        if self.inquiries <= self.ignore_inquiries:
+            return nonce, True
+
+        await asyncio.sleep(self.inquiry_delay_seconds)
+
+        if self.sha256:
+            nonce = NONCE
+            writer.write(f"PJLINK 2 {NONCE}\r".encode())
+        elif self.on_inquiry in ("ERR1", "ERR2", "ERRA"):
+            writer.write(f"PJLINK {self.on_inquiry}\r".encode())
+        elif self.on_inquiry == "echo":
+            writer.write(b"PJLINK 2\r")
+        elif self.on_inquiry == "bad number":
+            writer.write(b"PJLINK 2 12345\r")
+        elif self.on_inquiry == "hang up":
+            return nonce, False
+
+        await writer.drain()
+        return nonce, True
+
+    async def _authenticate(
+        self, line: bytes, nonce: str | None, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> bytes | None:
+        verified = self._verify(line, nonce)
+
+        if verified is None:
+            await self._reject_authentication(reader, writer, nonce)
+            return None
+
+        command, method = verified
+        self.authenticated_with.append(method)
+        return command
+
+    async def _reject_authentication(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, nonce: str | None
+    ) -> None:
+        reject_delay_seconds = self.sha256_reject_delay_seconds if nonce is not None else self.md5_reject_delay_seconds
+
+        if reject_delay_seconds:
+            with contextlib.suppress(TimeoutError):
+                # Ends early if the client hangs up.
+                await asyncio.wait_for(reader.read(), reject_delay_seconds)
+
+        writer.write(b"PJLINK ERRA\r")
+        await writer.drain()
 
     def _verify(self, line: bytes, nonce: str | None) -> tuple[bytes, str] | None:
         """`(command, method)` if the authentication data in front of the command is right, else None."""
