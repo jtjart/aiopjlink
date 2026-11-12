@@ -111,6 +111,20 @@ def _send_requests(udp_socket: socket.socket, targets: list[tuple[Any, ...]]) ->
         raise PJLinkNoConnection(f"search failed - {send_errors[0]}") from send_errors[0]
 
 
+async def _next_result(answers: asyncio.Queue[SearchResult], deadline: float) -> SearchResult | None:
+    """The next answer, or None once `deadline` (a loop time) has passed.
+
+    An answer that is waiting already is returned even after the deadline: it came in time, only the caller was slow.
+    """
+    if not answers.empty():
+        return answers.get_nowait()
+    try:
+        async with asyncio.timeout_at(deadline):
+            return await answers.get()
+    except TimeoutError:
+        return None
+
+
 async def search_iter(
     *,
     duration_seconds: float = DEFAULT_SEARCH_DURATION_SECONDS,
@@ -180,15 +194,7 @@ async def search_iter(
     try:
         _send_requests(udp_socket, targets)
         deadline = loop.time() + duration_seconds
-        while True:
-            try:
-                result = answers.get_nowait()
-            except asyncio.QueueEmpty:
-                try:
-                    async with asyncio.timeout_at(deadline):
-                        result = await answers.get()
-                except TimeoutError:
-                    return
+        while (result := await _next_result(answers, deadline)) is not None:
             yield result
     finally:
         transport.close()

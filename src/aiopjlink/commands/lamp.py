@@ -9,6 +9,8 @@ from ..enums import PJClass
 from ..exceptions import PJLinkUnexpectedResponseParameter
 from .base import CommandGroup
 
+_UNPARSABLE_STATUS = "unparsable lamp status"
+
 
 class Lamp(CommandGroup):
     """Status information about the projector light sources (§4.8).
@@ -30,15 +32,14 @@ class Lamp(CommandGroup):
             A list of ``(hours, state)`` tuples for each lamp.
         """
         response_parameter = await self._query_status("LAMP", PJClass.ONE, not_supported_message="no lamp")
-
+        tokens = response_parameter.split()
+        if not tokens:
+            raise PJLinkUnexpectedResponseParameter(_UNPARSABLE_STATUS)
         try:
-            tokens = response_parameter.split()
-            if not tokens:
-                raise ValueError("empty lamp status")
             hours_and_states = zip(tokens[::2], tokens[1::2], strict=True)
             return [(int(hours), Lamp.State(state)) for hours, state in hours_and_states]
         except ValueError as err:
-            raise PJLinkUnexpectedResponseParameter("unparsable lamp status") from err
+            raise PJLinkUnexpectedResponseParameter(_UNPARSABLE_STATUS) from err
 
     async def hours(self) -> int:
         """How long has the first lamp been on (hour, integer).

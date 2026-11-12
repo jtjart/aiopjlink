@@ -17,6 +17,8 @@ from .base import CommandGroup
 
 _RESOLUTION_PATTERN = re.compile(r"([0-9]+)x([0-9]+)", re.IGNORECASE)
 
+_UNPARSABLE_SOURCES = "unable to parse available sources"
+
 
 def _parse_resolution(resolution_text: str) -> tuple[int, int]:
     """Parse `<width>x<height>` (§4.18, §4.19) into `(width, height)`."""
@@ -79,14 +81,13 @@ class Sources(CommandGroup):
             A list of available input sources in the format: (Sources.Mode, index str).  For example:
                 [(<Mode.RGB: '1'>, '1'), (<Mode.DIGITAL: '3'>, '1'), ...]
         """
-        response_parameter = await self._query_status("INST", pjclass)
+        source_tokens = (await self._query_status("INST", pjclass)).split()
+        if not source_tokens or any(len(source_token) != 2 for source_token in source_tokens):
+            raise PJLinkUnexpectedResponseParameter(_UNPARSABLE_SOURCES)
         try:
-            source_tokens = response_parameter.split()
-            if not source_tokens or any(len(source_token) != 2 for source_token in source_tokens):
-                raise ValueError("invalid source format")
             return [(Sources.Mode(source_token[0]), source_token[1]) for source_token in source_tokens]
-        except (ValueError, IndexError) as err:
-            raise PJLinkUnexpectedResponseParameter("unable to parse available sources") from err
+        except ValueError as err:
+            raise PJLinkUnexpectedResponseParameter(_UNPARSABLE_SOURCES) from err
 
     async def get_source_name(self, mode: Mode, index: str | int) -> str:
         """Get the name of a given input source (§4.17).
@@ -105,14 +106,14 @@ class Sources(CommandGroup):
                 [(<Mode.RGB: '1'>, '1', 'Computer'), (<Mode.DIGITAL: '3'>, '1', 'DVI-D'), ...]
         """
         available_sources = await self.available(pjclass=PJClass.TWO)
-        named_sources: list[tuple[Sources.Mode, str, str | None]] = []
-        for mode, index in available_sources:
-            try:
-                name = await self.get_source_name(mode, index)
-            except PJLinkInvalidParameter:
-                name = None
-            named_sources.append((mode, index, name))
-        return named_sources
+        return [(mode, index, await self._source_name_or_none(mode, index)) for mode, index in available_sources]
+
+    async def _source_name_or_none(self, mode: Mode, index: str) -> str | None:
+        """The name of an input, or None if the projector has no name for it (`ERR2`)."""
+        try:
+            return await self.get_source_name(mode, index)
+        except PJLinkInvalidParameter:
+            return None
 
     async def resolution(self) -> tuple[int, int]:
         """Get the current projector resolution (§4.18)
