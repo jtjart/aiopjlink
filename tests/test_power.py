@@ -1,6 +1,7 @@
 import unittest
 
 import aiopjlink
+from aiopjlink._protocol import PJCommand
 from mock_projector import mock_tcp_pjlink
 
 
@@ -86,7 +87,7 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
             # Power set out of parameter (test duplicated in test_response_parsing)
             with self.assertRaises(aiopjlink.PJLinkInvalidParameter) as err:
                 async with server.when(b"%1POWR 3\r", respond_with=b"%1POWR=ERR2\r"):
-                    await client.transmit("POWR", "3", pjclass=aiopjlink.PJLink.C1)
+                    await client.transmit(PJCommand("POWR", "3", aiopjlink.PJClass.ONE))
             self.assertEqual(str(err.exception), "out of parameter")
 
             # Power set unavailable (test duplicated in test_response_parsing)

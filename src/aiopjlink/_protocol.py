@@ -7,6 +7,7 @@ Pure functions only: nothing here touches the network.
 """
 
 import re
+from dataclasses import dataclass, field
 
 from ._debug import LOGGER, redact_debug_payload
 from .enums import PJClass
@@ -23,19 +24,32 @@ SEARCH_REQUEST = b"%2SRCH\r"
 
 _SEARCH_RESPONSE_PREFIX = "%2ACKN="
 _MAC_ADDRESS_PATTERN = re.compile(r"[0-9a-f]{2}(?::[0-9a-f]{2}){5}", re.IGNORECASE)
+_COMMAND_LENGTH = 4
+_MAX_COMMAND_PARAM_LENGTH = 128
+_MIN_RESPONSE_LENGTH = 8
 
 
-def format_command(command: str, parameter: str, pjclass: PJClass, encoding: str = "utf-8") -> str:
-    """Build a command line: `%<class><COMMAND> <param>\\r` (§2.1)."""
-    pjclass = PJClass(pjclass)
-    if not command.isupper():
-        raise PJLinkProtocolError("command is not uppercase")
-    if len(command.encode(encoding)) != 4:
-        raise PJLinkProtocolError("command is not 4 bytes")
-    if len(parameter.encode(encoding)) > 128:
-        raise PJLinkProtocolError("command param is larger than 128 bytes")
-    separator = " "
-    return f"%{pjclass.value}{command}{separator}{parameter}\r"
+@dataclass(frozen=True, slots=True)
+class PJCommand:
+    name: str
+    parameter: str
+    pjclass: PJClass
+
+    encoding: str = field(default="utf-8", kw_only=True, repr=False)
+    line: str = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "pjclass", PJClass(self.pjclass))
+
+        if not self.name.isupper():
+            raise PJLinkProtocolError("command is not uppercase")
+        if len(self.name.encode(self.encoding)) != _COMMAND_LENGTH:
+            raise PJLinkProtocolError("command is not 4 bytes")
+        if len(self.parameter.encode(self.encoding)) > _MAX_COMMAND_PARAM_LENGTH:
+            raise PJLinkProtocolError("command param is larger than 128 bytes")
+
+        formatted_line = f"%{self.pjclass.value}{self.name} {self.parameter}\r"
+        object.__setattr__(self, "line", formatted_line)
 
 
 def parse_response(
@@ -44,7 +58,7 @@ def parse_response(
     """Split a response line into `(COMMAND, parameter)` (§2.2)."""
     LOGGER.debug("received response: %s", redact_debug_payload(response_line.strip()))
 
-    if len(response_line) < 8:
+    if len(response_line) < _MIN_RESPONSE_LENGTH:
         raise PJLinkProtocolError("unexpected response - too short")
 
     header_character = response_line[0]
@@ -104,6 +118,6 @@ def split_notification(datagram_text: str) -> tuple[str, str]:
 
     """
     line = datagram_text.rstrip("\r\n")
-    if len(line) < 7 or line[:2] != "%2" or line[6] != "=":
+    if len(line) < _MIN_RESPONSE_LENGTH or line[:2] != "%2" or line[6] != "=":
         raise PJLinkProtocolError(f"unexpected status notification: {line}")
     return line[2:6].upper(), line[7:]

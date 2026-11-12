@@ -15,6 +15,8 @@ SHA256_INQUIRY = "PJLINK 2\r"
 """The controller's question after the greeting: which security level does the projector support? (§5.1, (1-2))"""
 
 _SHA256_NONCE_PATTERN = re.compile(r"[0-9a-fA-F]{32}")
+_SHA256_REPLY_FIELD_COUNT = 3
+_MIN_WELCOME_LENGTH = 9
 
 
 def authentication_required(welcome_line: str) -> bool:
@@ -22,7 +24,7 @@ def authentication_required(welcome_line: str) -> bool:
 
     Raises `PJLinkProtocolError` if the line is not valid.
     """
-    if len(welcome_line) < 9:
+    if len(welcome_line) < _MIN_WELCOME_LENGTH:
         raise PJLinkProtocolError("unexpected opening header message from projector - too short")
 
     greeting_prefix, security_flag, separator = welcome_line[:7], welcome_line[7], welcome_line[8]
@@ -69,7 +71,7 @@ def parse_security_reply(reply: str) -> str | None:
     """
     fields = reply.strip().split(" ")
     if (
-        len(fields) == 3
+        len(fields) == _SHA256_REPLY_FIELD_COUNT
         and fields[0].upper() == "PJLINK"
         and fields[1] == "2"
         and _SHA256_NONCE_PATTERN.fullmatch(fields[2])

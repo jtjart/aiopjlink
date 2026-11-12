@@ -7,6 +7,8 @@ Input source selection and information (§4.3 INPT, §4.4 INPT ?, §4.9 INST ?,
 import re
 from enum import Enum
 
+from aiopjlink._protocol import PJCommand
+
 from ..enums import PJClass
 from ..exceptions import (
     PJLinkInvalidParameter,
@@ -16,6 +18,9 @@ from ..exceptions import (
 from .base import CommandGroup
 
 _RESOLUTION_PATTERN = re.compile(r"([0-9]+)x([0-9]+)", re.IGNORECASE)
+
+_UNPARSABLE_SOURCES = "unable to parse available sources"
+_SOURCE_TOKEN_LENGTH = 2
 
 
 def _parse_resolution(resolution_text: str) -> tuple[int, int]:
@@ -79,14 +84,13 @@ class Sources(CommandGroup):
             A list of available input sources in the format: (Sources.Mode, index str).  For example:
                 [(<Mode.RGB: '1'>, '1'), (<Mode.DIGITAL: '3'>, '1'), ...]
         """
-        response_parameter = await self._query_status("INST", pjclass)
+        source_tokens = (await self._query_status("INST", pjclass)).split()
+        if not source_tokens or any(len(source_token) != _SOURCE_TOKEN_LENGTH for source_token in source_tokens):
+            raise PJLinkUnexpectedResponseParameter(_UNPARSABLE_SOURCES)
         try:
-            source_tokens = response_parameter.split()
-            if not source_tokens or any(len(source_token) != 2 for source_token in source_tokens):
-                raise ValueError("invalid source format")
             return [(Sources.Mode(source_token[0]), source_token[1]) for source_token in source_tokens]
-        except (ValueError, IndexError) as err:
-            raise PJLinkUnexpectedResponseParameter("unable to parse available sources") from err
+        except ValueError as err:
+            raise PJLinkUnexpectedResponseParameter(_UNPARSABLE_SOURCES) from err
 
     async def get_source_name(self, mode: Mode, index: str | int) -> str:
         """Get the name of a given input source (§4.17).
@@ -94,7 +98,7 @@ class Sources(CommandGroup):
         :param index str: A single character.
         """
         return await self._link.transmit(
-            command="INNM", parameter=f"?{mode.value}{self._to_index_character(index)}", pjclass=PJClass.TWO
+            PJCommand("INNM", f"?{mode.value}{self._to_index_character(index)}", PJClass.TWO)
         )
 
     async def available_with_names(self) -> list[tuple[Mode, str, str | None]]:
@@ -105,14 +109,14 @@ class Sources(CommandGroup):
                 [(<Mode.RGB: '1'>, '1', 'Computer'), (<Mode.DIGITAL: '3'>, '1', 'DVI-D'), ...]
         """
         available_sources = await self.available(pjclass=PJClass.TWO)
-        named_sources: list[tuple[Sources.Mode, str, str | None]] = []
-        for mode, index in available_sources:
-            try:
-                name = await self.get_source_name(mode, index)
-            except PJLinkInvalidParameter:
-                name = None
-            named_sources.append((mode, index, name))
-        return named_sources
+        return [(mode, index, await self._source_name_or_none(mode, index)) for mode, index in available_sources]
+
+    async def _source_name_or_none(self, mode: Mode, index: str) -> str | None:
+        """The name of an input, or None if the projector has no name for it (`ERR2`)."""
+        try:
+            return await self.get_source_name(mode, index)
+        except PJLinkInvalidParameter:
+            return None
 
     async def resolution(self) -> tuple[int, int]:
         """Get the current projector resolution (§4.18)
@@ -136,8 +140,8 @@ class Sources(CommandGroup):
 
 def parse_input_source(input_parameter: str) -> tuple[Sources.Mode, str]:
     """Parse `<mode><index>` of an `INPT` query response (§4.4) or status notification (§3.3.2)."""
-    if len(input_parameter) != 2:
-        raise PJLinkUnexpectedResponseParameter("expected 2 INPT response characters")
+    if len(input_parameter) != _SOURCE_TOKEN_LENGTH:
+        raise PJLinkUnexpectedResponseParameter(f"expected {_SOURCE_TOKEN_LENGTH} INPT response characters")
     try:
         return Sources.Mode(input_parameter[0]), input_parameter[1]
     except ValueError as err:

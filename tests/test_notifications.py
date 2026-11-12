@@ -99,8 +99,8 @@ class WireFormatTests(unittest.TestCase):
             with self.subTest(data=data):
                 self.assertEqual(split_notification(data), ("POWR", "1"))
 
-    def test_split_empty_parameter(self) -> None:
-        self.assertEqual(split_notification("%2POWR=\r"), ("POWR", ""))
+    def test_empty_parameter(self) -> None:
+        self.assertRaises(aiopjlink.PJLinkProtocolError, split_notification, "%2POWR=\r")
 
     def test_not_a_notification(self) -> None:
         # The search start instruction and a Class 1 line are not notifications either.
@@ -161,7 +161,6 @@ class ParseEventTests(unittest.TestCase):
         """A notification, but with a value that does not exist: `PJLinkUnexpectedResponseParameter`."""
         cases = {
             "%2POWR=2\r": "unexpected power status notification",  # Cooling is not a notifiable state.
-            "%2POWR=\r": "unexpected power status notification",
             "%2POWR=OK\r": "unexpected power status notification",
             "%2ERST=00000\r": "unexpected number of error types reported",
             "%2ERST=0000000\r": "unexpected number of error types reported",

@@ -20,7 +20,7 @@ from typing import Any
 
 from ._debug import LOGGER
 from ._protocol import SEARCH_REQUEST, parse_search_response
-from ._udp import PJLINK_UDP_PORT, open_socket, resolve_address, source_address
+from ._udp import MAX_PORT_NUMBER, PJLINK_UDP_PORT, open_socket, resolve_address, source_address
 from .exceptions import PJLinkNoConnection, PJLinkProtocolError
 
 DEFAULT_SEARCH_DURATION_SECONDS = 30.0
@@ -111,6 +111,20 @@ def _send_requests(udp_socket: socket.socket, targets: list[tuple[Any, ...]]) ->
         raise PJLinkNoConnection(f"search failed - {send_errors[0]}") from send_errors[0]
 
 
+async def _next_result(answers: asyncio.Queue[SearchResult], deadline: float) -> SearchResult | None:
+    """The next answer, or None once `deadline` (a loop time) has passed.
+
+    An answer that is waiting already is returned even after the deadline: it came in time, only the caller was slow.
+    """
+    if not answers.empty():
+        return answers.get_nowait()
+    try:
+        async with asyncio.timeout_at(deadline):
+            return await answers.get()
+    except TimeoutError:
+        return None
+
+
 async def search_iter(
     *,
     duration_seconds: float = DEFAULT_SEARCH_DURATION_SECONDS,
@@ -158,9 +172,9 @@ async def search_iter(
     """
     if duration_seconds <= 0:
         raise ValueError("duration_seconds must be positive")
-    if not 0 < port < 65536:
+    if not 0 < port < MAX_PORT_NUMBER:
         raise ValueError("port must be between 1 and 65535")
-    if not 0 <= local_port < 65536:
+    if not 0 <= local_port < MAX_PORT_NUMBER:
         raise ValueError("local_port must be between 0 and 65535")
     family, targets = _resolve_targets(broadcast_address, port)
     local_sockaddr = _resolve_local(local_address, local_port, family)
@@ -180,15 +194,7 @@ async def search_iter(
     try:
         _send_requests(udp_socket, targets)
         deadline = loop.time() + duration_seconds
-        while True:
-            try:
-                result = answers.get_nowait()
-            except asyncio.QueueEmpty:
-                try:
-                    async with asyncio.timeout_at(deadline):
-                        result = await answers.get()
-                except TimeoutError:
-                    return
+        while (result := await _next_result(answers, deadline)) is not None:
             yield result
     finally:
         transport.close()

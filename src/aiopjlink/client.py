@@ -64,7 +64,7 @@ class PJLink(Transport):
     C1 = PJClass.ONE
     C2 = PJClass.TWO
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         address: str,
         port: int = 4352,
@@ -74,7 +74,7 @@ class PJLink(Transport):
         *,
         persistent: bool = True,
         idle_timeout_seconds: float = DEFAULT_IDLE_TIMEOUT_SECONDS,
-        authentication: PJAuth | str = PJAuth.AUTO,
+        authentication: PJAuth = PJAuth.AUTO,
     ) -> None:
         super().__init__(
             address,

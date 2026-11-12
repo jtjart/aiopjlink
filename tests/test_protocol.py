@@ -2,7 +2,7 @@ import asyncio
 import unittest
 
 import aiopjlink
-from aiopjlink._protocol import format_command, parse_response
+from aiopjlink._protocol import PJCommand, parse_response
 from aiopjlink.enums import PJClass
 from mock_projector import (
     client_for,
@@ -32,44 +32,44 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
     async def test_command_construction(self) -> None:
         """Test that command formatting accepts valid values and raises errors if out of spec."""
         # Normal commands.
-        result = format_command("ABCD", "???", pjclass=PJClass.ONE)
-        self.assertEqual(result, "%1ABCD ???\r")
+        result = PJCommand("ABCD", "???", PJClass.ONE)
+        self.assertEqual(result.line, "%1ABCD ???\r")
 
-        result = format_command("EFGH", "1", pjclass=PJClass.ONE)
-        self.assertEqual(result, "%1EFGH 1\r")
+        result = PJCommand("EFGH", "1", PJClass.ONE)
+        self.assertEqual(result.line, "%1EFGH 1\r")
 
-        result = format_command("IJKL", "9999999", pjclass=PJClass.ONE)
-        self.assertEqual(result, "%1IJKL 9999999\r")
+        result = PJCommand("IJKL", "9999999", PJClass.ONE)
+        self.assertEqual(result.line, "%1IJKL 9999999\r")
 
-        result = format_command("ABCD", "?", pjclass=PJClass.TWO)
-        self.assertEqual(result, "%2ABCD ?\r")
+        result = PJCommand("ABCD", "?", PJClass.TWO)
+        self.assertEqual(result.line, "%2ABCD ?\r")
 
         # Bad commands.
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
-            result = format_command("abcd", "?", pjclass=PJClass.ONE)
+            result = PJCommand("abcd", "?", PJClass.ONE)
         self.assertEqual(str(err.exception), "command is not uppercase")
 
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
-            result = format_command("ABCDE", "?", pjclass=PJClass.ONE)
+            result = PJCommand("ABCDE", "?", PJClass.ONE)
         self.assertEqual(str(err.exception), "command is not 4 bytes")
 
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
             large_param = "X" * 129
-            result = format_command("ABCD", large_param, pjclass=PJClass.ONE)
+            result = PJCommand("ABCD", large_param, PJClass.ONE)
         self.assertEqual(str(err.exception), "command param is larger than 128 bytes")
 
         with self.assertRaises(ValueError) as err_value_error:
-            result = format_command("ABCD", "?", pjclass="3")  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
+            result = PJCommand("ABCD", "?", "3")  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
         self.assertEqual(str(err_value_error.exception), "'3' is not a valid PJClass")
 
         # The limit is 128 bytes, not 128 characters (§2.1): "é" takes two bytes in UTF-8 ...
-        format_command("ABCD", "é" * 64, pjclass=PJClass.ONE)
+        PJCommand("ABCD", "é" * 64, PJClass.ONE)
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
-            format_command("ABCD", "é" * 65, pjclass=PJClass.ONE)
+            PJCommand("ABCD", "é" * 65, PJClass.ONE)
         self.assertEqual(str(err.exception), "command param is larger than 128 bytes")
 
         # ... and one byte in the encoding the line is actually sent in, if that is Latin-1.
-        format_command("ABCD", "é" * 65, pjclass=PJClass.ONE, encoding="latin-1")
+        PJCommand("ABCD", "é" * 65, PJClass.ONE, encoding="latin-1")
 
     async def test_bad_command_rejected_before_connecting(self) -> None:
         """A malformed command fails fast, without touching the network."""
@@ -78,24 +78,24 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         # this would be a `PJLinkNoConnection` instead.
         link = client_for(unused_port(), timeout_seconds=0.5)
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
-            await link.transmit("abcd", "?", pjclass=PJClass.ONE)
+            await link.transmit(PJCommand("abcd", "?", PJClass.ONE))
         self.assertEqual(str(err.exception), "command is not uppercase")
 
     async def test_oversized_or_unencodable_command_rejected_before_connecting(self) -> None:
         """The byte limit is checked in the link's encoding, and bad input never reaches the network."""
         link = client_for(unused_port(), timeout_seconds=0.5)
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
-            await link.transmit("NAME", "é" * 65, pjclass=aiopjlink.PJClass.ONE)
+            await link.transmit(PJCommand("NAME", "é" * 65, PJClass.ONE))
         self.assertEqual(str(err.exception), "command param is larger than 128 bytes")
 
         # A class that is neither 1 nor 2 is a programming error.
         with self.assertRaises(ValueError):
-            await link.transmit("NAME", "?", pjclass="3")  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
+            await link.transmit(PJCommand("NAME", "?", pjclass="3"))  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
 
         # Text the encoding cannot represent is a `ValueError` too (`UnicodeEncodeError` is one).
         ascii_link = client_for(unused_port(), timeout_seconds=0.5, encoding="ascii")
         with self.assertRaises(ValueError):
-            await ascii_link.transmit("NAME", "é", pjclass=aiopjlink.PJClass.ONE)
+            await ascii_link.transmit(PJCommand("NAME", "é", pjclass=aiopjlink.PJClass.ONE, encoding="ascii"))
 
     async def test_response_parsing(self) -> None:
         """Ensure that errors generate the correct responses."""

@@ -24,7 +24,7 @@ from typing import Any
 
 from ._debug import LOGGER
 from ._protocol import parse_mac_address, split_notification
-from ._udp import PJLINK_UDP_PORT, open_socket, resolve_address, source_address
+from ._udp import MAX_PORT_NUMBER, PJLINK_UDP_PORT, open_socket, resolve_address, source_address
 from .commands.errors import Errors, parse_error_levels
 from .commands.sources import Sources, parse_input_source
 from .exceptions import PJLinkNoConnection, PJLinkProtocolError, PJLinkUnexpectedResponseParameter
@@ -176,7 +176,7 @@ async def listen_notifications(
         ValueError: An argument is not valid (raised when the iteration starts).
         PJLinkNoConnection: The socket could not be opened or bound, e.g. because the local port is in use.
     """
-    if not 0 < local_port < 65536:
+    if not 0 < local_port < MAX_PORT_NUMBER:
         raise ValueError("local_port must be between 1 and 65535")
     if local_address is None:
         family, local_sockaddr = socket.AF_INET, ("0.0.0.0", local_port)
