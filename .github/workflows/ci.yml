@@ -51,15 +51,14 @@ jobs:
       - name: Pyright
         run: uv run pyright
 
-  test:
-    name: Test (${{ matrix.os }}, py${{ matrix.python-version }})
+  test-python:
+    name: Test (Ubuntu, py${{ matrix.python-version }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.11", "3.12", "3.13", "3.14"]
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
@@ -82,10 +81,38 @@ jobs:
 
       - name: Upload coverage report
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.14'
+        if: matrix.python-version == '3.14'
         with:
           files: coverage.xml
         continue-on-error: true
+
+  test-os:
+    name: Test (${{ matrix.os }}, py3.14)
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: uv sync --locked --group dev
+
+      - name: Run tests
+        run: uv run pytest
 
   build:
     name: Build
@@ -132,7 +159,7 @@ jobs:
   ci-passed:
     name: CI passed
     if: always()
-    needs: [lint, test, build]
+    needs: [lint, test-python, test-os, build]
     runs-on: ubuntu-latest
     steps:
       - name: Fail if any job failed
