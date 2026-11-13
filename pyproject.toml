@@ -82,6 +82,8 @@ select = [
     "TRY",     # tryceratops
     "PL",      # pylint
     "PLR1702", # pylint: too-many-nested-blocks
+    "PLR0904", # pylint: too-many-public-methods
+    "SLF",     # flake8-self
 ]
 preview = true
 explicit-preview-rules = true
@@ -89,6 +91,8 @@ explicit-preview-rules = true
 ignore = [
     "TRY003", # tryceratops: raise-vanilla-args
 ]
+
+per-file-ignores = { "tests/**" = ["SLF001"] }
 
 [tool.ruff.format]
 quote-style = "preserve"

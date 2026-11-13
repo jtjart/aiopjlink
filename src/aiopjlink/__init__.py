@@ -37,7 +37,6 @@ from ._search import SearchResult, search, search_iter
 from ._version import __version__
 from .client import PJLink
 from .commands import (
-    CommandGroup,
     Errors,
     Filter,
     Freeze,
@@ -65,7 +64,6 @@ from .exceptions import (
 )
 
 __all__ = [
-    "CommandGroup",
     "Errors",
     "ErrorsChanged",
     "Filter",

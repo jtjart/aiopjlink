@@ -7,12 +7,12 @@ from enum import Enum
 
 from ..enums import PJClass
 from ..exceptions import PJLinkUnexpectedResponseParameter
-from .base import CommandGroup
+from ._sender import CommandSender
 
 _NUMBER_OF_ERROR_CATEGORIES = 6
 
 
-class Errors(CommandGroup):
+class Errors:
     """Provide information about errors occuring within the projector (§4.7)."""
 
     class Category(Enum):
@@ -32,6 +32,9 @@ class Errors(CommandGroup):
         WARN = "1"
         ERROR = "2"
 
+    def __init__(self, sender: CommandSender) -> None:
+        self._sender = sender
+
     async def query(self) -> dict[Category, Level]:
         """Query the projecteor for the latest error status
         information for each of the error categories (§4.7).
@@ -39,7 +42,7 @@ class Errors(CommandGroup):
         Returns:
             dict[Category]: Level: Table of error categories to states.
         """
-        return parse_error_levels(await self._query_status("ERST", PJClass.ONE))
+        return parse_error_levels(await self._sender.query_status("ERST", PJClass.ONE))
 
 
 def parse_error_levels(levels_text: str) -> dict[Errors.Category, Errors.Level]:

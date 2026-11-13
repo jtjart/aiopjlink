@@ -7,10 +7,10 @@ from enum import Enum
 
 from ..enums import PJClass
 from ..exceptions import PJLinkUnexpectedResponseParameter
-from .base import CommandGroup
+from ._sender import CommandSender
 
 
-class Power(CommandGroup):
+class Power:
     """Control and query the power state of the projector lamp."""
 
     class State(Enum):
@@ -25,15 +25,18 @@ class Power(CommandGroup):
             """Truthy states for `on` and `warming`, falsy states for `off` and `cooling`."""
             return self in (Power.State.ON, Power.State.WARMING)
 
+    def __init__(self, sender: CommandSender) -> None:
+        self._sender = sender
+
     async def set(self, state: State, pjclass: PJClass = PJClass.ONE) -> None:
         """Send a power control instruction to power the projector lamp on or off."""
         if state in (Power.State.COOLING, Power.State.WARMING):
             raise ValueError("expected Power.State.ON or Power.State.OFF")
-        await self._transmit_expecting_ok("POWR", state.value, pjclass=pjclass)
+        await self._sender.transmit_expecting_ok("POWR", state.value, pjclass=pjclass)
 
     async def get(self, pjclass: PJClass = PJClass.ONE) -> State:
         """Request the power status of the projector."""
-        response_parameter = await self._query_status("POWR", pjclass)
+        response_parameter = await self._sender.query_status("POWR", pjclass)
         try:
             return Power.State(response_parameter)
         except ValueError as err:

@@ -5,15 +5,18 @@ Audio and video mute (§4.5 AVMT, §4.6 AVMT ?).
 
 from ..enums import PJClass
 from ..exceptions import PJLinkUnexpectedResponseParameter
-from .base import CommandGroup
+from ._sender import CommandSender
 
 
-class Mute(CommandGroup):
+class Mute:
     """Control audio and visual track mute status (§4.5, §4.6).
 
     If the mute function is individually executed or cancelled for the models
     that do not have audio or video mute functions, "ERR 2" (out of parameter range) is returned.
     """
+
+    def __init__(self, sender: CommandSender) -> None:
+        self._sender = sender
 
     async def status(self) -> tuple[bool, bool]:
         """Current (video, audio) track mute status returned as two booleans (§4.6).
@@ -21,7 +24,7 @@ class Mute(CommandGroup):
         Returns:
             tuple(video: bool, audio: bool): True if the track is muted.  False if not.
         """
-        mute_code = await self._query_status("AVMT", PJClass.ONE)
+        mute_code = await self._sender.query_status("AVMT", PJClass.ONE)
         if mute_code == "11":
             return True, False
         if mute_code == "21":
@@ -38,17 +41,17 @@ class Mute(CommandGroup):
     async def video(self, muted: bool) -> None:
         """Set if the video track should be muted (True to mute, False to unmute)."""
         parameter = "1" if muted else "0"
-        await self._transmit_expecting_ok("AVMT", f"1{parameter}", pjclass=PJClass.ONE)
+        await self._sender.transmit_expecting_ok("AVMT", f"1{parameter}", pjclass=PJClass.ONE)
 
     async def audio(self, muted: bool) -> None:
         """Set if the audio track should be muted (True to mute, False to unmute)."""
         parameter = "1" if muted else "0"
-        await self._transmit_expecting_ok("AVMT", f"2{parameter}", pjclass=PJClass.ONE)
+        await self._sender.transmit_expecting_ok("AVMT", f"2{parameter}", pjclass=PJClass.ONE)
 
     async def both(self, muted: bool) -> None:
         """Set if the AV tracks should be muted (True to mute, False to unmute)."""
         parameter = "1" if muted else "0"
-        await self._transmit_expecting_ok("AVMT", f"3{parameter}", pjclass=PJClass.ONE)
+        await self._sender.transmit_expecting_ok("AVMT", f"3{parameter}", pjclass=PJClass.ONE)
 
     async def set(self, video: bool | None, audio: bool | None) -> None:
         """Enable or disable mute for each track (call mirrors output of `status`).

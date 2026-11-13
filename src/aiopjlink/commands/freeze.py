@@ -5,20 +5,27 @@ Freeze the picture (§4.25 FREZ, §4.26 FREZ ?).
 
 from ..enums import PJClass
 from ..exceptions import PJLinkUnexpectedResponseParameter
-from .base import CommandGroup
+from ._sender import CommandSender
 
 
-class Freeze(CommandGroup):
+class Freeze:
     """Controls freezing and unfreezing the current frame (§4.25, §4.26)."""
+
+    def __init__(self, sender: CommandSender) -> None:
+        self._sender = sender
 
     async def set(self, frozen: bool) -> None:
         """Freeze or unfreeze the screen (§4.25)."""
         parameter = "1" if bool(frozen) else "0"
-        await self._transmit_expecting_ok("FREZ", parameter, PJClass.TWO, not_supported_message="freeze not supported")
+        await self._sender.transmit_expecting_ok(
+            "FREZ", parameter, PJClass.TWO, not_supported_message="freeze not supported"
+        )
 
     async def get(self) -> bool:
         """Returns True if the screen is currently frozen, and False if not §4.26."""
-        response_parameter = await self._query_status("FREZ", PJClass.TWO, not_supported_message="freeze not supported")
+        response_parameter = await self._sender.query_status(
+            "FREZ", PJClass.TWO, not_supported_message="freeze not supported"
+        )
         if response_parameter == "0":
             return False
         if response_parameter == "1":

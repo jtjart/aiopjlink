@@ -1,6 +1,5 @@
 """Groups of related PJLink commands, one module per feature (power, sources, mute, ...)."""
 
-from .base import CommandGroup
 from .errors import Errors
 from .filter import Filter
 from .freeze import Freeze
@@ -11,4 +10,4 @@ from .power import Power
 from .sources import Sources
 from .volume import Volume
 
-__all__ = ["CommandGroup", "Errors", "Filter", "Freeze", "Information", "Lamp", "Mute", "Power", "Sources", "Volume"]
+__all__ = ["Errors", "Filter", "Freeze", "Information", "Lamp", "Mute", "Power", "Sources", "Volume"]

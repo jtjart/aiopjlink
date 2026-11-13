@@ -5,9 +5,7 @@ from unittest.mock import patch
 
 import aiopjlink
 from aiopjlink._debug import redact_debug_payload
-from aiopjlink._protocol import PJCommand
 from aiopjlink._transport import Transport, _Session
-from aiopjlink.enums import PJClass
 from mock_projector import client_for, mock_tcp_pjlink, raw_tcp_server, unused_port
 
 
@@ -34,8 +32,8 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
                 # Send the power request and check the response is expected.
                 client = server.client()
                 self.addAsyncCleanup(client.close)
-                value = await client.transmit(PJCommand("POWR", "?", PJClass.ONE))
-                self.assertEqual(value, "0")
+                value = await client.power.get()
+                self.assertEqual(value, aiopjlink.Power.State.OFF)
 
     async def test_auth_malformed(self) -> None:
         """Tests the projector sending back a malformed welcome message generates a `PJLinkProtocolError`."""

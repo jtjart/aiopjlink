@@ -54,7 +54,7 @@ Modules starting with `_` are internal; only the names in `aiopjlink.__all__` ar
 ```
 src/aiopjlink/
 ├── __init__.py       public API (everything in __all__)
-├── client.py         PJLink: the entry point, wires the command groups onto a Transport
+├── client.py         PJLink: owns a Transport and wires the command groups onto it
 ├── _transport.py     Transport: connection, lock, deadline, transmit()
 ├── _protocol.py      command / response line format (§2), search (§3.2.2) and notification (§3.3.2) datagrams
 ├── _auth.py          opening handshake and password hashing (§5)
@@ -65,7 +65,7 @@ src/aiopjlink/
 ├── exceptions.py     PJLinkException and its subclasses
 ├── enums.py          PJClass
 └── commands/         one module per feature (spec chapter 4)
-    ├── base.py       CommandGroup
+    ├── _sender.py    CommandSender: sends one command and interprets the answer, shared by the groups
     ├── power.py      §4.1, §4.2
     ├── sources.py    §4.3, §4.4, §4.9, §4.17 - §4.19
     ├── mute.py       §4.5, §4.6
