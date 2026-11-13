@@ -95,9 +95,11 @@ async def listen_and_send(port: int, *datagrams: bytes, count: int, **overrides:
     """Listen on `port`, send the datagrams to the address listened on, and return the first `count` notifications."""
     async with contextlib.aclosing(listen_notifications(**listener_arguments(port, **overrides))) as found:
         pending = asyncio.ensure_future(take_notifications(found, count))
-        await wait_until_bound(port, overrides.get("local_address") or LOCALHOST)
+        local_address = overrides.get("local_address", LOCALHOST)
+        bind_address = local_address if local_address is not None else "0.0.0.0"
+        await wait_until_bound(port, bind_address)
         for datagram in datagrams:
-            send_datagram(port, datagram, host=overrides.get("local_address", LOCALHOST) or LOCALHOST)
+            send_datagram(port, datagram, host=local_address or LOCALHOST)
         return await pending
 
 
