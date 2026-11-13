@@ -31,6 +31,8 @@ LOCALHOST = "127.0.0.1"
 MAC = "00:11:22:33:44:55"
 MAX_WAIT_SECONDS = 2.0
 """The most a test waits for a notification that is expected to arrive."""
+LISTENER_START_TIMEOUT_SECONDS = 10.0
+"""The most a test waits for the listener to bind its socket."""
 
 ALL_OK = dict.fromkeys(aiopjlink.Errors.Category, aiopjlink.Errors.Level.OK)
 
@@ -60,6 +62,19 @@ def listener_arguments(port: int, **overrides: Any) -> dict[str, Any]:
     return result
 
 
+async def wait_until_bound(port: int, host: str = LOCALHOST) -> None:
+    """Wait until a listener owns `port`, rather than assuming it started after a fixed delay."""
+    family = socket.AF_INET6 if ":" in host else socket.AF_INET
+    async with asyncio.timeout(LISTENER_START_TIMEOUT_SECONDS):
+        while True:
+            with socket.socket(family, socket.SOCK_DGRAM) as sock:
+                try:
+                    sock.bind((host, port))
+                except OSError:
+                    return
+            await asyncio.sleep(0.01)
+
+
 async def take_notifications(notifications: AsyncGenerator[Notification, None], count: int) -> list[Notification]:
     """The next `count` notifications, but never wait for longer than `MAX_WAIT_SECONDS` for them."""
     async with asyncio.timeout(MAX_WAIT_SECONDS):
@@ -80,7 +95,7 @@ async def listen_and_send(port: int, *datagrams: bytes, count: int, **overrides:
     """Listen on `port`, send the datagrams to the address listened on, and return the first `count` notifications."""
     async with contextlib.aclosing(listen_notifications(**listener_arguments(port, **overrides))) as found:
         pending = asyncio.ensure_future(take_notifications(found, count))
-        await asyncio.sleep(0)  # The listener binds the port when it starts: nothing is lost from here on.
+        await wait_until_bound(port, overrides.get("local_address") or LOCALHOST)
         for datagram in datagrams:
             send_datagram(port, datagram, host=overrides.get("local_address", LOCALHOST) or LOCALHOST)
         return await pending
@@ -296,7 +311,6 @@ class ListenTests(unittest.IsolatedAsyncioTestCase):
     async def test_nothing_happens_before_the_first_iteration(self) -> None:
         port = unused_udp_port()
         listen_notifications(**listener_arguments(port))
-        await asyncio.sleep(0.05)
         # The port is still free: nothing was bound.
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.bind((LOCALHOST, port))
@@ -325,7 +339,7 @@ class ReleaseTests(unittest.IsolatedAsyncioTestCase):
                 pass
 
         task = asyncio.create_task(listen_forever())
-        await asyncio.sleep(0.1)
+        await wait_until_bound(port)
         task.cancel()
         with self.assertRaises(asyncio.CancelledError):
             async with asyncio.timeout(MAX_WAIT_SECONDS):
