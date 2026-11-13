@@ -7,15 +7,13 @@ Input source selection and information (§4.3 INPT, §4.4 INPT ?, §4.9 INST ?,
 import re
 from enum import Enum
 
-from aiopjlink._protocol import PJCommand
-
 from ..enums import PJClass
 from ..exceptions import (
     PJLinkInvalidParameter,
     PJLinkProjectorError,
     PJLinkUnexpectedResponseParameter,
 )
-from .base import CommandGroup
+from ._sender import CommandSender
 
 _RESOLUTION_PATTERN = re.compile(r"([0-9]+)x([0-9]+)", re.IGNORECASE)
 
@@ -31,7 +29,7 @@ def _parse_resolution(resolution_text: str) -> tuple[int, int]:
     return int(resolution_match[1]), int(resolution_match[2])
 
 
-class Sources(CommandGroup):
+class Sources:
     """Control and query projector input sources."""
 
     class Mode(Enum):
@@ -45,19 +43,22 @@ class Sources(CommandGroup):
         INTERNAL = "6"
         """ Class 2 only. """
 
+    def __init__(self, sender: CommandSender) -> None:
+        self._sender = sender
+
     async def set(self, mode: Mode, index: str | int, pjclass: PJClass = PJClass.ONE) -> None:
         """Set the current source input selection (§4.3).
 
         `mode` is a `Sources.Mode`
         `index` is 1-9 for both Class 1 and Class 2 projectors, and A-Z (or the integer 10-35) for a Class 2 projector.
         """
-        await self._transmit_expecting_ok(
+        await self._sender.transmit_expecting_ok(
             command="INPT", parameter=f"{mode.value}{self._to_index_character(index)}", pjclass=pjclass
         )
 
     async def get(self, pjclass: PJClass = PJClass.ONE) -> tuple[Mode, str]:
         """Get the current source input selection (§4.4)."""
-        return parse_input_source(await self._query_status("INPT", pjclass))
+        return parse_input_source(await self._sender.query_status("INPT", pjclass))
 
     _INDEX_CHARACTERS = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
@@ -84,7 +85,7 @@ class Sources(CommandGroup):
             A list of available input sources in the format: (Sources.Mode, index str).  For example:
                 [(<Mode.RGB: '1'>, '1'), (<Mode.DIGITAL: '3'>, '1'), ...]
         """
-        source_tokens = (await self._query_status("INST", pjclass)).split()
+        source_tokens = (await self._sender.query_status("INST", pjclass)).split()
         if not source_tokens or any(len(source_token) != _SOURCE_TOKEN_LENGTH for source_token in source_tokens):
             raise PJLinkUnexpectedResponseParameter(_UNPARSABLE_SOURCES)
         try:
@@ -97,9 +98,7 @@ class Sources(CommandGroup):
         :param mode Sources.Mode: The input mode to select.
         :param index str: A single character.
         """
-        return await self._link.transmit(
-            PJCommand("INNM", f"?{mode.value}{self._to_index_character(index)}", PJClass.TWO)
-        )
+        return await self._sender.transmit("INNM", f"?{mode.value}{self._to_index_character(index)}", PJClass.TWO)
 
     async def available_with_names(self) -> list[tuple[Mode, str, str | None]]:
         """List all the available input sources with names (§4.17).
@@ -123,7 +122,7 @@ class Sources(CommandGroup):
         Returns:
             (x:int, y:int) tuple: Horizontal and vertical resolutions of input signal respectively.
         """
-        response_parameter = await self._query_status("IRES", PJClass.TWO)
+        response_parameter = await self._sender.query_status("IRES", PJClass.TWO)
         if response_parameter == "-":
             raise PJLinkProjectorError("no signal input")
         if response_parameter == "*":
@@ -135,7 +134,7 @@ class Sources(CommandGroup):
         Returns:
             (x:int, y:int) tuple: Horizontal and vertical resolutions of input signal respectively.
         """
-        return _parse_resolution(await self._query_status("RRES", PJClass.TWO))
+        return _parse_resolution(await self._sender.query_status("RRES", PJClass.TWO))
 
 
 def parse_input_source(input_parameter: str) -> tuple[Sources.Mode, str]:

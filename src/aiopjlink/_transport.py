@@ -3,8 +3,8 @@
 How a command gets to the projector and its answer back (§3.1, §5).
 
 `Transport` knows about sockets, authentication and the wire format, but nothing
-about individual commands. The groups in `aiopjlink.commands` depend on it, and
-`PJLink` builds on it, so the dependency only ever points one way.
+about individual commands. `PJLink` owns one and hands it to the command groups in
+`aiopjlink.commands` (through a `CommandSender`), so the dependency only ever points one way.
 
 Connection handling
 -------------------
@@ -64,8 +64,7 @@ to be answered, whatever `timeout_seconds` is.
 import asyncio
 from dataclasses import dataclass
 from enum import Enum
-from types import TracebackType
-from typing import NoReturn, Self
+from typing import NoReturn
 
 from ._auth import (
     SHA256_INQUIRY,
@@ -164,8 +163,7 @@ class Transport:
 
     One object can safely be shared between several tasks: commands are sent one
     after the other. There is nothing to open: the connection is made by the first
-    command. Call `close` (or use the object as an `async with` block) when you are
-    done, so that a connection kept for reuse is released.
+    command. Call `close` when you are done, so that a connection kept for reuse is released.
     """
 
     def __init__(  # noqa: PLR0913
@@ -219,14 +217,6 @@ class Transport:
     def authentication(self) -> PJAuth:
         """The authentication this object was asked to use (`PJAuth.AUTO` unless set otherwise)."""
         return self._authentication
-
-    async def __aenter__(self) -> Self:
-        return self
-
-    async def __aexit__(
-        self, exc_type: type[BaseException] | None, exc: BaseException | None, tb: TracebackType | None
-    ) -> None:
-        await self.close()
 
     async def close(self) -> None:
         """Close the connection kept for reuse, if there is one.

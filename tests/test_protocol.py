@@ -78,24 +78,26 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         # this would be a `PJLinkNoConnection` instead.
         link = client_for(unused_port(), timeout_seconds=0.5)
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
-            await link.transmit(PJCommand("abcd", "?", PJClass.ONE))
+            await link._transport.transmit(PJCommand("abcd", "?", PJClass.ONE))
         self.assertEqual(str(err.exception), "command is not uppercase")
 
     async def test_oversized_or_unencodable_command_rejected_before_connecting(self) -> None:
         """The byte limit is checked in the link's encoding, and bad input never reaches the network."""
         link = client_for(unused_port(), timeout_seconds=0.5)
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
-            await link.transmit(PJCommand("NAME", "é" * 65, PJClass.ONE))
+            await link._transport.transmit(PJCommand("NAME", "é" * 65, PJClass.ONE))
         self.assertEqual(str(err.exception), "command param is larger than 128 bytes")
 
         # A class that is neither 1 nor 2 is a programming error.
         with self.assertRaises(ValueError):
-            await link.transmit(PJCommand("NAME", "?", pjclass="3"))  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
+            await link._transport.transmit(PJCommand("NAME", "?", pjclass="3"))  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
 
         # Text the encoding cannot represent is a `ValueError` too (`UnicodeEncodeError` is one).
         ascii_link = client_for(unused_port(), timeout_seconds=0.5, encoding="ascii")
         with self.assertRaises(ValueError):
-            await ascii_link.transmit(PJCommand("NAME", "é", pjclass=aiopjlink.PJClass.ONE, encoding="ascii"))
+            await ascii_link._transport.transmit(
+                PJCommand("NAME", "é", pjclass=aiopjlink.PJClass.ONE, encoding="ascii")
+            )
 
     async def test_response_parsing(self) -> None:
         """Ensure that errors generate the correct responses."""

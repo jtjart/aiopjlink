@@ -1,6 +1,6 @@
-"""commands/base.py
+"""commands/_sender.py
 
-Base class for the groups of related PJLink commands.
+Sending one command to the projector and reading its answer the way the command groups need it.
 """
 
 from .._protocol import PJCommand
@@ -9,13 +9,18 @@ from ..enums import PJClass
 from ..exceptions import PJLinkNotReady, PJLinkNotSupported, PJLinkUnexpectedResponseParameter
 
 
-class CommandGroup:
-    """Base class for related groups of PJLink functionality."""
+class CommandSender:
+    """What every command group uses to talk to the projector.
 
-    def __init__(self, link: Transport) -> None:
-        self._link = link
+    A group is given one instead of inheriting these methods, so it only contains what is particular to its
+    own commands. The sender adds to `Transport.transmit` what the spec says about the meaning of answers
+    (`ERR1` for "no lamp", `OK` where a value was asked for, ...).
+    """
 
-    async def _transmit_response_parameter(
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    async def transmit(
         self, command: str, parameter: str, pjclass: PJClass, *, not_supported_message: str | None = None
     ) -> str:
         """Transmit a command and return the response parameter.
@@ -25,13 +30,13 @@ class CommandGroup:
         as its message.
         """
         try:
-            return await self._link.transmit(PJCommand(command, parameter, pjclass))
+            return await self._transport.transmit(PJCommand(command, parameter, pjclass))
         except PJLinkNotSupported as err:
-            if not_supported_message is None:
-                raise
-            raise PJLinkNotSupported(not_supported_message, command=command) from err
+            if not_supported_message is not None and err.command is not None:
+                raise PJLinkNotSupported(not_supported_message, command=command) from err
+            raise
 
-    async def _query_status(self, command: str, pjclass: PJClass, *, not_supported_message: str | None = None) -> str:
+    async def query_status(self, command: str, pjclass: PJClass, *, not_supported_message: str | None = None) -> str:
         """Query a status value (numbers, flags, lists - never free text) and return the response parameter.
 
         Some projectors answer `OK` instead of a value while they are not ready (just after a state
@@ -39,23 +44,21 @@ class CommandGroup:
         ("unavailable in the current state"), exactly as if the projector had said so.
 
         Do not use this for queries that return free text (names, serial numbers, ...): `OK` is a valid value there.
-        See `_transmit_response_parameter` for `not_supported_message`.
+        See `transmit` for `not_supported_message`.
         """
-        response_parameter = await self._transmit_response_parameter(
-            command, "?", pjclass, not_supported_message=not_supported_message
-        )
+        response_parameter = await self.transmit(command, "?", pjclass, not_supported_message=not_supported_message)
         if response_parameter.upper() == "OK":
             raise PJLinkNotReady("projector answered a status query with OK", command=command)
         return response_parameter
 
-    async def _transmit_expecting_ok(
+    async def transmit_expecting_ok(
         self, command: str, parameter: str, pjclass: PJClass, *, not_supported_message: str | None = None
     ) -> None:
         """Transmit a command and check the response is OK.
 
-        See `_transmit_response_parameter` for `not_supported_message`.
+        See `transmit` for `not_supported_message`.
         """
-        response_parameter = await self._transmit_response_parameter(
+        response_parameter = await self.transmit(
             command, parameter, pjclass, not_supported_message=not_supported_message
         )
         if response_parameter.upper() != "OK":

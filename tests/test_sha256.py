@@ -352,8 +352,9 @@ class LegacyFallbackTests(unittest.IsolatedAsyncioTestCase):
                 projector = SecureProjector(sha256=False, on_inquiry=behaviour)
                 async with raw_tcp_server(projector) as server:
                     link = server.client(password=PASSWORD, timeout_seconds=2, authentication=PJAuth.SHA256)
-                    with self.assertRaises(aiopjlink.PJLinkNotSupported):
-                        await link.power.get()
+                    with self.assertRaises(aiopjlink.PJLinkNotSupported) as err:
+                        await link.lamps.hours()
+                    self.assertEqual(str(err.exception), "SHA256 authentication not supported by the projector")
                 self.assertEqual(projector.authenticated_with, [])
                 self.assertEqual([line for line in projector.lines if line != b"PJLINK 2\r"], [])
 

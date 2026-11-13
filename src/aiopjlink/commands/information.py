@@ -4,15 +4,16 @@ Information queries (§4.10 NAME ?, §4.11 INF1 ?, §4.12 INF2 ?, §4.13 INFO ?,
 §4.14 CLSS ?, §4.15 SNUM ?, §4.16 SVER ?).
 """
 
-from aiopjlink._protocol import PJCommand
-
 from ..enums import PJClass
 from ..exceptions import PJLinkUnexpectedResponseParameter
-from .base import CommandGroup
+from ._sender import CommandSender
 
 
-class Information(CommandGroup):
+class Information:
     """Gathers information about the projector."""
+
+    def __init__(self, sender: CommandSender) -> None:
+        self._sender = sender
 
     async def software_version(self) -> str:
         """Request software version of the projector (§4.16).
@@ -22,7 +23,7 @@ class Information(CommandGroup):
         Returns:
             str: The version string.
         """
-        return await self._link.transmit(PJCommand("SVER", "?", PJClass.TWO))
+        return await self._sender.transmit("SVER", "?", PJClass.TWO)
 
     async def serial_number(self) -> str:
         """Request the projector serial number (§4.15).
@@ -31,12 +32,12 @@ class Information(CommandGroup):
         Returns:
             str: The serial number string.
         """
-        return await self._link.transmit(PJCommand("SNUM", "?", PJClass.TWO))
+        return await self._sender.transmit("SNUM", "?", PJClass.TWO)
 
     async def pjlink_class(self, pjclass: PJClass = PJClass.ONE) -> PJClass:
         """Get projectors PJLink class number as a `PJClass` enumeration (§4.14)"""
         try:
-            return PJClass(await self._query_status("CLSS", pjclass))
+            return PJClass(await self._sender.query_status("CLSS", pjclass))
         except ValueError as err:
             raise PJLinkUnexpectedResponseParameter("unexpected PJLink class") from err
 
@@ -46,25 +47,25 @@ class Information(CommandGroup):
 
         If there is no other information, this returns an empty string.
         """
-        return await self._link.transmit(PJCommand("INFO", "?", PJClass.ONE))
+        return await self._sender.transmit("INFO", "?", PJClass.ONE)
 
     async def product_name(self) -> str:
         """Get product name information string (e.g. EPSON PU1007B/PU1007W) as in (§4.12).
 
         If there is no information, this returns an empty string.
         """
-        return await self._link.transmit(PJCommand("INF2", "?", PJClass.ONE))
+        return await self._sender.transmit("INF2", "?", PJClass.ONE)
 
     async def manufacturer_name(self) -> str:
         """Get manufacturer name information string (e.g. EPSON) as in (§4.11).
 
         If there is no information, this returns an empty string.
         """
-        return await self._link.transmit(PJCommand("INF1", "?", PJClass.ONE))
+        return await self._sender.transmit("INF1", "?", PJClass.ONE)
 
     async def projector_name(self) -> str:
         """Get projector name information string (e.g. EBB13648) as in (§4.10).
 
         If there is no information, this returns an empty string.
         """
-        return await self._link.transmit(PJCommand("NAME", "?", PJClass.ONE))
+        return await self._sender.transmit("NAME", "?", PJClass.ONE)

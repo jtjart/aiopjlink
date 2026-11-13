@@ -5,16 +5,14 @@ Lamp status and replacement models (§4.8 LAMP ?, §4.21 RLMP ?).
 
 from enum import Enum
 
-from aiopjlink._protocol import PJCommand
-
 from ..enums import PJClass
 from ..exceptions import PJLinkUnexpectedResponseParameter
-from .base import CommandGroup
+from ._sender import CommandSender
 
 _UNPARSABLE_STATUS = "unparsable lamp status"
 
 
-class Lamp(CommandGroup):
+class Lamp:
     """Status information about the projector light sources (§4.8).
 
     According to the spec the "usage time of lamp is always 0 when it is
@@ -25,6 +23,9 @@ class Lamp(CommandGroup):
         OFF = "0"
         ON = "1"
 
+    def __init__(self, sender: CommandSender) -> None:
+        self._sender = sender
+
     async def status(self) -> list[tuple[int, State]]:
         """Query the current lamp hours and lamp statuses.
 
@@ -33,7 +34,7 @@ class Lamp(CommandGroup):
         Returns:
             A list of ``(hours, state)`` tuples for each lamp.
         """
-        response_parameter = await self._query_status("LAMP", PJClass.ONE, not_supported_message="no lamp")
+        response_parameter = await self._sender.query_status("LAMP", PJClass.ONE, not_supported_message="no lamp")
         tokens = response_parameter.split()
         if not tokens:
             raise PJLinkUnexpectedResponseParameter(_UNPARSABLE_STATUS)
@@ -55,5 +56,5 @@ class Lamp(CommandGroup):
         """Get the lamp replacement models listed in the projector.
         There may be more than one model number, so they are returned in a list.
         """
-        models = await self._link.transmit(PJCommand("RLMP", "?", PJClass.TWO))
+        models = await self._sender.transmit("RLMP", "?", PJClass.TWO)
         return [model for model in models.split(" ") if model]

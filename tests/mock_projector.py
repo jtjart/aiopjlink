@@ -130,7 +130,7 @@ class PJLinkServerProtocol(asyncio.Protocol):
                 if self.debug:
                     print("PJLinkServerProtocol UNEXPECTED:", self._receive_buffer, "expected", expected.incoming)
                 expected.receive_buffer_contents = self._receive_buffer[:]
-                self.loop.call_soon_threadsafe(expected.set)
+                self.loop.call_soon_threadsafe(expected.received.set)
                 self._receive_buffer = b""
                 self.transport.close()
 
@@ -139,7 +139,7 @@ class PJLinkServerProtocol(asyncio.Protocol):
             # response.
             else:
                 expected.receive_buffer_contents = self._receive_buffer[:]
-                self.loop.call_soon_threadsafe(expected.set)
+                self.loop.call_soon_threadsafe(expected.received.set)
                 self.transport.write(expected.respond_with)
                 self._receive_buffer = b""
 
@@ -167,7 +167,7 @@ class PJLinkServerProtocol(asyncio.Protocol):
         # Give the event back to the application.
         try:
             yield expected
-            await asyncio.wait_for(expected.wait(), timeout=expected.timeout_seconds)
+            await asyncio.wait_for(expected.received.wait(), timeout=expected.timeout_seconds)
 
             # The projector hangs up on a message it did not expect. A client that reconnects after a
             # hang-up (see `aiopjlink._transport`) does not see an error, so check the message here as well.
@@ -219,28 +219,15 @@ class PJLinkServerProtocol(asyncio.Protocol):
                 self._expected_events.remove(expected)
 
 
-class ExpectedEvent(asyncio.Event):
-    """
-    Specalised event that controls what the mocked projector
-    does next and validates that it behaves in the expected way.
-    """
+class ExpectedEvent:
+    """What the mocked projector expects to receive next, and how it reacts."""
 
     def __init__(self, incoming: bytes, respond_with: bytes, within_seconds: float) -> None:
-        super().__init__()
-        # What the projector expects to recieve from the client.
         self.incoming = incoming
-
-        # What should the projector respond with when it receives the expected
-        # message from the client. NOTE: If it doesn't get the expected message
-        # it hangs up the connection.  In this way, simulated projector errors
-        # need to be implemented by the test cases.
         self.respond_with = respond_with
-
-        # How long does the client have to do its thing.
         self.timeout_seconds = within_seconds
-
-        # Contents of the projector recieve buffer after processing.
         self.receive_buffer_contents: bytes | None = None
+        self.received = asyncio.Event()
 
 
 @contextlib.asynccontextmanager
