@@ -35,6 +35,7 @@ class UdpProjector(asyncio.DatagramProtocol):
         self.replies = replies
         self.delay_seconds = delay_seconds
         self.requests: list[tuple[bytes, tuple[Any, ...]]] = []
+        self.request_received = asyncio.Event()
         self.port = 0
         self._transport: asyncio.DatagramTransport | None = None
 
@@ -43,6 +44,7 @@ class UdpProjector(asyncio.DatagramProtocol):
 
     def datagram_received(self, data: bytes, addr: tuple[Any, ...]) -> None:
         self.requests.append((data, addr))
+        self.request_received.set()
         for reply in self.replies:
             asyncio.get_running_loop().call_later(self.delay_seconds, self._reply, reply, addr)
 
@@ -294,7 +296,7 @@ class IterTests(unittest.IsolatedAsyncioTestCase):
             task = asyncio.create_task(
                 aiopjlink.search(**search_arguments(server, duration_seconds=5, local_port=port))
             )
-            await asyncio.sleep(0.1)
+            await asyncio.wait_for(server.request_received.wait(), timeout=5)
             task.cancel()
             with self.assertRaises(asyncio.CancelledError):
                 await task
@@ -312,7 +314,6 @@ class IterTests(unittest.IsolatedAsyncioTestCase):
     async def test_nothing_happens_before_the_first_iteration(self) -> None:
         async with udp_projector(ACKN) as server:
             aiopjlink.search_iter(**search_arguments(server))
-            await asyncio.sleep(0.1)
         self.assertEqual(server.requests, [])
 
 
