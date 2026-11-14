@@ -35,6 +35,17 @@ def unused_udp_port() -> int:
         return cast(int, sock.getsockname()[1])
 
 
+def ipv6_loopback_available() -> bool:
+    if not socket.has_ipv6:
+        return False
+    try:
+        with socket.socket(socket.AF_INET6, socket.SOCK_DGRAM) as sock:
+            sock.bind(("::1", 0))
+    except OSError:
+        return False
+    return True
+
+
 class PJLinkTestFrameworkError(Exception):
     """Base exception for problems with the test framework."""
 

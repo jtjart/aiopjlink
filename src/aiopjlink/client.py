@@ -21,7 +21,7 @@ from typing import Self
 from ._transport import DEFAULT_IDLE_TIMEOUT_SECONDS, Transport
 from .commands import Errors, Filter, Freeze, Information, Lamp, Mute, Power, Sources, Volume
 from .commands._sender import CommandSender
-from .enums import PJAuth, PJClass
+from .enums import PJAuth
 
 
 class PJLink:
@@ -65,9 +65,6 @@ class PJLink:
         ...     await link.power.turn_on()
 
     """
-
-    C1 = PJClass.ONE
-    C2 = PJClass.TWO
 
     def __init__(  # noqa: PLR0913
         self,

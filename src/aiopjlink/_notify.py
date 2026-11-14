@@ -24,10 +24,10 @@ from typing import Any
 
 from ._debug import LOGGER
 from ._protocol import parse_mac_address, split_notification
-from ._udp import MAX_PORT_NUMBER, PJLINK_UDP_PORT, open_socket, resolve_address, source_address
+from ._udp import MAX_PORT_NUMBER, PJLINK_UDP_PORT, open_endpoint, resolve_address, source_address
 from .commands.errors import Errors, parse_error_levels
 from .commands.sources import Sources, parse_input_source
-from .exceptions import PJLinkNoConnection, PJLinkProtocolError, PJLinkUnexpectedResponseParameter
+from .exceptions import PJLinkProtocolError, PJLinkUnexpectedResponseParameter
 
 # The notifications that have arrived but are not yet taken by the caller. The port is open to the whole network and
 # nothing authenticates the sender, so a slow caller must not let a flood of datagrams use up memory. UDP loses
@@ -176,7 +176,7 @@ async def listen_notifications(
         ValueError: An argument is not valid (raised when the iteration starts).
         PJLinkNoConnection: The socket could not be opened or bound, e.g. because the local port is in use.
     """
-    if not 0 < local_port < MAX_PORT_NUMBER:
+    if not 0 < local_port <= MAX_PORT_NUMBER:
         raise ValueError("local_port must be between 1 and 65535")
     if local_address is None:
         family, local_sockaddr = socket.AF_INET, ("0.0.0.0", local_port)
@@ -184,23 +184,12 @@ async def listen_notifications(
         family, local_sockaddr = resolve_address(local_address, local_port, "local_address")
 
     pending_notifications: asyncio.Queue[Notification] = asyncio.Queue(_MAX_PENDING_NOTIFICATIONS)
-    try:
-        udp_socket = open_socket(family, local_sockaddr, enable_broadcast=False)
-    except OSError as err:
-        raise PJLinkNoConnection(f"listening for notifications failed - {err}") from err
-    try:
-        transport, _ = await asyncio.get_running_loop().create_datagram_endpoint(
-            lambda: _NotificationProtocol(pending_notifications), sock=udp_socket
-        )
-    except BaseException:
-        udp_socket.close()
-        raise
-
-    try:
+    async with open_endpoint(
+        _NotificationProtocol(pending_notifications),
+        family,
+        local_sockaddr,
+        enable_broadcast=False,
+        purpose="listening for notifications",
+    ):
         while True:
             yield await pending_notifications.get()
-    finally:
-        # The transport gives the socket back on the next iteration of the event loop. Let that happen, so that
-        # whoever listens next (on the same local port) does not find it still in use.
-        transport.close()
-        await asyncio.sleep(0)

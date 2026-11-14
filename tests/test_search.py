@@ -21,9 +21,8 @@ import aiopjlink
 from aiopjlink._protocol import SEARCH_REQUEST, parse_search_response
 from aiopjlink._search import _SearchProtocol
 from aiopjlink._udp import source_address
-from mock_projector import unused_udp_port
+from mock_projector import LOCALHOST, ipv6_loopback_available, unused_udp_port
 
-LOCALHOST = "127.0.0.1"
 MAC = "00:11:22:33:44:55"
 ACKN = b"%2ACKN=00:11:22:33:44:55\r"
 
@@ -78,17 +77,6 @@ def search_arguments(server: UdpProjector, **overrides: Any) -> dict[str, Any]:
     }
     result.update(overrides)
     return result
-
-
-def ipv6_loopback_available() -> bool:
-    if not socket.has_ipv6:
-        return False
-    try:
-        with socket.socket(socket.AF_INET6, socket.SOCK_DGRAM) as sock:
-            sock.bind(("::1", 0))
-    except OSError:
-        return False
-    return True
 
 
 class WireFormatTests(unittest.TestCase):

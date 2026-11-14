@@ -51,6 +51,11 @@ class PJCommand:
         formatted_line = f"%{self.pjclass.value}{self.name} {self.parameter}\r"
         object.__setattr__(self, "line", formatted_line)
 
+    @property
+    def is_query(self) -> bool:
+        """True for a status query (the parameter starts with `?`). A query changes nothing, so it may be repeated."""
+        return self.parameter.startswith("?")
+
 
 def parse_response(
     response_line: str, expect_command: str | None = None, expect_pjclass: PJClass = PJClass.ONE

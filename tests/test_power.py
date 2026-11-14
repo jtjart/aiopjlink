@@ -77,11 +77,11 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
 
             # Power ON
             async with server.when(b"%2POWR 1\r", respond_with=b"%2POWR=OK\r"):
-                await client.power.set(aiopjlink.Power.State.ON, pjclass=aiopjlink.PJLink.C2)
+                await client.power.set(aiopjlink.Power.State.ON, pjclass=aiopjlink.PJClass.TWO)
 
             # Power OFF
             async with server.when(b"%2POWR 0\r", respond_with=b"%2POWR=OK\r"):
-                await client.power.set(aiopjlink.Power.State.OFF, pjclass=aiopjlink.PJLink.C2)
+                await client.power.set(aiopjlink.Power.State.OFF, pjclass=aiopjlink.PJClass.TWO)
 
             # Power set unavailable (test duplicated in test_response_parsing)
             with self.assertRaises(aiopjlink.PJLinkNotReady) as err_not_ready:

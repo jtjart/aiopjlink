@@ -6,8 +6,13 @@ Both use UDP port 4352 on the controller's side as well as on the projector's, s
 same way and report the sender of a datagram the same way. What they do with a datagram is up to them.
 """
 
+import asyncio
+import contextlib
 import socket
+from collections.abc import AsyncGenerator
 from typing import Any
+
+from .exceptions import PJLinkNoConnection
 
 PJLINK_UDP_PORT = 4352
 """The UDP port of the PJLink search and status notification protocols (§3.2, §3.3)."""
@@ -36,7 +41,6 @@ def resolve_address(host: str, port: int, argument_name: str) -> tuple[socket.Ad
     which a plain `(host, port)` tuple would lose. `argument_name` names the argument in the `ValueError`.
     """
     if not host:
-        # Not left to `getaddrinfo`: macOS takes an empty string for "no host" and answers with a loopback address.
         raise ValueError(f"{argument_name} is not a usable IP address: {host!r}")
     try:
         address_infos = socket.getaddrinfo(host, port, 0, socket.SOCK_DGRAM, 0, socket.AI_NUMERICHOST)
@@ -46,22 +50,50 @@ def resolve_address(host: str, port: int, argument_name: str) -> tuple[socket.Ad
     return family, sockaddr
 
 
-def open_socket(
-    family: socket.AddressFamily, local_sockaddr: tuple[Any, ...], *, enable_broadcast: bool
-) -> socket.socket:
-    """Create a non-blocking UDP socket bound to `local_sockaddr`.
+@contextlib.asynccontextmanager
+async def open_endpoint(
+    protocol: asyncio.DatagramProtocol,
+    family: socket.AddressFamily,
+    local_sockaddr: tuple[Any, ...],
+    *,
+    enable_broadcast: bool,
+    purpose: str,
+) -> AsyncGenerator[socket.socket, None]:
+    """Open a UDP endpoint and close it when the context exits.
 
-    Set `enable_broadcast` if it is to send to broadcast addresses.
+    Creates a non-blocking UDP socket, optionally enables IPv4 broadcast, binds it to the local address,
+    and attaches the supplied datagram protocol.
 
-    Raises `OSError` if the socket cannot be created or bound; the caller says in its own words what failed.
+    Yields the socket so callers can send datagrams directly.
+
+    Raises `PJLinkNoConnection` if socket creation or binding fails.
+    The `purpose` argument identifies the operation in the resulting error.
     """
-    udp_socket = socket.socket(family, socket.SOCK_DGRAM)
+    try:
+        udp_socket = socket.socket(family, socket.SOCK_DGRAM)
+    except OSError as err:
+        raise PJLinkNoConnection(f"{purpose} failed - {err}") from err
+
     try:
         udp_socket.setblocking(False)
         if enable_broadcast and family == socket.AF_INET:
             udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         udp_socket.bind(local_sockaddr)
-    except OSError:
+
+    except OSError as err:
+        udp_socket.close()
+        raise PJLinkNoConnection(f"{purpose} failed - {err}") from err
+
+    try:
+        transport, _ = await asyncio.get_running_loop().create_datagram_endpoint(lambda: protocol, sock=udp_socket)
+    except BaseException:
         udp_socket.close()
         raise
-    return udp_socket
+
+    try:
+        yield udp_socket
+    finally:
+        # The transport gives the socket back on the next iteration of the event loop. Let that happen, so that
+        # whoever binds the same local port next does not find it still in use.
+        transport.close()
+        await asyncio.sleep(0)

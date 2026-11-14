@@ -25,9 +25,8 @@ from aiopjlink import (
 )
 from aiopjlink._notify import _MAX_PENDING_NOTIFICATIONS, _NotificationProtocol, parse_event
 from aiopjlink._protocol import parse_mac_address, split_notification
-from mock_projector import unused_udp_port
+from mock_projector import LOCALHOST, ipv6_loopback_available, unused_udp_port
 
-LOCALHOST = "127.0.0.1"
 MAC = "00:11:22:33:44:55"
 MAX_WAIT_SECONDS = 2.0
 """The most a test waits for a notification that is expected to arrive."""
@@ -35,17 +34,6 @@ LISTENER_START_TIMEOUT_SECONDS = 10.0
 """The most a test waits for the listener to bind its socket."""
 
 ALL_OK = dict.fromkeys(aiopjlink.Errors.Category, aiopjlink.Errors.Level.OK)
-
-
-def ipv6_loopback_available() -> bool:
-    if not socket.has_ipv6:
-        return False
-    try:
-        with socket.socket(socket.AF_INET6, socket.SOCK_DGRAM) as sock:
-            sock.bind(("::1", 0))
-    except OSError:
-        return False
-    return True
 
 
 def send_datagram(port: int, datagram: bytes, *, host: str = LOCALHOST) -> None:

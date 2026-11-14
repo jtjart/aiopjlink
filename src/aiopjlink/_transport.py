@@ -265,60 +265,30 @@ class Transport:
         """
 
         async with self._command_lock:
-            # Queries have no side effects, so they may be repeated if a reused connection turns out to be dead.
-            is_query = command.parameter.startswith("?")
             try:
-                return await self._attempt_transmit(
-                    command, may_retry_on_new_connection=is_query, budget_seconds=self._timeout_seconds
-                )
+                return await self._attempt_transmit(command)
             except _Md5Rejected:
                 LOGGER.debug("MD5 was rejected by a projector that may do SHA256, asking again")
-            return await self._attempt_transmit_sha256_only(command, may_retry_on_new_connection=is_query)
+            # The projector rejected the digest, so it did not carry out the command: asking again is safe even for
+            # a command that changes something. The second try is for SHA256 only, so a wrong password is not
+            # rejected twice, and it has a deadline of its own: the first try ended with an answer, so the
+            # projector is there.
+            try:
+                return await self._attempt_transmit(command, sha256_only=True)
+            except _Sha256Refused:
+                raise PJLinkPassword("authentication failed") from None
 
-    async def _attempt_transmit_sha256_only(self, command: PJCommand, may_retry_on_new_connection: bool) -> str:
-        """The second try after a rejected MD5 digest. Must only be called with the lock held.
-
-        The projector rejected the digest, so it did not carry out the command: asking again is safe even for a
-        command that changes something. The try is for SHA256 only, so a wrong password is not rejected twice, and
-        it has a deadline of its own: the first try ended with an answer, so the projector is there.
-        """
-        try:
-            return await self._attempt_transmit(
-                command,
-                may_retry_on_new_connection=may_retry_on_new_connection,
-                budget_seconds=self._timeout_seconds,
-                sha256_only=True,
-            )
-        except _Sha256Refused:
-            raise PJLinkPassword("authentication failed") from None
-
-    async def _attempt_transmit(
-        self,
-        command: PJCommand,
-        *,
-        may_retry_on_new_connection: bool,
-        budget_seconds: float,
-        sha256_only: bool = False,
-    ) -> str:
+    async def _attempt_transmit(self, command: PJCommand, *, sha256_only: bool = False) -> str:
         """Does the actual work of `transmit`. Must only be called with the lock held.
 
-        `may_retry_on_new_connection` allows one more attempt on a new connection if the kept connection was closed
-        by the projector in the meantime. A command that changes something must not be repeated:
-        the projector may have carried it out before it hung up.
-
-        `budget_seconds` is how long this attempt may take (but see `_MINIMUM_DIGEST_ANSWER_SECONDS`).
+        The attempt is bound by `timeout_seconds` (but see `_MINIMUM_DIGEST_ANSWER_SECONDS`).
         `sha256_only` is the second try after a rejected MD5 digest: it asks for SHA256 and never falls back
         (`_Sha256Refused` if the projector does not do it).
         """
         self._prepare_session()
         try:
-            async with asyncio.timeout(budget_seconds) as deadline:
-                session, response_line = await self._send_until_answered(
-                    command.line,
-                    deadline,
-                    may_retry_on_new_connection=may_retry_on_new_connection,
-                    sha256_only=sha256_only,
-                )
+            async with asyncio.timeout(self._timeout_seconds) as deadline:
+                session, response_line = await self._send_until_answered(command, deadline, sha256_only=sha256_only)
                 return self._parse_answer(session, response_line, command.name, command.pjclass)
         except TimeoutError as err:
             raise self._timeout_error(sha256_only=sha256_only) from err
@@ -337,31 +307,27 @@ class Transport:
         return PJLinkNoConnection(session.phase.value)
 
     async def _send_until_answered(
-        self,
-        command_line: str,
-        deadline: asyncio.Timeout,
-        *,
-        may_retry_on_new_connection: bool,
-        sha256_only: bool,
+        self, command: PJCommand, deadline: asyncio.Timeout, *, sha256_only: bool
     ) -> tuple[_Session, str]:
         """Send the command and read the line that answers it: on the kept connection if there is one, else a new one.
 
-        A command that may be repeated goes to a new connection if the kept one turns out to be dead.
+        A query goes to a new connection if the kept one turns out to be dead. A command that changes something
+        does not: the projector may have carried it out before it hung up.
         """
         kept_session = self._session
         if kept_session is not None:
             try:
                 # Whatever is waiting on a kept connection is not the answer to this command.
                 await self._discard_unsolicited(kept_session)
-                return kept_session, await self._send_and_read(kept_session, command_line, deadline)
+                return kept_session, await self._send_and_read(kept_session, command.line, deadline)
             except PJLinkConnectionClosed:
-                if not may_retry_on_new_connection:
+                if not command.is_query:
                     raise
                 LOGGER.debug("reused connection was closed by the projector, reconnecting")
                 self._drop_session(kept_session)
 
         session = await self._connect(deadline, sha256_only=sha256_only)
-        return session, await self._send_and_read(session, command_line, deadline)
+        return session, await self._send_and_read(session, command.line, deadline)
 
     async def _connect(self, deadline: asyncio.Timeout, *, sha256_only: bool) -> _Session:
         """Open a connection that is ready for its first command (§5.1).
