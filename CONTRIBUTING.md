@@ -38,7 +38,7 @@ uv run pyright
 
 The tests are type-checked as strictly as the library (mypy `strict` and pyright `strict`, configured once in `pyproject.toml`
 and shared by the editor, pre-commit and CI): annotate every test method (`-> None`) and helper. Tests may use private
-modules such as `aiopjlink._transport`; that is the only rule pyright relaxes for them.
+modules such as `aiopjlink._protocol`; that is the only rule pyright relaxes for them.
 
 The pre-commit hooks run the same tools, including the full test suite, so a commit takes a moment.
 CI runs them too, with the tests on Linux, macOS and Windows with Python 3.11–3.14.
@@ -61,7 +61,7 @@ src/aiopjlink/
 ├── _notify.py        listen_notifications(): status notifications sent by projectors (§3.3)
 ├── _udp.py           socket plumbing shared by _search and _notify
 ├── _debug.py         logger and redaction of authentication data
-├── exceptions.py     PJLinkException and its subclasses
+├── exceptions.py     PJLinkError and its subclasses
 ├── enums.py          PJClass
 └── commands/         one module per feature (spec chapter 4)
     ├── _sender.py    CommandSender: sends one command and interprets the answer, shared by the groups
@@ -80,7 +80,7 @@ Rules the code follows:
 
 * Dependencies point one way: `exceptions`, `enums` → `_protocol`, `_auth` → `commands` → `client`. The command groups are given `PJLink._transmit` as a plain function (`CommandSender`), so they never import `client`. `_search` builds on `_udp`, `_protocol` and `exceptions` only. `_notify` also uses the parsers of the command groups (`parse_error_levels`, `parse_input_source`), so a notification is read exactly like the answer to the matching query.
 * Only `PJLink` (TCP), `_search` and `_notify` (UDP, opened through `_udp`) touch sockets. `_protocol` and `_auth` are pure functions.
-* Everything raised while talking to a projector is a `PJLinkException` (see `exceptions.py` for which one when). Invalid arguments are a `ValueError`, raised before anything is sent.
+* Everything raised while talking to a projector is a `PJLinkError` (see `exceptions.py` for which one when). Invalid arguments are a `ValueError`, raised before anything is sent.
 * Commands that change something are never repeated after a dropped connection; queries may be.
 * New public names must be exported in `__init__.py` and new commands added to the README table.
 

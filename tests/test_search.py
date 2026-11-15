@@ -302,7 +302,7 @@ class IterTests(unittest.IsolatedAsyncioTestCase):
 
 
 class SearchErrorTests(unittest.IsolatedAsyncioTestCase):
-    """What goes wrong on this machine is a `PJLinkNoConnection`; a wrong argument is a `ValueError`."""
+    """What goes wrong on this machine is a `PJLinkNoConnectionError`; a wrong argument is a `ValueError`."""
 
     async def test_local_port_in_use(self) -> None:
         """Two searches cannot share a local port: the second one says so."""
@@ -310,14 +310,14 @@ class SearchErrorTests(unittest.IsolatedAsyncioTestCase):
             blocker.bind((LOCALHOST, 0))
             port = blocker.getsockname()[1]
             async with udp_projector() as server:
-                with self.assertRaises(aiopjlink.PJLinkNoConnection) as err:
+                with self.assertRaises(aiopjlink.PJLinkNoConnectionError) as err:
                     await search_all(**search_arguments(server, local_port=port))
         self.assertTrue(str(err.exception).startswith("search failed - "), str(err.exception))
         self.assertIsInstance(err.exception, aiopjlink.PJLinkConnectionError)
 
     async def test_local_address_not_on_this_machine(self) -> None:
         async with udp_projector() as server:
-            with self.assertRaises(aiopjlink.PJLinkNoConnection):
+            with self.assertRaises(aiopjlink.PJLinkNoConnectionError):
                 await search_all(**search_arguments(server, local_address="192.0.2.1"))
 
     async def test_nothing_can_be_sent(self) -> None:
@@ -326,7 +326,7 @@ class SearchErrorTests(unittest.IsolatedAsyncioTestCase):
         async with udp_projector() as server:
             with mock.patch.object(socket.socket, "sendto", side_effect=unreachable):
                 start = time.monotonic()
-                with self.assertRaises(aiopjlink.PJLinkNoConnection) as err:
+                with self.assertRaises(aiopjlink.PJLinkNoConnectionError) as err:
                     await search_all(**search_arguments(server, duration_seconds=5))
         self.assertLess(time.monotonic() - start, 1)
         self.assertIn("Network is unreachable", str(err.exception))
@@ -351,7 +351,7 @@ class SearchErrorTests(unittest.IsolatedAsyncioTestCase):
         async with udp_projector() as server:
             with (
                 mock.patch.object(socket, "socket", side_effect=OSError(errno.EAFNOSUPPORT, "not supported")),
-                self.assertRaises(aiopjlink.PJLinkNoConnection) as err,
+                self.assertRaises(aiopjlink.PJLinkNoConnectionError) as err,
             ):
                 await search_all(**search_arguments(server))
         self.assertEqual(str(err.exception), f"search failed - [Errno {errno.EAFNOSUPPORT}] not supported")

@@ -75,7 +75,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         """A malformed command fails fast, without touching the network."""
 
         # No server is running: if the library tried to connect first,
-        # this would be a `PJLinkNoConnection` instead.
+        # this would be a `PJLinkNoConnectionError` instead.
         link = client_for(unused_port(), timeout_seconds=0.5)
         with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
             await link._transmit(PJCommand("abcd", "?", PJClass.ONE))
@@ -139,28 +139,28 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(str(err.exception), "unexpected response command")
 
         # ERR1 - unsupported command
-        with self.assertRaises(aiopjlink.PJLinkNotSupported) as err_not_supported:
+        with self.assertRaises(aiopjlink.PJLinkNotSupportedError) as err_not_supported:
             parse_response(response_line="%1ABCD=ERR1\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err_not_supported.exception), "unsupported command")
 
         # ERR2 - out of parameter
-        with self.assertRaises(aiopjlink.PJLinkInvalidParameter) as err_invalid_parameter:
+        with self.assertRaises(aiopjlink.PJLinkInvalidParameterError) as err_invalid_parameter:
             parse_response(response_line="%1ABCD=ERR2\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err_invalid_parameter.exception), "out of parameter")
 
         # ERR3 - unavailable in the current state
-        with self.assertRaises(aiopjlink.PJLinkNotReady) as err_not_ready:
+        with self.assertRaises(aiopjlink.PJLinkNotReadyError) as err_not_ready:
             parse_response(response_line="%1ABCD=ERR3\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err_not_ready.exception), "unavailable in the current state")
 
         # ERR4 - projector or display failure
-        with self.assertRaises(aiopjlink.PJLinkDeviceFailure) as err_device_failure:
+        with self.assertRaises(aiopjlink.PJLinkMalfunctionError) as err_device_failure:
             parse_response(response_line="%1ABCD=ERR4\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err_device_failure.exception), "projector or display failure")
 
         # Check error parsing is case insensitive (from projector) and error
         # parsing is handled in the same way too (Postel's law).
-        with self.assertRaises(aiopjlink.PJLinkDeviceFailure) as err_device_failure:
+        with self.assertRaises(aiopjlink.PJLinkMalfunctionError) as err_device_failure:
             parse_response(response_line="%1abcd=err4\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err_device_failure.exception), "projector or display failure")
 
@@ -179,14 +179,14 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(str(err.exception), "unexpected response - too short")
 
     async def test_response_timeout(self) -> None:
-        """A projector that accepts the connection but never answers the command is a `PJLinkNoConnection`."""
+        """A projector that accepts the connection but never answers the command is a `PJLinkNoConnectionError`."""
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK 0\r")
             client = server.client(timeout_seconds=0.5)
 
             # The mock reads the command but sends nothing back.
             async with server.when(b"%1POWR ?\r", respond_with=b""):
-                with self.assertRaises(aiopjlink.PJLinkNoConnection) as err:
+                with self.assertRaises(aiopjlink.PJLinkNoConnectionError) as err:
                     await client.power.get()
             self.assertIn("did not respond in time", str(err.exception))
 
@@ -203,7 +203,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(await client.power.get())
 
     async def test_connection_closed_before_response(self) -> None:
-        """A projector that hangs up in the middle of a command is a `PJLinkConnectionClosed`."""
+        """A projector that hangs up in the middle of a command is a `PJLinkConnectionClosedError`."""
 
         async def hang_up(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             writer.write(b"PJLINK 0\r")
@@ -213,7 +213,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
 
         async with raw_tcp_server(hang_up) as server:
             client = server.client(timeout_seconds=0.5)
-            with self.assertRaises(aiopjlink.PJLinkConnectionClosed):
+            with self.assertRaises(aiopjlink.PJLinkConnectionClosedError):
                 await client.power.get()
 
     async def test_free_text_in_another_encoding_is_still_returned(self) -> None:
@@ -237,7 +237,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             mock_client_server_noauth() as (server, client),
             server.when(b"%1POWR ?\r", respond_with=b"%1POWR=\xff\r"),
         ):
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter):
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError):
                 await client.power.get()
 
     async def test_undecodable_response(self) -> None:

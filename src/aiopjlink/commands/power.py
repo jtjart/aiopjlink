@@ -6,7 +6,7 @@ Control and query the projector's power state (§4.1 POWR, §4.2 POWR ?).
 from enum import Enum
 
 from ..enums import PJClass
-from ..exceptions import PJLinkUnexpectedResponseParameter
+from ..exceptions import PJLinkUnexpectedValueError
 from ._sender import CommandSender
 
 
@@ -40,7 +40,7 @@ class Power:
         try:
             return Power.State(response_parameter)
         except ValueError as err:
-            raise PJLinkUnexpectedResponseParameter("unexpected power state") from err
+            raise PJLinkUnexpectedValueError("unexpected power state") from err
 
     async def turn_on(self) -> None:
         """Power the projector on."""

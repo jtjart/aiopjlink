@@ -57,12 +57,12 @@ Deadline
 --------
 `timeout_seconds` is how long a projector may take to answer. The exception is a command that carries a password digest:
 a projector that dislikes it waits two seconds before saying so (§5.1), and that must come out as
-`PJLinkPassword`, not as a dead connection, so such a command is given at least
+`PJLinkAuthenticationError`, not as a dead connection, so such a command is given at least
 `_MINIMUM_DIGEST_ANSWER_SECONDS` to be answered, whatever `timeout_seconds` is.
 
 Error handling
 --------------
-See `aiopjlink.exceptions`: everything raised here is a subclass of `PJLinkException`.
+See `aiopjlink.exceptions`: everything raised here is a subclass of `PJLinkError`.
 """
 
 import asyncio
@@ -84,11 +84,11 @@ from .commands import Errors, Filter, Freeze, Information, Lamp, Mute, Power, So
 from .commands._sender import CommandSender
 from .enums import PJAuth, PJClass
 from .exceptions import (
-    PJLinkConnectionClosed,
-    PJLinkException,
-    PJLinkNoConnection,
-    PJLinkNotSupported,
-    PJLinkPassword,
+    PJLinkAuthenticationError,
+    PJLinkConnectionClosedError,
+    PJLinkError,
+    PJLinkNoConnectionError,
+    PJLinkNotSupportedError,
     PJLinkProjectorError,
     PJLinkProtocolError,
 )
@@ -129,8 +129,8 @@ class _Phase(Enum):
 class _Md5RejectedError(Exception):
     """MD5 was rejected by a projector that may still do SHA256: send the command again, asking for SHA256.
 
-    Raised by `PJLink._reject_password`, caught by `PJLink._transmit`. It is not a `PJLinkException` on purpose:
-    it is never visible outside this module, and must not be caught by an `except PJLinkPassword`.
+    Raised by `PJLink._reject_password`, caught by `PJLink._transmit`. It is not a `PJLinkError` on purpose:
+    it is never visible outside this module, and must not be caught by an `except PJLinkAuthenticationError`.
     """
 
 
@@ -190,12 +190,12 @@ class PJLink:
 
     Every command is bound by `timeout_seconds` in total, including connecting. The exception is a command
     that carries a password: a projector answers a wrong password only after two seconds (§5.1), so such a command
-    is given at least 3 seconds to be answered, and a wrong password is reported as `PJLinkPassword`
-    instead of `PJLinkNoConnection`, whatever `timeout_seconds` is.
+    is given at least 3 seconds to be answered, and a wrong password is reported as `PJLinkAuthenticationError`
+    instead of `PJLinkNoConnectionError`, whatever `timeout_seconds` is.
 
     `authentication` chooses the password procedure (§5.1) for a projector that has security on. The default,
     `PJAuth.AUTO`, asks for SHA256 (specification 2.10) and uses MD5 for projectors that do not support it;
-    `PJAuth.SHA256` never uses MD5 (a projector without SHA256 raises `PJLinkNotSupported`), and `PJAuth.MD5` never
+    `PJAuth.SHA256` never uses MD5 (a projector without SHA256 raises `PJLinkNotSupportedError`), and `PJAuth.MD5` never
     asks for SHA256. See the README for how a projector without SHA256 is recognised.
 
     Usage:
@@ -304,11 +304,11 @@ class PJLink:
         try:
             raw_line = await reader.readuntil(b"\r")
         except asyncio.IncompleteReadError as err:
-            raise PJLinkConnectionClosed("projector closed the connection") from err
+            raise PJLinkConnectionClosedError("projector closed the connection") from err
         except asyncio.LimitOverrunError as err:
             raise PJLinkProtocolError("response from projector is too long") from err
         except OSError as err:
-            raise PJLinkConnectionClosed(f"connection error - {err}") from err
+            raise PJLinkConnectionClosedError(f"connection error - {err}") from err
 
         # The spec prescribes UTF-8, but free text (a projector name, say) does turn up in other encodings. That must
         # not make the whole answer unreadable: undecodable bytes become U+FFFD. The fields that are not free text are
@@ -321,7 +321,7 @@ class PJLink:
         Calls are serialised, so this can be used from several tasks at once. The whole call, from connecting
         to the answer, is bound by `timeout_seconds`.
 
-        Raises a subclass of `PJLinkException` for anything that goes wrong while talking to the projector.
+        Raises a subclass of `PJLinkError` for anything that goes wrong while talking to the projector.
         """
         async with self._command_lock:
             try:
@@ -338,7 +338,7 @@ class PJLink:
 
         The try is bound by `timeout_seconds` (but see `_MINIMUM_DIGEST_ANSWER_SECONDS`).
         `sha256_only` is the second try after a rejected MD5 digest: it asks for SHA256 and never falls back
-        (a projector that does not do it raises `PJLinkPassword`: the password was wrong).
+        (a projector that does not do it raises `PJLinkAuthenticationError`: the password was wrong).
         """
         self._prepare_session()
         try:
@@ -350,16 +350,16 @@ class PJLink:
         finally:
             await self._release_session()
 
-    def _timeout_error(self, *, sha256_only: bool) -> PJLinkException:
+    def _timeout_error(self, *, sha256_only: bool) -> PJLinkError:
         """The exception for a deadline that expired, which says what the command was waiting for."""
         session = self._session
         if session is None:
-            return PJLinkNoConnection(_Phase.CONNECT.value)
+            return PJLinkNoConnectionError(_Phase.CONNECT.value)
         if sha256_only and session.phase is _Phase.RESPONSE and session.digest_sent:
             # MD5 was rejected before, and now the projector sits on our SHA256 digest: a projector that dislikes
             # a digest answers only after two seconds (§5.1). The password is wrong, not the connection.
-            return PJLinkPassword("authentication failed")
-        return PJLinkNoConnection(session.phase.value)
+            return PJLinkAuthenticationError("authentication failed")
+        return PJLinkNoConnectionError(session.phase.value)
 
     async def _send_until_answered(
         self, command: PJCommand, deadline: asyncio.Timeout, *, sha256_only: bool
@@ -375,7 +375,7 @@ class PJLink:
                 # Whatever is waiting on a kept connection is not the answer to this command.
                 await self._discard_unsolicited(kept_session)
                 return kept_session, await self._send_and_read(kept_session, command.line, deadline)
-            except PJLinkConnectionClosed:
+            except PJLinkConnectionClosedError:
                 if not command.is_query:
                     raise
                 LOGGER.debug("reused connection was closed by the projector, reconnecting")
@@ -401,10 +401,10 @@ class PJLink:
 
         self._drop_session(session)
         if self._authentication is PJAuth.SHA256:
-            raise PJLinkNotSupported("SHA256 authentication not supported by the projector")
+            raise PJLinkNotSupportedError("SHA256 authentication not supported by the projector")
         if sha256_only:
             # The first try had its MD5 digest rejected, and the projector does not say yes to SHA256 either.
-            raise PJLinkPassword("authentication failed")
+            raise PJLinkAuthenticationError("authentication failed")
         # Assumed from now on, even if the new connection fails: a projector that cannot cope with the question
         # must not be asked again by every connection. If it was a SHA256 projector that missed it, the rejected
         # MD5 digest puts that right.
@@ -419,7 +419,7 @@ class PJLink:
         try:
             reader, writer = await asyncio.open_connection(self._address, self._port)
         except OSError as err:
-            raise PJLinkNoConnection(f"connection failed - {err}") from err
+            raise PJLinkNoConnectionError(f"connection failed - {err}") from err
         LOGGER.debug("connected to %s:%s", self._address, self._port)
         session = _Session(reader, writer)
         # From here on, however the command ends, `_release_session` keeps or drops this connection.
@@ -439,10 +439,10 @@ class PJLink:
         session.phase = _Phase.RESPONSE
         try:
             return await self._read_line(session.reader)
-        except PJLinkConnectionClosed as err:
+        except PJLinkConnectionClosedError as err:
             if not session.digest_sent or self._password_accepted:
                 raise
-            raise PJLinkPassword(
+            raise PJLinkAuthenticationError(
                 "projector closed the connection after the password was sent - the password is probably wrong"
             ) from err
 
@@ -484,7 +484,7 @@ class PJLink:
         if md5_was_used and self._authentication is PJAuth.AUTO and not session.sha256_declined:
             # The projector never said it does not do SHA256: ask again (see `_transmit`).
             raise _Md5RejectedError
-        raise PJLinkPassword("authentication failed")
+        raise PJLinkAuthenticationError("authentication failed")
 
     def _should_ask_for_sha256(self) -> bool:
         """True if a new connection should ask the projector for SHA256 (§5.1)."""
@@ -517,7 +517,7 @@ class PJLink:
                 session.writer.write(SHA256_INQUIRY.encode("ascii"))
                 await session.writer.drain()
                 security_reply = await self._read_line(session.reader)
-        except (TimeoutError, PJLinkConnectionClosed, PJLinkProtocolError, OSError):
+        except (TimeoutError, PJLinkConnectionClosedError, PJLinkProtocolError, OSError):
             LOGGER.debug("no answer to the security level inquiry")
             return None
 
@@ -553,7 +553,7 @@ class PJLink:
             session.writer.write(request_bytes)
             await session.writer.drain()
         except OSError as err:
-            raise PJLinkConnectionClosed(f"connection error - {err}") from err
+            raise PJLinkConnectionClosedError(f"connection error - {err}") from err
 
     @staticmethod
     async def _discard_unsolicited(session: _Session) -> None:
@@ -564,7 +564,7 @@ class PJLink:
         except TimeoutError:  # Before OSError, which it is a subclass of.
             return
         except OSError as err:
-            raise PJLinkConnectionClosed(f"connection error - {err}") from err
+            raise PJLinkConnectionClosedError(f"connection error - {err}") from err
         if unsolicited_bytes:
             LOGGER.debug("discarded unsolicited data from the projector: %r", unsolicited_bytes)
 

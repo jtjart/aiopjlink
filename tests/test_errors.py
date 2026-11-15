@@ -41,13 +41,13 @@ class ErrorGroup(unittest.IsolatedAsyncioTestCase):
                 )
 
             # Bad error from the projector - too many errors.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%1ERST ?\r", respond_with=b"%1ERST=0000000\r"):
                     errors = await client.errors.query()
             self.assertEqual(str(err.exception), "unexpected number of error types reported")
 
             # Bad error from the projector - unknown error type.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%1ERST ?\r", respond_with=b"%1ERST=003000\r"):
                     errors = await client.errors.query()
             self.assertEqual(str(err.exception), "unknown error level")

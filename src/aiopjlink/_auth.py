@@ -9,7 +9,7 @@ import hashlib
 import re
 import secrets
 
-from .exceptions import PJLinkPassword, PJLinkProtocolError
+from .exceptions import PJLinkAuthenticationError, PJLinkProtocolError
 
 SHA256_INQUIRY = "PJLINK 2\r"
 """The controller's question after the greeting: which security level does the projector support? (§5.1, (1-2))"""
@@ -46,13 +46,13 @@ def build_md5_request(welcome_line: str, command_line: str, password: str | None
     """Turn the projector's welcome line and a command line into the bytes to send (§5.1, §5.2).
 
     Raises `PJLinkProtocolError` if the welcome line is not valid,
-    and `PJLinkPassword` if the projector wants a password and none was given.
+    and `PJLinkAuthenticationError` if the projector wants a password and none was given.
     """
     if not authentication_required(welcome_line):
         return command_line.encode(encoding)
 
     if password is None:
-        raise PJLinkPassword("password required")
+        raise PJLinkAuthenticationError("password required")
 
     # Read the random number used to salt the password (excluding the terminating `\r`).
     token = welcome_line[9:-1]

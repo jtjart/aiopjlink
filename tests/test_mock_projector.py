@@ -4,8 +4,8 @@ import unittest
 import aiopjlink
 from aiopjlink._protocol import PJCommand
 from mock_projector import (
-    NoClientMessage,
-    UnexpectedClientMessage,
+    NoClientMessageError,
+    UnexpectedClientMessageError,
     mock_client_server_noauth,
     mock_tcp_pjlink,
 )
@@ -17,14 +17,14 @@ class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
     async def test_mock_nonresponse(self) -> None:
         """
         The test framework notices that the client has not issued the expected command.
-        It times out with a `NoClientMessage` and closes the server.
+        It times out with a `NoClientMessageError` and closes the server.
         """
         # Start server with no auth.
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK 0\r")
 
             # Expect a POWR status request.
-            with self.assertRaises(NoClientMessage):
+            with self.assertRaises(NoClientMessageError):
                 async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r"):
                     # Never give one.
                     pass
@@ -33,7 +33,7 @@ class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
         """
         The test framework notices that the client has issued an "incorrect" command
         to the one that was expected (in this case, during auth).
-        It catches this error, closes the server, and issues an `UnexpectedClientMessage`.
+        It catches this error, closes the server, and issues an `UnexpectedClientMessageError`.
 
         This helps us check the tests are written correctly without super complex error messages.
         """
@@ -42,18 +42,18 @@ class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
             server.open_and_send(b"PJLINK 1 21d0e96e\r")
 
             # Expect an unexpected message (valid test behaviour).
-            with self.assertRaises(UnexpectedClientMessage):
+            with self.assertRaises(UnexpectedClientMessageError):
                 # Compute what the projector expects to see if the password was actually "ABC123"
                 # with the above salt token (21d0e96e).
                 salted_password = hashlib.md5(b"21d0e96eABC123").hexdigest().encode()
                 expected_cmd = bytes(salted_password) + b"%1POWR ?\r"
 
-                # Tell the test framework to raise an UnexpectedClientMessage
+                # Tell the test framework to raise an UnexpectedClientMessageError
                 # if we get a different password sent from the client.  In this case, that is
                 # what we want (not an auth error) because we are testing our ability to mock
                 # a projector and NOT the behaviour of the projector.
                 async with server.when(expected_cmd, respond_with=b"%1POWR=0\r"):
-                    # Give a junk password to trigger the UnexpectedClientMessage.
+                    # Give a junk password to trigger the UnexpectedClientMessageError.
                     link = server.client(password="INCORRECT", authentication=aiopjlink.PJAuth.MD5)
                     await link.power.get()
 
@@ -82,7 +82,7 @@ class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(value, "0")
 
             # Check that the test framework handles the mistake in the test code.
-            with self.assertRaises(UnexpectedClientMessage):
+            with self.assertRaises(UnexpectedClientMessageError):
                 async with server.when(b"SOME_MESSAGE\r", respond_with=b"%1POWR=0\r"):
                     await client._transmit(PJCommand("POWR", "?", aiopjlink.PJClass.ONE))
 
@@ -101,8 +101,8 @@ class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(value, "2")
 
             # Expect a POWR followed by a CLSS - but don't get it, so we should
-            # expect a warning about the test case: UnexpectedClientMessage
-            with self.assertRaises(UnexpectedClientMessage):
+            # expect a warning about the test case: UnexpectedClientMessageError
+            with self.assertRaises(UnexpectedClientMessageError):
                 async with (
                     server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r"),
                     server.when(b"%1CLSS ?\r", respond_with=b"%1CLSS=2\r"),

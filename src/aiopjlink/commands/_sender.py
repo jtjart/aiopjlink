@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 
 from .._protocol import PJCommand
 from ..enums import PJClass
-from ..exceptions import PJLinkNotReady, PJLinkNotSupported, PJLinkUnexpectedResponseParameter
+from ..exceptions import PJLinkNotReadyError, PJLinkNotSupportedError, PJLinkUnexpectedValueError
 
 TransmitCommand = Callable[[PJCommand], Awaitable[str]]
 """Sends one command and returns the response parameter: what `PJLink` gives to the command groups."""
@@ -35,9 +35,9 @@ class CommandSender:
         """
         try:
             return await self._transmit_command(PJCommand(command, parameter, pjclass))
-        except PJLinkNotSupported as err:
+        except PJLinkNotSupportedError as err:
             if not_supported_message is not None and err.command is not None:
-                raise PJLinkNotSupported(not_supported_message, command=command) from err
+                raise PJLinkNotSupportedError(not_supported_message, command=command) from err
             raise
 
     async def query_status(self, command: str, pjclass: PJClass, *, not_supported_message: str | None = None) -> str:
@@ -52,7 +52,7 @@ class CommandSender:
         """
         response_parameter = await self.transmit(command, "?", pjclass, not_supported_message=not_supported_message)
         if response_parameter.upper() == "OK":
-            raise PJLinkNotReady("projector answered a status query with OK", command=command)
+            raise PJLinkNotReadyError("projector answered a status query with OK", command=command)
         return response_parameter
 
     async def transmit_expecting_ok(
@@ -66,4 +66,4 @@ class CommandSender:
             command, parameter, pjclass, not_supported_message=not_supported_message
         )
         if response_parameter.upper() != "OK":
-            raise PJLinkUnexpectedResponseParameter("expected OK response")
+            raise PJLinkUnexpectedValueError("expected OK response")

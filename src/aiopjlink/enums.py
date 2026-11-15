@@ -40,7 +40,7 @@ class PJAuth(Enum):
     rejected later by a projector that never said it lacks SHA256, the command asks again, for SHA256 only. """
 
     SHA256 = "sha256"
-    """ SHA256 only: a projector that does not support it is an error (`PJLinkNotSupported`), never a downgrade. """
+    """SHA256 only: a projector that does not support it is an error (`PJLinkNotSupportedError`), never a downgrade."""
 
     MD5 = "md5"
-    """ MD5 only: `PJLINK 2` is never sent. For projectors that cannot cope with the question. """
+    """MD5 only: `PJLINK 2` is never sent. For projectors that cannot cope with the question."""

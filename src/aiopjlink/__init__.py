@@ -18,7 +18,7 @@ A projector that has been set up to do so reports changes of its state by itself
     async for notification in listen_notifications():
         print(notification.address, notification.event)
 
-Everything raised while talking to a projector derives from `PJLinkException`.
+Everything raised while talking to a projector derives from `PJLinkError`.
 See the README for connection handling and error handling.
 """
 
@@ -39,18 +39,18 @@ from .client import PJLink
 from .commands import Errors, Filter, Freeze, Information, Lamp, Mute, Power, Sources, Volume
 from .enums import PJAuth, PJClass
 from .exceptions import (
-    PJLinkConnectionClosed,
+    PJLinkAuthenticationError,
+    PJLinkConnectionClosedError,
     PJLinkConnectionError,
-    PJLinkDeviceFailure,
-    PJLinkException,
-    PJLinkInvalidParameter,
-    PJLinkNoConnection,
-    PJLinkNotReady,
-    PJLinkNotSupported,
-    PJLinkPassword,
+    PJLinkError,
+    PJLinkInvalidParameterError,
+    PJLinkMalfunctionError,
+    PJLinkNoConnectionError,
+    PJLinkNotReadyError,
+    PJLinkNotSupportedError,
     PJLinkProjectorError,
     PJLinkProtocolError,
-    PJLinkUnexpectedResponseParameter,
+    PJLinkUnexpectedValueError,
 )
 
 __all__ = [
@@ -68,18 +68,18 @@ __all__ = [
     "PJAuth",
     "PJClass",
     "PJLink",
-    "PJLinkConnectionClosed",
+    "PJLinkAuthenticationError",
+    "PJLinkConnectionClosedError",
     "PJLinkConnectionError",
-    "PJLinkDeviceFailure",
-    "PJLinkException",
-    "PJLinkInvalidParameter",
-    "PJLinkNoConnection",
-    "PJLinkNotReady",
-    "PJLinkNotSupported",
-    "PJLinkPassword",
+    "PJLinkError",
+    "PJLinkInvalidParameterError",
+    "PJLinkMalfunctionError",
+    "PJLinkNoConnectionError",
+    "PJLinkNotReadyError",
+    "PJLinkNotSupportedError",
     "PJLinkProjectorError",
     "PJLinkProtocolError",
-    "PJLinkUnexpectedResponseParameter",
+    "PJLinkUnexpectedValueError",
     "Power",
     "PowerChanged",
     "SearchResult",

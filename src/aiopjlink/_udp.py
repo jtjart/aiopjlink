@@ -12,7 +12,7 @@ import socket
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from .exceptions import PJLinkNoConnection
+from .exceptions import PJLinkNoConnectionError
 
 PJLINK_UDP_PORT = 4352
 """The UDP port of the PJLink search and status notification protocols (§3.2, §3.3)."""
@@ -66,13 +66,13 @@ async def open_endpoint(
 
     Yields the socket so callers can send datagrams directly.
 
-    Raises `PJLinkNoConnection` if socket creation or binding fails.
+    Raises `PJLinkNoConnectionError` if socket creation or binding fails.
     The `purpose` argument identifies the operation in the resulting error.
     """
     try:
         udp_socket = socket.socket(family, socket.SOCK_DGRAM)
     except OSError as err:
-        raise PJLinkNoConnection(f"{purpose} failed - {err}") from err
+        raise PJLinkNoConnectionError(f"{purpose} failed - {err}") from err
 
     try:
         udp_socket.setblocking(False)
@@ -82,7 +82,7 @@ async def open_endpoint(
 
     except OSError as err:
         udp_socket.close()
-        raise PJLinkNoConnection(f"{purpose} failed - {err}") from err
+        raise PJLinkNoConnectionError(f"{purpose} failed - {err}") from err
 
     try:
         transport, _ = await asyncio.get_running_loop().create_datagram_endpoint(lambda: protocol, sock=udp_socket)

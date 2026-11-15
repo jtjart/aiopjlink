@@ -55,15 +55,15 @@ class PJLinkTestFrameworkError(Exception):
     """Base exception for problems with the test framework."""
 
 
-class NoClientMessage(PJLinkTestFrameworkError):
+class NoClientMessageError(PJLinkTestFrameworkError):
     """The test case fails because the test case didn't send a client message."""
 
 
-class UnexpectedClientMessage(PJLinkTestFrameworkError):
+class UnexpectedClientMessageError(PJLinkTestFrameworkError):
     """The test case fails because the test case expected something the client didn't send."""
 
 
-class NoExpectations(PJLinkTestFrameworkError):
+class NoExpectationsError(PJLinkTestFrameworkError):
     """The test case fails because the mock projector recieves a command before it is told how to respond."""
 
 
@@ -135,7 +135,7 @@ class PJLinkServerProtocol(asyncio.Protocol):
         if self._receive_buffer.endswith(b"\r"):
             # Handle bad test case programming.
             if not len(self._expected_events):
-                raise NoExpectations("mock projector got a message before it was told to expect data")
+                raise NoExpectationsError("mock projector got a message before it was told to expect data")
 
             # Pop the next expected event off.
             expected = self._expected_events.pop(0)
@@ -171,8 +171,8 @@ class PJLinkServerProtocol(asyncio.Protocol):
         When the projector recieves an incoming message, it should respond with
         a reply within n seconds.
 
-        If the projector recieves nothing from the client, raise `NoClientMessage`.
-        If the projector recieves a different message, raise `UnexpectedClientMessage`.
+        If the projector recieves nothing from the client, raise `NoClientMessageError`.
+        If the projector recieves a different message, raise `UnexpectedClientMessageError`.
 
         Other exceptions are passed through for handling by the test case.
         """
@@ -188,7 +188,7 @@ class PJLinkServerProtocol(asyncio.Protocol):
             # The projector hangs up on a message it did not expect. A client that reconnects after a
             # hang-up (see `aiopjlink._transport`) does not see an error, so check the message here as well.
             if expected.receive_buffer_contents != expected.incoming:
-                raise UnexpectedClientMessage(
+                raise UnexpectedClientMessageError(
                     f"projector expected {expected.incoming!r} from the client "
                     f"but got {expected.receive_buffer_contents!r}"
                 )
@@ -201,24 +201,24 @@ class PJLinkServerProtocol(asyncio.Protocol):
         except asyncio.exceptions.TimeoutError as err:
             # print("⌚ probably no message from client")
             if not expected.receive_buffer_contents:
-                raise NoClientMessage(
+                raise NoClientMessageError(
                     f"projector recieved no data from client (within={expected.timeout_seconds}s)"
                 ) from err
 
-        except aiopjlink.PJLinkConnectionClosed:
+        except aiopjlink.PJLinkConnectionClosedError:
             # print("🚌 probably transport closed on purpose after bad message")
             # Check the object state to see if it got a bad message.
             if expected.receive_buffer_contents != expected.incoming:
-                raise UnexpectedClientMessage(
+                raise UnexpectedClientMessageError(
                     f"projector expected {expected.incoming!r} from the client "
                     f"but got {expected.receive_buffer_contents!r}"
                 ) from None
 
-        except aiopjlink.PJLinkPassword:
+        except aiopjlink.PJLinkAuthenticationError:
             # A wrong password makes a projector hang up (or send ERRA). If the message was not the one
             # the test expected, that is a test bug; otherwise let the test case see the error.
             if expected.receive_buffer_contents != expected.incoming:
-                raise UnexpectedClientMessage(
+                raise UnexpectedClientMessageError(
                     f"projector expected {expected.incoming!r} from the client "
                     f"but got {expected.receive_buffer_contents!r}"
                 ) from None

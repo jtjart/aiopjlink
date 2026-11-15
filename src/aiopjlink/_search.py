@@ -21,7 +21,7 @@ from typing import Any
 from ._debug import LOGGER
 from ._protocol import SEARCH_REQUEST, parse_search_response
 from ._udp import MAX_PORT_NUMBER, PJLINK_UDP_PORT, open_endpoint, resolve_address, source_address
-from .exceptions import PJLinkNoConnection, PJLinkProtocolError
+from .exceptions import PJLinkNoConnectionError, PJLinkProtocolError
 
 DEFAULT_SEARCH_DURATION_SECONDS = 30.0
 """How long the controller listens for answers (§3.2.1, step 2), in seconds."""
@@ -108,7 +108,7 @@ def _send_requests(udp_socket: socket.socket, targets: list[tuple[Any, ...]]) ->
             LOGGER.debug("could not send search request to %s: %s", target_sockaddr[0], err)
             send_errors.append(err)
     if len(send_errors) == len(targets):
-        raise PJLinkNoConnection(f"search failed - {send_errors[0]}") from send_errors[0]
+        raise PJLinkNoConnectionError(f"search failed - {send_errors[0]}") from send_errors[0]
 
 
 async def _next_result(answers: asyncio.Queue[SearchResult], deadline: float) -> SearchResult | None:
@@ -160,7 +160,7 @@ async def search(
         local_port: The local UDP port to send from and listen on. The projector may answer the port the
             request came from or port 4352 (Fig. 1 of the spec leaves that open), and 4352 is right for both,
             so that is the default. It means that only one search can run per local address at a time:
-            a second one fails with `PJLinkNoConnection`. 0 lets the operating system choose a port,
+            a second one fails with `PJLinkNoConnectionError`. 0 lets the operating system choose a port,
             which only suits projectors that answer the port the request came from.
 
     Yields:
@@ -168,7 +168,7 @@ async def search(
 
     Raises:
         ValueError: An argument is not valid (raised when the iteration starts, before anything is sent).
-        PJLinkNoConnection: The socket could not be opened or bound (e.g. the local port is in use), or the
+        PJLinkNoConnectionError: The socket could not be opened or bound (e.g. the local port is in use), or the
             search start instruction could not be sent at all (e.g. there is no network).
     """
     if duration_seconds <= 0:

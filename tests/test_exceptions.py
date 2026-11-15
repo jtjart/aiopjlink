@@ -3,8 +3,8 @@ from collections.abc import Awaitable, Callable
 
 import aiopjlink
 from aiopjlink import (
-    PJLinkNotReady,
-    PJLinkNotSupported,
+    PJLinkNotReadyError,
+    PJLinkNotSupportedError,
 )
 from mock_projector import mock_client_server_noauth
 
@@ -14,9 +14,9 @@ class Err1MeaningTests(unittest.IsolatedAsyncioTestCase):
 
     async def _err1(
         self, command: bytes, respond: bytes, call: Callable[[aiopjlink.PJLink], Awaitable[object]]
-    ) -> PJLinkNotSupported:
+    ) -> PJLinkNotSupportedError:
         async with mock_client_server_noauth() as (server, client):
-            with self.assertRaises(PJLinkNotSupported) as ctx:
+            with self.assertRaises(PJLinkNotSupportedError) as ctx:
                 async with server.when(command, respond_with=respond):
                     await call(client)
         return ctx.exception
@@ -63,7 +63,7 @@ class OkToQueryTests(unittest.IsolatedAsyncioTestCase):
         for command, respond, call, name in cases:
             with self.subTest(command=command):
                 async with mock_client_server_noauth() as (server, client):
-                    with self.assertRaises(PJLinkNotReady) as ctx:
+                    with self.assertRaises(PJLinkNotReadyError) as ctx:
                         async with server.when(command, respond_with=respond):
                             await call(client)
                 self.assertEqual(ctx.exception.command, name)

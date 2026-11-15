@@ -4,7 +4,7 @@ Audio and video mute (§4.5 AVMT, §4.6 AVMT ?).
 """
 
 from ..enums import PJClass
-from ..exceptions import PJLinkUnexpectedResponseParameter
+from ..exceptions import PJLinkUnexpectedValueError
 from ._sender import CommandSender
 
 
@@ -36,7 +36,7 @@ class Mute:
         # Not defined as a query response (§4.6), but some projectors report "not muted" like this
         if mute_code in ("10", "20"):
             return False, False
-        raise PJLinkUnexpectedResponseParameter("unexpected mute response")
+        raise PJLinkUnexpectedValueError("unexpected mute response")
 
     async def video(self, muted: bool) -> None:
         """Set if the video track should be muted (True to mute, False to unmute)."""

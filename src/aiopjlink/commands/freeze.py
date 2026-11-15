@@ -4,7 +4,7 @@ Freeze the picture (§4.25 FREZ, §4.26 FREZ ?).
 """
 
 from ..enums import PJClass
-from ..exceptions import PJLinkUnexpectedResponseParameter
+from ..exceptions import PJLinkUnexpectedValueError
 from ._sender import CommandSender
 
 
@@ -30,4 +30,4 @@ class Freeze:
             return False
         if response_parameter == "1":
             return True
-        raise PJLinkUnexpectedResponseParameter("unexpected freeze state")
+        raise PJLinkUnexpectedValueError("unexpected freeze state")

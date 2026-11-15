@@ -2,7 +2,7 @@ import unittest
 
 import aiopjlink
 from mock_projector import (
-    NoClientMessage,
+    NoClientMessageError,
     mock_client_server_noauth,
 )
 
@@ -38,7 +38,7 @@ class MuteGroup(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(audio, True)
 
             # Bad information from projector.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%1AVMT ?\r", respond_with=b"%1AVMT=41\r"):
                     video, audio = await client.mute.status()
             self.assertEqual(str(err.exception), "unexpected mute response")
@@ -106,6 +106,6 @@ class MuteGroup(unittest.IsolatedAsyncioTestCase):
                 await client.mute.set(video=False, audio=None)
 
             # Nothing specified - so no messages sent.
-            with self.assertRaises(NoClientMessage):
+            with self.assertRaises(NoClientMessageError):
                 async with server.when(b"%1XXXX 11\r", respond_with=b"NOTHING\r"):
                     await client.mute.set(None, None)

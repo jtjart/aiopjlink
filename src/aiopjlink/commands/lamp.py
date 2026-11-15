@@ -6,7 +6,7 @@ Lamp status and replacement models (§4.8 LAMP ?, §4.21 RLMP ?).
 from enum import Enum
 
 from ..enums import PJClass
-from ..exceptions import PJLinkUnexpectedResponseParameter
+from ..exceptions import PJLinkUnexpectedValueError
 from ._sender import CommandSender
 
 _UNPARSABLE_STATUS = "unparsable lamp status"
@@ -37,12 +37,12 @@ class Lamp:
         response_parameter = await self._sender.query_status("LAMP", PJClass.ONE, not_supported_message="no lamp")
         tokens = response_parameter.split()
         if not tokens:
-            raise PJLinkUnexpectedResponseParameter(_UNPARSABLE_STATUS)
+            raise PJLinkUnexpectedValueError(_UNPARSABLE_STATUS)
         try:
             hours_and_states = zip(tokens[::2], tokens[1::2], strict=True)
             return [(int(hours), Lamp.State(state)) for hours, state in hours_and_states]
         except ValueError as err:
-            raise PJLinkUnexpectedResponseParameter(_UNPARSABLE_STATUS) from err
+            raise PJLinkUnexpectedValueError(_UNPARSABLE_STATUS) from err
 
     async def hours(self) -> int:
         """How long has the first lamp been on (hour, integer).

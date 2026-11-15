@@ -87,6 +87,7 @@ select = [
     "ARG",     # flake8-unused-arguments
     "PLR0914", # pylint: too-many-locals
     "RUF029",  # ruff: unused-async
+    "N",       # pep8-naming
 ]
 preview = true
 explicit-preview-rules = true

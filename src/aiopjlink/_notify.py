@@ -27,7 +27,7 @@ from ._protocol import parse_mac_address, split_notification
 from ._udp import MAX_PORT_NUMBER, PJLINK_UDP_PORT, open_endpoint, resolve_address, source_address
 from .commands.errors import Errors, parse_error_levels
 from .commands.sources import Sources, parse_input_source
-from .exceptions import PJLinkProtocolError, PJLinkUnexpectedResponseParameter
+from .exceptions import PJLinkProtocolError, PJLinkUnexpectedValueError
 
 # The notifications that have arrived but are not yet taken by the caller. The port is open to the whole network and
 # nothing authenticates the sender, so a slow caller must not let a flood of datagrams use up memory. UDP loses
@@ -93,7 +93,7 @@ class Notification:
 def parse_event(datagram_text: str) -> NotificationEvent:
     """Turn the text of a notification datagram (§3.3.2) into the event it describes.
 
-    Raises `PJLinkProtocolError` if it is not a notification, and `PJLinkUnexpectedResponseParameter`
+    Raises `PJLinkProtocolError` if it is not a notification, and `PJLinkUnexpectedValueError`
     if it is one but holds a value that is not defined for it.
     """
     command, parameter = split_notification(datagram_text)
@@ -106,7 +106,7 @@ def parse_event(datagram_text: str) -> NotificationEvent:
         return ErrorsChanged(parse_error_levels(parameter))
     if command == "POWR":
         if parameter not in ("0", "1"):
-            raise PJLinkUnexpectedResponseParameter("unexpected power status notification")
+            raise PJLinkUnexpectedValueError("unexpected power status notification")
         return PowerChanged(powered_on=parameter == "1")
     if command == "INPT":
         mode, index = parse_input_source(parameter)
@@ -124,7 +124,7 @@ class _NotificationProtocol(asyncio.DatagramProtocol):
         sender_address = source_address(addr)
         try:
             event = parse_event(data.decode("ascii", errors="replace"))
-        except (PJLinkProtocolError, PJLinkUnexpectedResponseParameter) as err:
+        except (PJLinkProtocolError, PJLinkUnexpectedValueError) as err:
             # Includes the search protocol's datagrams, which use the same port.
             LOGGER.debug("ignoring datagram from %s: %s", sender_address, err)
             return
@@ -174,7 +174,7 @@ async def listen_notifications(
 
     Raises:
         ValueError: An argument is not valid (raised when the iteration starts).
-        PJLinkNoConnection: The socket could not be opened or bound, e.g. because the local port is in use.
+        PJLinkNoConnectionError: The socket could not be opened or bound, e.g. because the local port is in use.
     """
     if not 0 < local_port <= MAX_PORT_NUMBER:
         raise ValueError("local_port must be between 1 and 65535")

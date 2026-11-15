@@ -163,7 +163,7 @@ class ParseEventTests(unittest.TestCase):
                 parse_event(data)
 
     def test_invalid_value(self) -> None:
-        """A notification, but with a value that does not exist: `PJLinkUnexpectedResponseParameter`."""
+        """A notification, but with a value that does not exist: `PJLinkUnexpectedValueError`."""
         cases = {
             "%2POWR=2\r": "unexpected power status notification",  # Cooling is not a notifiable state.
             "%2POWR=OK\r": "unexpected power status notification",
@@ -176,7 +176,7 @@ class ParseEventTests(unittest.TestCase):
         }
         for data, message in cases.items():
             with self.subTest(data=data):
-                with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+                with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
                     parse_event(data)
                 self.assertEqual(str(err.exception), message)
 
@@ -357,13 +357,13 @@ class ReleaseTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
-    """What goes wrong on this machine is a `PJLinkNoConnection`; a wrong argument is a `ValueError`."""
+    """What goes wrong on this machine is a `PJLinkNoConnectionError`; a wrong argument is a `ValueError`."""
 
     async def test_local_port_in_use(self) -> None:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as blocker:
             blocker.bind((LOCALHOST, 0))
             port = blocker.getsockname()[1]
-            with self.assertRaises(aiopjlink.PJLinkNoConnection) as err:
+            with self.assertRaises(aiopjlink.PJLinkNoConnectionError) as err:
                 await start_listening(**listener_arguments(port))
         self.assertTrue(str(err.exception).startswith("listening for notifications failed - "), str(err.exception))
         self.assertIsInstance(err.exception, aiopjlink.PJLinkConnectionError)
@@ -373,7 +373,7 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
         async with contextlib.aclosing(listen_notifications(**listener_arguments(port))) as first:
             pending = asyncio.ensure_future(take_notifications(first, 1))
             await asyncio.sleep(0)
-            with self.assertRaises(aiopjlink.PJLinkNoConnection):
+            with self.assertRaises(aiopjlink.PJLinkNoConnectionError):
                 await start_listening(**listener_arguments(port))
             pending.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -385,7 +385,7 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
         async with contextlib.aclosing(listen_notifications(**listener_arguments(port))) as found:
             pending = asyncio.ensure_future(take_notifications(found, 1))
             await asyncio.sleep(0)
-            with self.assertRaises(aiopjlink.PJLinkNoConnection):
+            with self.assertRaises(aiopjlink.PJLinkNoConnectionError):
                 await search_all(
                     duration_seconds=0.1, broadcast_address=LOCALHOST, local_address=LOCALHOST, local_port=port
                 )
@@ -394,7 +394,7 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
                 await pending
 
     async def test_local_address_not_on_this_machine(self) -> None:
-        with self.assertRaises(aiopjlink.PJLinkNoConnection):
+        with self.assertRaises(aiopjlink.PJLinkNoConnectionError):
             await start_listening(local_address="192.0.2.1", local_port=unused_udp_port())
 
     async def test_no_socket_can_be_made(self) -> None:
@@ -402,7 +402,7 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
         port = unused_udp_port()
         with (
             mock.patch.object(socket, "socket", side_effect=OSError(errno.EAFNOSUPPORT, "not supported")),
-            self.assertRaises(aiopjlink.PJLinkNoConnection) as err,
+            self.assertRaises(aiopjlink.PJLinkNoConnectionError) as err,
         ):
             await start_listening(**listener_arguments(port))
         self.assertEqual(

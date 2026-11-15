@@ -12,10 +12,10 @@ from dataclasses import dataclass, field
 from ._debug import LOGGER, redact_debug_payload
 from .enums import PJClass
 from .exceptions import (
-    PJLinkDeviceFailure,
-    PJLinkInvalidParameter,
-    PJLinkNotReady,
-    PJLinkNotSupported,
+    PJLinkInvalidParameterError,
+    PJLinkMalfunctionError,
+    PJLinkNotReadyError,
+    PJLinkNotSupportedError,
     PJLinkProtocolError,
 )
 
@@ -83,13 +83,13 @@ def parse_response(
 
     parameter_uppercase = parameter.upper()
     if parameter_uppercase == "ERR1":
-        raise PJLinkNotSupported("unsupported command", command=command)
+        raise PJLinkNotSupportedError("unsupported command", command=command)
     if parameter_uppercase == "ERR2":
-        raise PJLinkInvalidParameter("out of parameter", command=command)
+        raise PJLinkInvalidParameterError("out of parameter", command=command)
     if parameter_uppercase == "ERR3":
-        raise PJLinkNotReady("unavailable in the current state", command=command)
+        raise PJLinkNotReadyError("unavailable in the current state", command=command)
     if parameter_uppercase == "ERR4":
-        raise PJLinkDeviceFailure("projector or display failure", command=command)
+        raise PJLinkMalfunctionError("projector or display failure", command=command)
 
     return command, parameter
 
