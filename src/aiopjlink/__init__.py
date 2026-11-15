@@ -7,9 +7,9 @@ Create one `PJLink` and use its command groups (`power`, `sources`, `mute`, `err
         await link.power.turn_on()
         print(await link.errors.query())
 
-Projectors on the network are found with `search` (or `search_iter`, which yields each one as it answers)::
+Projectors on the network are found with `search`, which yields each one as it answers::
 
-    for found in await search(duration_seconds=12):
+    async for found in search(duration_seconds=12):
         print(found.address, found.mac_address)
 
 A projector that has been set up to do so reports changes of its state by itself (power, errors, input).
@@ -33,20 +33,10 @@ from ._notify import (
     PowerChanged,
     listen_notifications,
 )
-from ._search import SearchResult, search, search_iter
+from ._search import SearchResult, search
 from ._version import __version__
 from .client import PJLink
-from .commands import (
-    Errors,
-    Filter,
-    Freeze,
-    Information,
-    Lamp,
-    Mute,
-    Power,
-    Sources,
-    Volume,
-)
+from .commands import Errors, Filter, Freeze, Information, Lamp, Mute, Power, Sources, Volume
 from .enums import PJAuth, PJClass
 from .exceptions import (
     PJLinkConnectionClosed,
@@ -98,5 +88,4 @@ __all__ = [
     "__version__",
     "listen_notifications",
     "search",
-    "search_iter",
 ]

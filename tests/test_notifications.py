@@ -25,7 +25,7 @@ from aiopjlink import (
 )
 from aiopjlink._notify import _MAX_PENDING_NOTIFICATIONS, _NotificationProtocol, parse_event
 from aiopjlink._protocol import parse_mac_address, split_notification
-from mock_projector import LOCALHOST, ipv6_loopback_available, unused_udp_port
+from mock_projector import LOCALHOST, ipv6_loopback_available, search_all, unused_udp_port
 
 MAC = "00:11:22:33:44:55"
 MAX_WAIT_SECONDS = 2.0
@@ -386,7 +386,7 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
             pending = asyncio.ensure_future(take_notifications(found, 1))
             await asyncio.sleep(0)
             with self.assertRaises(aiopjlink.PJLinkNoConnection):
-                await aiopjlink.search(
+                await search_all(
                     duration_seconds=0.1, broadcast_address=LOCALHOST, local_address=LOCALHOST, local_port=port
                 )
             pending.cancel()
@@ -427,7 +427,7 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
                     if argument == "local_address":
                         await start_listening(local_address="", local_port=unused_udp_port())
                     else:
-                        await aiopjlink.search(broadcast_address="", duration_seconds=0.1, local_port=0)
+                        await search_all(broadcast_address="", duration_seconds=0.1, local_port=0)
                 self.assertIn("is not a usable IP address", str(err.exception))
 
     async def test_invalid_arguments(self) -> None:

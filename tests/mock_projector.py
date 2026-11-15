@@ -46,6 +46,11 @@ def ipv6_loopback_available() -> bool:
     return True
 
 
+async def search_all(**arguments: Any) -> list[aiopjlink.SearchResult]:
+    """Run `aiopjlink.search` to the end and return everything it found."""
+    return [result async for result in aiopjlink.search(**arguments)]
+
+
 class PJLinkTestFrameworkError(Exception):
     """Base exception for problems with the test framework."""
 

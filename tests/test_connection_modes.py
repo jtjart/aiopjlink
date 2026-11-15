@@ -13,7 +13,7 @@ from typing import Any
 from unittest import mock
 
 import aiopjlink
-from aiopjlink._transport import _Session
+from aiopjlink.client import _Session
 from mock_projector import RawServer, raw_tcp_server
 
 POWER_ON_RESPONSE = b"%1POWR=1\r"
@@ -264,7 +264,7 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
             link = client_for_server(server)
             await link.power.get()
             with (
-                mock.patch("aiopjlink._transport._CLOSE_TIMEOUT_SECONDS", 0.1),
+                mock.patch("aiopjlink.client._CLOSE_TIMEOUT_SECONDS", 0.1),
                 mock.patch.object(asyncio.StreamWriter, "wait_closed", hang),
             ):
                 start = time.monotonic()

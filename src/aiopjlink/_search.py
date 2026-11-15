@@ -8,7 +8,7 @@ MAC address (`%2ACKN=xx:xx:xx:xx:xx:xx`). The controller listens for 30 seconds 
 the projectors it found, by the address the answer came from. No authentication is involved (§6), and since it
 is UDP either datagram can get lost, so a projector that does not show up is not necessarily absent.
 
-Nothing here uses `Transport`: there is no connection, no password and no per-command answer, so the search
+Nothing here uses `PJLink`: there is no connection, no password and no per-command answer, so the search
 has a socket of its own. Everything a stranger on the network might send to port 4352 is ignored, not raised.
 """
 
@@ -125,7 +125,7 @@ async def _next_result(answers: asyncio.Queue[SearchResult], deadline: float) ->
         return None
 
 
-async def search_iter(
+async def search(
     *,
     duration_seconds: float = DEFAULT_SEARCH_DURATION_SECONDS,
     broadcast_address: str | Sequence[str] = DEFAULT_BROADCAST_ADDRESS,
@@ -138,9 +138,10 @@ async def search_iter(
     Sends the search start instruction, then listens for `duration_seconds`. A projector that answers more than
     once is yielded once. Datagrams that are not search responses are ignored.
 
+    To wait for all of them, iterate to the end: `[found async for found in search()]`
     To stop early, leave the loop and close the generator, so the socket is released at once::
 
-        async with contextlib.aclosing(search_iter()) as results:
+        async with contextlib.aclosing(search()) as results:
             async for result in results:
                 if result.mac_address == wanted:
                     break
@@ -188,28 +189,3 @@ async def search_iter(
         deadline = loop.time() + duration_seconds
         while (result := await _next_result(answers, deadline)) is not None:
             yield result
-
-
-async def search(
-    *,
-    duration_seconds: float = DEFAULT_SEARCH_DURATION_SECONDS,
-    broadcast_address: str | Sequence[str] = DEFAULT_BROADCAST_ADDRESS,
-    port: int = PJLINK_UDP_PORT,
-    local_address: str | None = None,
-    local_port: int = PJLINK_UDP_PORT,
-) -> list[SearchResult]:
-    """Search for projectors, wait `duration_seconds` and return all that answered (§3.2).
-
-    This is `search_iter` collected into a list; see there for the arguments and the exceptions.
-    Use `search_iter` instead to react to a projector as soon as it answers.
-    """
-    return [
-        result
-        async for result in search_iter(
-            duration_seconds=duration_seconds,
-            broadcast_address=broadcast_address,
-            port=port,
-            local_address=local_address,
-            local_port=local_port,
-        )
-    ]

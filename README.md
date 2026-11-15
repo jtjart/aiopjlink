@@ -73,33 +73,34 @@ One object may be shared between tasks: commands are sent one after the other.
 
 ## Searching for projectors
 
-`search()` finds the projectors on the network (§3.2). It broadcasts one UDP datagram, listens for answers, and returns what it found:
+`search()` finds the projectors on the network (§3.2). It broadcasts one UDP datagram and yields each projector as it answers:
 
 ```python
 import asyncio
-from aiopjlink import PJLink, search
+from aiopjlink import search
 
 
 async def main() -> None:
-    for found in await search(duration_seconds=12):
+    async for found in search(duration_seconds=12):
         print(found.address, found.mac_address)  # 192.168.1.120 00:11:22:33:44:55
-    ...
 
 
 asyncio.run(main())
 ```
 
+To wait for all of them, collect them: `found = [result async for result in search(duration_seconds=12)]`.
+
 A `SearchResult` has the `address` the answer came from, which goes straight into `PJLink(address=...)`, and the projector's `mac_address` (lower case, `aa:bb:cc:dd:ee:ff`), which stays the same when the address changes. No password is needed to search (§6).
 
-**To stop as soon as the one you want has answered,** use `search_iter()`, which yields each projector when it answers. Close it when you leave the loop, so the socket is released at once:
+**To stop as soon as the one you want has answered,** leave the loop and close the generator, so the socket is released at once:
 
 ```python
 from contextlib import aclosing
-from aiopjlink import search_iter
+from aiopjlink import search
 
 
 async def find_address(mac_address: str) -> str | None:
-    async with aclosing(search_iter()) as results:
+    async with aclosing(search()) as results:
         async for result in results:
             if result.mac_address == mac_address:
                 return result.address
@@ -148,7 +149,7 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-A `Notification` has the `address` it came from (what you give `PJLink(address=...)`) and an `event`: `LinkUp`, `ErrorsChanged` (the same table as `link.errors.query()`), `PowerChanged` or `InputChanged` (the same mode and index as `link.sources.get()`). One listener serves every projector on the network, so with several projectors, run **one** listener and pass each notification on by its `address`. Stop it by cancelling the task, or, to release the socket at once when you leave a loop, with `contextlib.aclosing`, as for `search_iter()` above.
+A `Notification` has the `address` it came from (what you give `PJLink(address=...)`) and an `event`: `LinkUp`, `ErrorsChanged` (the same table as `link.errors.query()`), `PowerChanged` or `InputChanged` (the same mode and index as `link.sources.get()`). One listener serves every projector on the network, so with several projectors, run **one** listener and pass each notification on by its `address`. Stop it by cancelling the task, or, to release the socket at once when you leave a loop, with `contextlib.aclosing`, as for `search()` above.
 
 **The projector has to be set up to send them.** The specification says the projector sends to "the IP address registered in advance", and leaves open how that is done: look for a notification or "status notification" destination in the projector's network settings, and enter the address of the machine the listener runs on. The library only listens, and it needs no password.
 

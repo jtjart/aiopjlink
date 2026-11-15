@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import aiopjlink
 from aiopjlink._debug import redact_debug_payload
-from aiopjlink._transport import Transport, _Session
+from aiopjlink.client import _Session
 from mock_projector import client_for, mock_tcp_pjlink, raw_tcp_server, unused_port
 
 
@@ -162,14 +162,14 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             await reader.read()
             writer.close()
 
-        async def fail_send(transport: Transport, session: _Session, command_line: str) -> None:
+        async def fail_send(link: aiopjlink.PJLink, session: _Session, command_line: str) -> None:
             session.digest_sent = True
             raise aiopjlink.PJLinkConnectionClosed("simulated send failure")
 
         async with raw_tcp_server(handler) as server:
             link = server.client(timeout_seconds=0.5)
             with (
-                patch.object(Transport, "_send", fail_send),
+                patch.object(aiopjlink.PJLink, "_send", fail_send),
                 self.assertRaises(aiopjlink.PJLinkConnectionClosed),
             ):
                 await link.power.get()

@@ -54,11 +54,10 @@ Modules starting with `_` are internal; only the names in `aiopjlink.__all__` ar
 ```
 src/aiopjlink/
 ├── __init__.py       public API (everything in __all__)
-├── client.py         PJLink: owns a Transport and wires the command groups onto it
-├── _transport.py     Transport: connection, lock, deadline, transmit()
+├── client.py         PJLink: connection, lock, deadline, authentication; wires the command groups onto it
 ├── _protocol.py      command / response line format (§2), search (§3.2.2) and notification (§3.3.2) datagrams
 ├── _auth.py          opening handshake and password hashing (§5)
-├── _search.py        search() and search_iter(): finding projectors by UDP broadcast (§3.2)
+├── _search.py        search(): finding projectors by UDP broadcast (§3.2)
 ├── _notify.py        listen_notifications(): status notifications sent by projectors (§3.3)
 ├── _udp.py           socket plumbing shared by _search and _notify
 ├── _debug.py         logger and redaction of authentication data
@@ -79,8 +78,8 @@ src/aiopjlink/
 
 Rules the code follows:
 
-* Dependencies point one way: `exceptions`, `enums` → `_protocol`, `_auth` → `_transport` → `commands` → `client`. `_search` builds on `_udp`, `_protocol` and `exceptions` only. `_notify` also uses the parsers of the command groups (`parse_error_levels`, `parse_input_source`), so a notification is read exactly like the answer to the matching query.
-* Only `Transport` (TCP), `_search` and `_notify` (UDP, opened through `_udp`) touch sockets. `_protocol` and `_auth` are pure functions.
+* Dependencies point one way: `exceptions`, `enums` → `_protocol`, `_auth` → `commands` → `client`. The command groups are given `PJLink._transmit` as a plain function (`CommandSender`), so they never import `client`. `_search` builds on `_udp`, `_protocol` and `exceptions` only. `_notify` also uses the parsers of the command groups (`parse_error_levels`, `parse_input_source`), so a notification is read exactly like the answer to the matching query.
+* Only `PJLink` (TCP), `_search` and `_notify` (UDP, opened through `_udp`) touch sockets. `_protocol` and `_auth` are pure functions.
 * Everything raised while talking to a projector is a `PJLinkException` (see `exceptions.py` for which one when). Invalid arguments are a `ValueError`, raised before anything is sent.
 * Commands that change something are never repeated after a dropped connection; queries may be.
 * New public names must be exported in `__init__.py` and new commands added to the README table.
