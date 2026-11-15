@@ -1,73 +1,73 @@
 """exceptions.py
 
 Everything that can go wrong while talking to the projector is raised as a
-subclass of `PJLinkException`, so callers only need to catch that one class.
+subclass of `PJLinkError`, so callers only need to catch that one class.
 The hierarchy tells a caller what to do about it::
 
-    PJLinkException
-    ├── PJLinkConnectionError              projector unreachable or not talking: try again later
-    │   ├── PJLinkNoConnection             could not connect, or no greeting / answer in time, or no UDP socket
-    │   └── PJLinkConnectionClosed         connection closed or reset by the projector
-    ├── PJLinkPassword                     password missing or wrong
-    ├── PJLinkProtocolError                what the projector sent is not valid PJLink
-    ├── PJLinkUnexpectedResponseParameter  valid PJLink, but a value this library does not know
-    └── PJLinkProjectorError               the projector answered with an error instead of a value
-        ├── PJLinkNotSupported             ERR1  command or feature not supported
-        ├── PJLinkInvalidParameter         ERR2  parameter out of range
-        ├── PJLinkNotReady                 ERR3  unavailable in the current state (standby, warming up, ...)
-        └── PJLinkDeviceFailure            ERR4  projector or display failure
+    PJLinkError
+    ├── PJLinkConnectionError            projector unreachable or not talking: try again later
+    │   ├── PJLinkNoConnectionError      could not connect, or no greeting / answer in time, or no UDP socket
+    │   └── PJLinkConnectionClosedError  connection closed or reset by the projector
+    ├── PJLinkAuthenticationError        password missing or wrong
+    ├── PJLinkProtocolError              what the projector sent is not valid PJLink
+    ├── PJLinkUnexpectedValueError       valid PJLink, but a value this library does not know
+    └── PJLinkProjectorError             the projector answered with an error instead of a value
+        ├── PJLinkNotSupportedError      ERR1  command or feature not supported
+        ├── PJLinkInvalidParameterError  ERR2  parameter out of range
+        ├── PJLinkNotReadyError          ERR3  unavailable in the current state (standby, warming up, ...)
+        └── PJLinkMalfunctionError       ERR4  projector or display failure
 
 Which exception for which situation:
 
     =====================================================  ================================
-    TCP connect refused, DNS failure, connect timeout      `PJLinkNoConnection`
-    Connected, but no greeting within the timeout          `PJLinkNoConnection`
-    Greeting received, but no response within the timeout  `PJLinkNoConnection`
-    Search, listen: UDP socket cannot be opened or bound   `PJLinkNoConnection`
-    Connection closed (FIN) or reset (RST) by the peer     `PJLinkConnectionClosed`
-    Password required, rejected (`ERRA`)                   `PJLinkPassword`
-    Hang-up after the first password                       `PJLinkPassword`
-    SHA256 required but not offered by the projector       `PJLinkNotSupported`
+    TCP connect refused, DNS failure, connect timeout      `PJLinkNoConnectionError`
+    Connected, but no greeting within the timeout          `PJLinkNoConnectionError`
+    Greeting received, but no response within the timeout  `PJLinkNoConnectionError`
+    Search, listen: UDP socket cannot be opened or bound   `PJLinkNoConnectionError`
+    Connection closed (FIN) or reset (RST) by the peer     `PJLinkConnectionClosedError`
+    Password required, rejected (`ERRA`)                   `PJLinkAuthenticationError`
+    Hang-up after the first password                       `PJLinkAuthenticationError`
+    SHA256 required but not offered by the projector       `PJLinkNotSupportedError`
     Bytes that are not a valid PJLink line                 `PJLinkProtocolError`
-    A valid line with a value the library cannot map       `PJLinkUnexpectedResponseParameter`
-    `ERR1` ... `ERR4`                                      `PJLinkNotSupported` ... `PJLinkDeviceFailure`
+    A valid line with a value the library cannot map       `PJLinkUnexpectedValueError`
+    `ERR1` ... `ERR4`                                      `PJLinkNotSupportedError` ... `PJLinkMalfunctionError`
     =====================================================  ================================
 
 `ERR1` means "undefined command" (§2.3), but the spec reuses it for "this projector has no ...":
 
     ======  ==================================  =================================
-    LAMP ?  no lamp                             `PJLinkNotSupported("no lamp")`
-    FILT ?  no filter                           `PJLinkNotSupported("no filter")`
-    SVOL    speaker not installed               `PJLinkNotSupported("no speaker installed")`
-    MVOL    microphone not installed            `PJLinkNotSupported("no microphone installed")`
-    FREZ    freeze not supported                `PJLinkNotSupported("freeze not supported")`
+    LAMP ?  no lamp                             `PJLinkNotSupportedError("no lamp")`
+    FILT ?  no filter                           `PJLinkNotSupportedError("no filter")`
+    SVOL    speaker not installed               `PJLinkNotSupportedError("no speaker installed")`
+    MVOL    microphone not installed            `PJLinkNotSupportedError("no microphone installed")`
+    FREZ    freeze not supported                `PJLinkNotSupportedError("freeze not supported")`
     ======  ==================================  =================================
 
 It is deliberately one class: what ERR1 means is decided by the command that was sent, and the
 exception carries that command (`err.command`) and a message that says which of the above applies.
-Callers who only care whether a feature exists can use a single `except PJLinkNotSupported`.
+Callers who only care whether a feature exists can use a single `except PJLinkNotSupportedError`.
 
 `ValueError` is still raised for invalid arguments passed in by the caller
 (e.g. an unknown `Power.State`), because that is a programming error.
 """
 
 
-class PJLinkException(Exception):
+class PJLinkError(Exception):
     """Base exception for PJLink library issues."""
 
 
-class PJLinkConnectionError(PJLinkException):
+class PJLinkConnectionError(PJLinkError):
     """The projector cannot be reached, or stopped talking, so no answer was obtained.
 
     Typical causes are a projector in network standby, one that is rebooting, or one that is
     busy with another controller (many allow a single PJLink session). This is usually
     temporary: treat the projector as unavailable and try again later.
 
-    Never raised directly - catch it to handle `PJLinkNoConnection` and `PJLinkConnectionClosed` together.
+    Never raised directly - catch it to handle `PJLinkNoConnectionError` and `PJLinkConnectionClosedError` together.
     """
 
 
-class PJLinkNoConnection(PJLinkConnectionError):
+class PJLinkNoConnectionError(PJLinkConnectionError):
     """Could not connect, or the projector did not send a greeting or a response in time.
 
     Also raised by `search` when the network is not there to search: the UDP socket cannot be opened or bound
@@ -77,19 +77,19 @@ class PJLinkNoConnection(PJLinkConnectionError):
     """
 
 
-class PJLinkConnectionClosed(PJLinkConnectionError):
+class PJLinkConnectionClosedError(PJLinkConnectionError):
     """The projector closed or reset the connection."""
 
 
-class PJLinkProtocolError(PJLinkException):
+class PJLinkProtocolError(PJLinkError):
     """Unexpected communication to or from the projector."""
 
 
-class PJLinkUnexpectedResponseParameter(PJLinkException):
+class PJLinkUnexpectedValueError(PJLinkError):
     """Unable to parse a response parameter."""
 
 
-class PJLinkPassword(PJLinkException):
+class PJLinkAuthenticationError(PJLinkError):
     """Invalid or absent password.
 
     Also raised when a projector that has never accepted the password closes the connection right after
@@ -97,7 +97,7 @@ class PJLinkPassword(PJLinkException):
     """
 
 
-class PJLinkProjectorError(PJLinkException):
+class PJLinkProjectorError(PJLinkError):
     """The projector answered, but with an error (or a condition such as "no signal") instead of a value.
 
     `command` is the four-letter command the projector answered, when known (e.g. `"SVOL"`).
@@ -108,7 +108,7 @@ class PJLinkProjectorError(PJLinkException):
         self.command = command
 
 
-class PJLinkNotSupported(PJLinkProjectorError):
+class PJLinkNotSupportedError(PJLinkProjectorError):
     """The projector does not support the command or the feature (spec: `ERR1`, §2.3).
 
     Some commands give it a specific meaning ("no lamp", "no speaker installed", ...):
@@ -118,11 +118,11 @@ class PJLinkNotSupported(PJLinkProjectorError):
     """
 
 
-class PJLinkInvalidParameter(PJLinkProjectorError):
+class PJLinkInvalidParameterError(PJLinkProjectorError):
     """The parameter is out of range, e.g. a nonexistent input source (spec: `ERR2`, §2.3)."""
 
 
-class PJLinkNotReady(PJLinkProjectorError):
+class PJLinkNotReadyError(PJLinkProjectorError):
     """The command is not available at the current time or in the current state (spec: `ERR3`, §2.3).
 
     Typical cases are standby, warming up, cooling down or switching input. Projectors that
@@ -130,5 +130,5 @@ class PJLinkNotReady(PJLinkProjectorError):
     """
 
 
-class PJLinkDeviceFailure(PJLinkProjectorError):
+class PJLinkMalfunctionError(PJLinkProjectorError):
     """The projector or display has failed and cannot continue to operate properly (spec: `ERR4`, §2.3)."""

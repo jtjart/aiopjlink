@@ -17,7 +17,7 @@ class FreezeGroup(unittest.IsolatedAsyncioTestCase):
                 await client.freeze.set(False)
 
             # Unexpected.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%2FREZ 1\r", respond_with=b"%2FREZ=UGH\r"):
                     await client.freeze.set(True)
             self.assertEqual(str(err.exception), "expected OK response")
@@ -32,7 +32,7 @@ class FreezeGroup(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(await client.freeze.get(), True)
 
             # Unexpected.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%2FREZ ?\r", respond_with=b"%2FREZ=2\r"):
                     await client.freeze.get()
             self.assertEqual(str(err.exception), "unexpected freeze state")

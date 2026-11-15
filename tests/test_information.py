@@ -50,7 +50,7 @@ class InfoGroup(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(response, aiopjlink.PJClass.TWO)
 
             # Unexpected class.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%1CLSS ?\r", respond_with=b"%1CLSS=9\r"):
                     await client.info.pjlink_class()
             self.assertEqual(str(err.exception), "unexpected PJLink class")

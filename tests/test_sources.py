@@ -30,13 +30,13 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
                 await client.sources.set(aiopjlink.Sources.Mode.VIDEO, "1")
 
             # Bad response: wrong length.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%1INPT ?\r", respond_with=b"%1INPT=311\r"):
                     await client.sources.get()
             self.assertEqual(str(err.exception), "expected 2 INPT response characters")
 
             # Bad response: unknown input mode.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%1INPT ?\r", respond_with=b"%1INPT=91\r"):
                     await client.sources.get()
             self.assertEqual(str(err.exception), "unexpected input source mode")
@@ -83,7 +83,7 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
 
             # Unparsable list from the projector.
             for response in (b"%1INST=\r", b"%1INST=91\r", b"%1INST=111\r"):
-                with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+                with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
                     async with server.when(b"%1INST ?\r", respond_with=response):
                         await client.sources.available()
                 self.assertEqual(str(err.exception), "unable to parse available sources")
@@ -175,7 +175,7 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(str(err.exception), "unknown signal")
 
             # Bad response from the projecetor.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err_unexpected_response_parameter:
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err_unexpected_response_parameter:
                 async with server.when(b"%2IRES ?\r", respond_with=b"%2IRES=\r"):
                     width, height = await client.sources.resolution()
             self.assertIn("unable to parse resolution", str(err_unexpected_response_parameter.exception))
@@ -190,7 +190,7 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(height, 1080)
 
             # Bad response from the projecetor.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%2RRES ?\r", respond_with=b"%2RRES=\r"):
                     width, height = await client.sources.recommended_resolution()
             self.assertIn("unable to parse resolution", str(err.exception))
@@ -199,7 +199,7 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
         """A resolution is `<width>x<height>`: more or fewer than two numbers is not a resolution."""
         async with mock_client_server_noauth() as (server, client):
             for response in (b"%2IRES=1920\r", b"%2IRES=1920x1080x60\r", b"%2IRES=axb\r", b"%2IRES=1920x\r"):
-                with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+                with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
                     async with server.when(b"%2IRES ?\r", respond_with=response):
                         await client.sources.resolution()
                 self.assertIn("unable to parse resolution", str(err.exception))

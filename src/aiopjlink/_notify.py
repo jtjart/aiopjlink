@@ -11,7 +11,7 @@ Like the search, this protocol is connectionless and has no authentication (§6)
 anyone on the network can send one. A notification says that something changed, not that it can be trusted, so
 a controller that acts on it should ask the projector (over the authenticated TCP connection) what the state is.
 
-Nothing here uses `Transport`. There is no connection and no password, so the listener has a socket of its own,
+Nothing here uses `PJLink`. There is no connection and no password, so the listener has a socket of its own,
 opened like the search's (see `aiopjlink._udp`). Everything a stranger on the network might send to port 4352,
 including the search protocol's own datagrams, is ignored, not raised.
 """
@@ -24,10 +24,10 @@ from typing import Any
 
 from ._debug import LOGGER
 from ._protocol import parse_mac_address, split_notification
-from ._udp import MAX_PORT_NUMBER, PJLINK_UDP_PORT, open_socket, resolve_address, source_address
+from ._udp import MAX_PORT_NUMBER, PJLINK_UDP_PORT, open_endpoint, resolve_address, source_address
 from .commands.errors import Errors, parse_error_levels
 from .commands.sources import Sources, parse_input_source
-from .exceptions import PJLinkNoConnection, PJLinkProtocolError, PJLinkUnexpectedResponseParameter
+from .exceptions import PJLinkProtocolError, PJLinkUnexpectedValueError
 
 # The notifications that have arrived but are not yet taken by the caller. The port is open to the whole network and
 # nothing authenticates the sender, so a slow caller must not let a flood of datagrams use up memory. UDP loses
@@ -93,7 +93,7 @@ class Notification:
 def parse_event(datagram_text: str) -> NotificationEvent:
     """Turn the text of a notification datagram (§3.3.2) into the event it describes.
 
-    Raises `PJLinkProtocolError` if it is not a notification, and `PJLinkUnexpectedResponseParameter`
+    Raises `PJLinkProtocolError` if it is not a notification, and `PJLinkUnexpectedValueError`
     if it is one but holds a value that is not defined for it.
     """
     command, parameter = split_notification(datagram_text)
@@ -106,7 +106,7 @@ def parse_event(datagram_text: str) -> NotificationEvent:
         return ErrorsChanged(parse_error_levels(parameter))
     if command == "POWR":
         if parameter not in ("0", "1"):
-            raise PJLinkUnexpectedResponseParameter("unexpected power status notification")
+            raise PJLinkUnexpectedValueError("unexpected power status notification")
         return PowerChanged(powered_on=parameter == "1")
     if command == "INPT":
         mode, index = parse_input_source(parameter)
@@ -124,7 +124,7 @@ class _NotificationProtocol(asyncio.DatagramProtocol):
         sender_address = source_address(addr)
         try:
             event = parse_event(data.decode("ascii", errors="replace"))
-        except (PJLinkProtocolError, PJLinkUnexpectedResponseParameter) as err:
+        except (PJLinkProtocolError, PJLinkUnexpectedValueError) as err:
             # Includes the search protocol's datagrams, which use the same port.
             LOGGER.debug("ignoring datagram from %s: %s", sender_address, err)
             return
@@ -174,9 +174,9 @@ async def listen_notifications(
 
     Raises:
         ValueError: An argument is not valid (raised when the iteration starts).
-        PJLinkNoConnection: The socket could not be opened or bound, e.g. because the local port is in use.
+        PJLinkNoConnectionError: The socket could not be opened or bound, e.g. because the local port is in use.
     """
-    if not 0 < local_port < MAX_PORT_NUMBER:
+    if not 0 < local_port <= MAX_PORT_NUMBER:
         raise ValueError("local_port must be between 1 and 65535")
     if local_address is None:
         family, local_sockaddr = socket.AF_INET, ("0.0.0.0", local_port)
@@ -184,23 +184,12 @@ async def listen_notifications(
         family, local_sockaddr = resolve_address(local_address, local_port, "local_address")
 
     pending_notifications: asyncio.Queue[Notification] = asyncio.Queue(_MAX_PENDING_NOTIFICATIONS)
-    try:
-        udp_socket = open_socket(family, local_sockaddr, enable_broadcast=False)
-    except OSError as err:
-        raise PJLinkNoConnection(f"listening for notifications failed - {err}") from err
-    try:
-        transport, _ = await asyncio.get_running_loop().create_datagram_endpoint(
-            lambda: _NotificationProtocol(pending_notifications), sock=udp_socket
-        )
-    except BaseException:
-        udp_socket.close()
-        raise
-
-    try:
+    async with open_endpoint(
+        _NotificationProtocol(pending_notifications),
+        family,
+        local_sockaddr,
+        enable_broadcast=False,
+        purpose="listening for notifications",
+    ):
         while True:
             yield await pending_notifications.get()
-    finally:
-        # The transport gives the socket back on the next iteration of the event loop. Let that happen, so that
-        # whoever listens next (on the same local port) does not find it still in use.
-        transport.close()
-        await asyncio.sleep(0)

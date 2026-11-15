@@ -5,7 +5,7 @@ Information queries (§4.10 NAME ?, §4.11 INF1 ?, §4.12 INF2 ?, §4.13 INFO ?,
 """
 
 from ..enums import PJClass
-from ..exceptions import PJLinkUnexpectedResponseParameter
+from ..exceptions import PJLinkUnexpectedValueError
 from ._sender import CommandSender
 
 
@@ -39,7 +39,7 @@ class Information:
         try:
             return PJClass(await self._sender.query_status("CLSS", pjclass))
         except ValueError as err:
-            raise PJLinkUnexpectedResponseParameter("unexpected PJLink class") from err
+            raise PJLinkUnexpectedValueError("unexpected PJLink class") from err
 
     async def other_information(self) -> str:
         """Query the projector for other information about the projector/display

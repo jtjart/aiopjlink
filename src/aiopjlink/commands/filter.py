@@ -4,7 +4,7 @@ Filter usage and replacement models (§4.20 FILT ?, §4.22 RFIL ?).
 """
 
 from ..enums import PJClass
-from ..exceptions import PJLinkUnexpectedResponseParameter
+from ..exceptions import PJLinkUnexpectedValueError
 from ._sender import CommandSender
 
 
@@ -21,7 +21,7 @@ class Filter:
         try:
             return int(await self._sender.query_status("FILT", PJClass.TWO, not_supported_message="no filter"))
         except ValueError as err:
-            raise PJLinkUnexpectedResponseParameter("filter usage not parsable") from err
+            raise PJLinkUnexpectedValueError("filter usage not parsable") from err
 
     async def replacement_models(self) -> list[str]:
         """Get the filter replacement models listed in the projector (§4.22).

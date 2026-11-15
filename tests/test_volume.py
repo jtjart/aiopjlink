@@ -27,7 +27,7 @@ class VolumeGroups(unittest.IsolatedAsyncioTestCase):
                 await client.speaker.turn_down()
 
             # Unexpected.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%2SVOL 1\r", respond_with=b"%2SVOL=2\r"):
                     await client.speaker.turn_up()
             self.assertEqual(str(err.exception), "expected OK response")

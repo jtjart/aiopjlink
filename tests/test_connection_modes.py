@@ -13,7 +13,7 @@ from typing import Any
 from unittest import mock
 
 import aiopjlink
-from aiopjlink._transport import _Session
+from aiopjlink.client import _Session
 from mock_projector import RawServer, raw_tcp_server
 
 POWER_ON_RESPONSE = b"%1POWR=1\r"
@@ -130,7 +130,7 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
         """ERR3 is a complete answer: the connection is fine and carries the next command."""
         projector = FakeProjector(replies=[b"%1POWR=ERR3\r"])
         async with raw_tcp_server(projector) as server, client_for_server(server) as link:
-            with self.assertRaises(aiopjlink.PJLinkNotReady):
+            with self.assertRaises(aiopjlink.PJLinkNotReadyError):
                 await link.power.get()
             self.assertEqual(await link.power.get(), aiopjlink.Power.State.ON)
         self.assertEqual(projector.connections, 1)
@@ -139,7 +139,7 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
         """A late answer must not be taken for the answer to the next command."""
         projector = FakeProjector(replies=[b"%1POWR=0\r"], delays_seconds={0: TIMEOUT_SECONDS * 1.4})
         async with raw_tcp_server(projector) as server, client_for_server(server) as link:
-            with self.assertRaises(aiopjlink.PJLinkNoConnection):
+            with self.assertRaises(aiopjlink.PJLinkNoConnectionError):
                 await link.power.get()
             # The late "0" would be read here if the connection had been kept.
             self.assertEqual(await link.power.get(), aiopjlink.Power.State.ON)
@@ -187,7 +187,7 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
             await projector.wait_for_closed_connections(1)
             with (
                 mock.patch.object(_Session, "usable", new_callable=mock.PropertyMock, return_value=True),
-                self.assertRaises(aiopjlink.PJLinkConnectionClosed),
+                self.assertRaises(aiopjlink.PJLinkConnectionClosedError),
             ):
                 await link.power.turn_on()
             # The failed connection was dropped: the next command works.
@@ -264,7 +264,7 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
             link = client_for_server(server)
             await link.power.get()
             with (
-                mock.patch("aiopjlink._transport._CLOSE_TIMEOUT_SECONDS", 0.1),
+                mock.patch("aiopjlink.client._CLOSE_TIMEOUT_SECONDS", 0.1),
                 mock.patch.object(asyncio.StreamWriter, "wait_closed", hang),
             ):
                 start = time.monotonic()

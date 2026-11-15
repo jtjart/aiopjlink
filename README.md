@@ -39,7 +39,7 @@ PJLink is a manufacturer-independent protocol for operating data projectors over
 | `freeze` | | `FREZ` |
 | `info` | `NAME`, `INF1`, `INF2`, `INFO`, `CLSS` | `SNUM`, `SVER` |
 
-Finding projectors on the network (`SRCH`/`ACKN`, §3.2) is done by `search()` and `search_iter()`, see [below](#searching-for-projectors).
+Finding projectors on the network (`SRCH`/`ACKN`, §3.2) is done by `search()`, see [below](#searching-for-projectors).
 Status notifications (`LKUP`, `ERST`, `POWR`, `INPT`, §3.3) are received by `listen_notifications()`, see [below](#status-notifications).
 
 ## Installation
@@ -73,33 +73,34 @@ One object may be shared between tasks: commands are sent one after the other.
 
 ## Searching for projectors
 
-`search()` finds the projectors on the network (§3.2). It broadcasts one UDP datagram, listens for answers, and returns what it found:
+`search()` finds the projectors on the network (§3.2). It broadcasts one UDP datagram and yields each projector as it answers:
 
 ```python
 import asyncio
-from aiopjlink import PJLink, search
+from aiopjlink import search
 
 
 async def main() -> None:
-    for found in await search(duration_seconds=12):
+    async for found in search(duration_seconds=12):
         print(found.address, found.mac_address)  # 192.168.1.120 00:11:22:33:44:55
-    ...
 
 
 asyncio.run(main())
 ```
 
+To wait for all of them, collect them: `found = [result async for result in search(duration_seconds=12)]`.
+
 A `SearchResult` has the `address` the answer came from, which goes straight into `PJLink(address=...)`, and the projector's `mac_address` (lower case, `aa:bb:cc:dd:ee:ff`), which stays the same when the address changes. No password is needed to search (§6).
 
-**To stop as soon as the one you want has answered,** use `search_iter()`, which yields each projector when it answers. Close it when you leave the loop, so the socket is released at once:
+**To stop as soon as the one you want has answered,** leave the loop and close the generator, so the socket is released at once:
 
 ```python
 from contextlib import aclosing
-from aiopjlink import search_iter
+from aiopjlink import search
 
 
 async def find_address(mac_address: str) -> str | None:
-    async with aclosing(search_iter()) as results:
+    async with aclosing(search()) as results:
         async for result in results:
             if result.mac_address == mac_address:
                 return result.address
@@ -118,9 +119,9 @@ The address of a single projector works as well. Host names do not: they are not
 
 **Reliability.** The search is UDP, so a datagram can get lost (§6), and a projector that has just been switched on may not answer yet. Nothing found is not proof that nothing is there: search again. Device search is defined by PJLink Class 2, so a projector that only speaks Class 1 is not expected to answer.
 
-**Local port.** Both ends use UDP port 4352 (Fig. 1 of the spec leaves open whether a projector answers the port the request came from, or port 4352), so the search sends from, and listens on, port 4352. That means one search at a time per local address: a second one, or another program using the port, raises `PJLinkNoConnection`. Pass `local_port=0` to let the operating system choose a port; that only works with projectors that answer the port the request came from. `local_address` picks the local interface.
+**Local port.** Both ends use UDP port 4352 (Fig. 1 of the spec leaves open whether a projector answers the port the request came from, or port 4352), so the search sends from, and listens on, port 4352. That means one search at a time per local address: a second one, or another program using the port, raises `PJLinkNoConnectionError`. Pass `local_port=0` to let the operating system choose a port; that only works with projectors that answer the port the request came from. `local_address` picks the local interface.
 
-Anything else that arrives on the port is ignored. Problems on this machine (the port is in use, there is no network) raise `PJLinkNoConnection`, and a wrong argument raises `ValueError`.
+Anything else that arrives on the port is ignored. Problems on this machine (the port is in use, there is no network) raise `PJLinkNoConnectionError`, and a wrong argument raises `ValueError`.
 
 ## Status notifications
 
@@ -148,7 +149,7 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-A `Notification` has the `address` it came from (what you give `PJLink(address=...)`) and an `event`: `LinkUp`, `ErrorsChanged` (the same table as `link.errors.query()`), `PowerChanged` or `InputChanged` (the same mode and index as `link.sources.get()`). One listener serves every projector on the network, so with several projectors, run **one** listener and pass each notification on by its `address`. Stop it by cancelling the task, or, to release the socket at once when you leave a loop, with `contextlib.aclosing`, as for `search_iter()` above.
+A `Notification` has the `address` it came from (what you give `PJLink(address=...)`) and an `event`: `LinkUp`, `ErrorsChanged` (the same table as `link.errors.query()`), `PowerChanged` or `InputChanged` (the same mode and index as `link.sources.get()`). One listener serves every projector on the network, so with several projectors, run **one** listener and pass each notification on by its `address`. Stop it by cancelling the task, or, to release the socket at once when you leave a loop, with `contextlib.aclosing`, as for `search()` above.
 
 **The projector has to be set up to send them.** The specification says the projector sends to "the IP address registered in advance", and leaves open how that is done: look for a notification or "status notification" destination in the projector's network settings, and enter the address of the machine the listener runs on. The library only listens, and it needs no password.
 
@@ -160,9 +161,9 @@ A `Notification` has the `address` it came from (what you give `PJLink(address=.
 * A projector that has no warm-up or cooling time reports the switch to on or off itself.
 * Datagrams that are not notifications, or hold a value this library does not know, are ignored (and logged at `DEBUG`).
 
-**Local port.** Projectors send to UDP port 4352 (§3.3), so the listener binds it, on all IPv4 interfaces. `local_address` picks one interface, or `"::"` for IPv6 (a listener is for one IP version). Only one program can use the port at a time, and **the search uses it too**: while a listener runs, `search()` fails with `PJLinkNoConnection`, unless it is given another `local_port`. `search(local_port=0)` works with projectors that answer the port the request came from, but not with those that answer port 4352 (see [above](#searching-for-projectors)). The way out is to search before listening starts, or to stop listening while searching. In a container, the datagrams only arrive if it is on the host network, and a firewall has to let UDP port 4352 in.
+**Local port.** Projectors send to UDP port 4352 (§3.3), so the listener binds it, on all IPv4 interfaces. `local_address` picks one interface, or `"::"` for IPv6 (a listener is for one IP version). Only one program can use the port at a time, and **the search uses it too**: while a listener runs, `search()` fails with `PJLinkNoConnectionError`, unless it is given another `local_port`. `search(local_port=0)` works with projectors that answer the port the request came from, but not with those that answer port 4352 (see [above](#searching-for-projectors)). The way out is to search before listening starts, or to stop listening while searching. In a container, the datagrams only arrive if it is on the host network, and a firewall has to let UDP port 4352 in.
 
-If more than 256 notifications are waiting to be taken, the newest are dropped, so a flood of datagrams cannot fill the memory. A socket that cannot be opened (the port is in use, ...) raises `PJLinkNoConnection`, and a wrong argument raises `ValueError`.
+If more than 256 notifications are waiting to be taken, the newest are dropped, so a flood of datagrams cannot fill the memory. A socket that cannot be opened (the port is in use, ...) raises `PJLinkNoConnectionError`, and a wrong argument raises `ValueError`.
 
 ## Connection handling
 
@@ -183,11 +184,11 @@ The spec allows both styles (§5.3, §5.4). With `persistent=True`:
 * **Reconnecting is automatic.** A connection the projector dropped (it does so after 30 s of silence) is replaced by the next command.
 * **A failed command never poisons the next one.** After a timeout, cancellation or any unexpected error the connection is dropped, so a late answer is never mistaken for the next answer.
 * **Data the projector sends unasked is discarded.** Some projectors volunteer a status line of their own (one was seen to send `%1powr=0` after a power-on command). Nothing can be the answer to a command that has not been sent yet, so whatever has arrived by then is thrown away before the next command goes out, and shows up in the debug log as `discarded unsolicited data`.
-* **Queries are repeated once** on a new connection if the kept one turns out to be dead. Commands that change something (power, input, volume, ...) are not: the projector may already have carried them out, so you get `PJLinkConnectionClosed` and decide.
+* **Queries are repeated once** on a new connection if the kept one turns out to be dead. Commands that change something (power, input, volume, ...) are not: the projector may already have carried them out, so you get `PJLinkConnectionClosedError` and decide.
 
 Every command has a single deadline, `timeout_seconds` (default 4), covering connect, greeting, send and answer. A command waiting behind others in the queue is bound by `timeout_seconds` for each of them.
 
-`timeout_seconds` is how long a projector may take to answer. The exception is a command that carries a password: a projector answers a wrong password only after two seconds (§5.1), so such a command is given at least 3 s to be answered, whatever `timeout_seconds` is, and a wrong password is reported as `PJLinkPassword` rather than as a dead connection. There is therefore no minimum for `timeout_seconds`.
+`timeout_seconds` is how long a projector may take to answer. The exception is a command that carries a password: a projector answers a wrong password only after two seconds (§5.1), so such a command is given at least 3 s to be answered, whatever `timeout_seconds` is, and a wrong password is reported as `PJLinkAuthenticationError` rather than as a dead connection. There is therefore no minimum for `timeout_seconds`.
 
 ## Authentication
 
@@ -195,46 +196,46 @@ A projector with a password uses MD5 (PJLink up to 2.00) or SHA256 (PJLink 2.10,
 
 ```python
 PJLink(address, password="secret")  # SHA256 if the projector can, otherwise MD5
-PJLink(address, password="secret", authentication=PJAuth.SHA256)  # never MD5: PJLinkNotSupported if it cannot
+PJLink(address, password="secret", authentication=PJAuth.SHA256)  # never MD5: PJLinkNotSupportedError if it cannot
 PJLink(address, password="secret", authentication=PJAuth.MD5)  # never asks for SHA256
 ```
 
 * **The answer is remembered.** Once a projector has not said yes to the question (it answered with an error, hung up, or stayed silent), MD5 is assumed from then on and new connections go straight to MD5, so only the first one pays for the question. That also protects a projector that cannot cope with the question (it may lock up for 30 s, guideline behaviour 6) from being put out of action again by every new connection.
 * **A rejected MD5 digest is retried at once.** If MD5 is rejected by a projector that never said it lacks SHA256 (the question was skipped because MD5 was assumed or worked before, or went unanswered), it may have been switched to SHA256 or just missed the question. The same command then asks again on a new connection, for SHA256 only, with a deadline of its own (a command can thus make two attempts, each bounded by `timeout_seconds`). A projector that did answer the question with an error is not asked again, and a wrong password is never tried twice. A rejected command was not carried out, so this is safe for commands that change something.
 * **A silent projector costs time once.** The question is bound by 2 s, and by half of `timeout_seconds`, so that the command can still reconnect. For a projector that cannot cope with the question at all, use `PJAuth.MD5`.
-* **`ERRA` in answer to the question is not a wrong password.** Some MD5-only projectors answer it that way. A wrong password is reported as `PJLinkPassword` once the digest has been sent.
+* **`ERRA` in answer to the question is not a wrong password.** Some MD5-only projectors answer it that way. A wrong password is reported as `PJLinkAuthenticationError` once the digest has been sent.
 * **With `persistent=False`** every command does the whole handshake (question included) on its own connection.
 * **Security note.** The fallback can be provoked by anyone who can tamper with the traffic. If all your projectors support SHA256, use `PJAuth.SHA256`.
 
 ## Error handling
 
-Everything the library raises derives from `PJLinkException`:
+Everything the library raises derives from `PJLinkError`:
 
 ```
-PJLinkException
-├── PJLinkConnectionError               projector unreachable or not talking
-│   ├── PJLinkNoConnection              refused / no greeting / no response in time / no search socket
-│   └── PJLinkConnectionClosed          closed or reset by the projector
-├── PJLinkPassword                      password missing or wrong
-├── PJLinkProtocolError                 what the projector sent is not valid PJLink
-├── PJLinkUnexpectedResponseParameter   valid PJLink, but a value the library does not know
-└── PJLinkProjectorError                the projector answered with an error
-    ├── PJLinkNotSupported      ERR1    not supported ("no lamp", "no speaker installed", SHA256 when required, ...)
-    ├── PJLinkInvalidParameter  ERR2    parameter out of range
-    ├── PJLinkNotReady          ERR3    unavailable now (standby, warming up, `OK` to a status query)
-    └── PJLinkDeviceFailure     ERR4    projector or display failure
+PJLinkError
+├── PJLinkConnectionError            projector unreachable or not talking
+│   ├── PJLinkNoConnectionError      refused / no greeting / no response in time / no search socket
+│   └── PJLinkConnectionClosedError  closed or reset by the projector
+├── PJLinkAuthenticationError        password missing or wrong
+├── PJLinkProtocolError              what the projector sent is not valid PJLink
+├── PJLinkUnexpectedValueError       valid PJLink, but a value the library does not know
+└── PJLinkProjectorError             the projector answered with an error
+    ├── PJLinkNotSupportedError      ERR1    not supported ("no lamp", "no speaker installed", SHA256 when required, ...)
+    ├── PJLinkInvalidParameterError  ERR2    parameter out of range
+    ├── PJLinkNotReadyError          ERR3    unavailable now (standby, warming up, `OK` to a status query)
+    └── PJLinkMalfunctionError       ERR4    projector or display failure
 ```
 
 ```python
 try:
     state = await link.power.get()
-except PJLinkNotReady:
+except PJLinkNotReadyError:
     state = Power.State.OFF  # standby or not ready
 except PJLinkConnectionError:
     ...  # unavailable, try again later
-except PJLinkPassword:
+except PJLinkAuthenticationError:
     ...  # ask for a (new) password
-except PJLinkException:
+except PJLinkError:
     ...  # anything else
 ```
 

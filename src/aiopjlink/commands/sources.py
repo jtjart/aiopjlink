@@ -9,9 +9,9 @@ from enum import Enum
 
 from ..enums import PJClass
 from ..exceptions import (
-    PJLinkInvalidParameter,
+    PJLinkInvalidParameterError,
     PJLinkProjectorError,
-    PJLinkUnexpectedResponseParameter,
+    PJLinkUnexpectedValueError,
 )
 from ._sender import CommandSender
 
@@ -25,7 +25,7 @@ def _parse_resolution(resolution_text: str) -> tuple[int, int]:
     """Parse `<width>x<height>` (§4.18, §4.19) into `(width, height)`."""
     resolution_match = _RESOLUTION_PATTERN.fullmatch(resolution_text)
     if resolution_match is None:
-        raise PJLinkUnexpectedResponseParameter(f"unable to parse resolution: {resolution_text}")
+        raise PJLinkUnexpectedValueError(f"unable to parse resolution: {resolution_text}")
     return int(resolution_match[1]), int(resolution_match[2])
 
 
@@ -87,11 +87,11 @@ class Sources:
         """
         source_tokens = (await self._sender.query_status("INST", pjclass)).split()
         if not source_tokens or any(len(source_token) != _SOURCE_TOKEN_LENGTH for source_token in source_tokens):
-            raise PJLinkUnexpectedResponseParameter(_UNPARSABLE_SOURCES)
+            raise PJLinkUnexpectedValueError(_UNPARSABLE_SOURCES)
         try:
             return [(Sources.Mode(source_token[0]), source_token[1]) for source_token in source_tokens]
         except ValueError as err:
-            raise PJLinkUnexpectedResponseParameter(_UNPARSABLE_SOURCES) from err
+            raise PJLinkUnexpectedValueError(_UNPARSABLE_SOURCES) from err
 
     async def get_source_name(self, mode: Mode, index: str | int) -> str:
         """Get the name of a given input source (§4.17).
@@ -114,7 +114,7 @@ class Sources:
         """The name of an input, or None if the projector has no name for it (`ERR2`)."""
         try:
             return await self.get_source_name(mode, index)
-        except PJLinkInvalidParameter:
+        except PJLinkInvalidParameterError:
             return None
 
     async def resolution(self) -> tuple[int, int]:
@@ -140,8 +140,8 @@ class Sources:
 def parse_input_source(input_parameter: str) -> tuple[Sources.Mode, str]:
     """Parse `<mode><index>` of an `INPT` query response (§4.4) or status notification (§3.3.2)."""
     if len(input_parameter) != _SOURCE_TOKEN_LENGTH:
-        raise PJLinkUnexpectedResponseParameter(f"expected {_SOURCE_TOKEN_LENGTH} INPT response characters")
+        raise PJLinkUnexpectedValueError(f"expected {_SOURCE_TOKEN_LENGTH} INPT response characters")
     try:
         return Sources.Mode(input_parameter[0]), input_parameter[1]
     except ValueError as err:
-        raise PJLinkUnexpectedResponseParameter("unexpected input source mode") from err
+        raise PJLinkUnexpectedValueError("unexpected input source mode") from err

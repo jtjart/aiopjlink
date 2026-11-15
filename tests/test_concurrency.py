@@ -27,7 +27,7 @@ class ConcurrencyTests(unittest.IsolatedAsyncioTestCase):
         """A failed command does not block the commands that follow it."""
         async with mock_client_server_noauth() as (server, client):
             # First command fails (projector reports ERR3).
-            with self.assertRaises(aiopjlink.PJLinkNotReady):
+            with self.assertRaises(aiopjlink.PJLinkNotReadyError):
                 async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=ERR3\r"):
                     await client.power.get()
 
@@ -48,6 +48,6 @@ class ConcurrencyTests(unittest.IsolatedAsyncioTestCase):
             results = await asyncio.gather(client.power.get(), client.power.get(), return_exceptions=True)
             elapsed = time.monotonic() - start
 
-        self.assertTrue(all(isinstance(r, aiopjlink.PJLinkException) for r in results), results)
+        self.assertTrue(all(isinstance(r, aiopjlink.PJLinkError) for r in results), results)
         self.assertGreaterEqual(elapsed, timeout_seconds * 2 * 0.9)  # One after the other.
         self.assertLess(elapsed, timeout_seconds * 2 + 1)  # One deadline each.

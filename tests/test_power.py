@@ -53,7 +53,7 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(status, aiopjlink.Power.State.WARMING)
 
             # Unxpected power result.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=A\r"):
                     await client.power.get()
             self.assertEqual(str(err.exception), "unexpected power state")
@@ -77,26 +77,26 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
 
             # Power ON
             async with server.when(b"%2POWR 1\r", respond_with=b"%2POWR=OK\r"):
-                await client.power.set(aiopjlink.Power.State.ON, pjclass=aiopjlink.PJLink.C2)
+                await client.power.set(aiopjlink.Power.State.ON, pjclass=aiopjlink.PJClass.TWO)
 
             # Power OFF
             async with server.when(b"%2POWR 0\r", respond_with=b"%2POWR=OK\r"):
-                await client.power.set(aiopjlink.Power.State.OFF, pjclass=aiopjlink.PJLink.C2)
+                await client.power.set(aiopjlink.Power.State.OFF, pjclass=aiopjlink.PJClass.TWO)
 
             # Power set unavailable (test duplicated in test_response_parsing)
-            with self.assertRaises(aiopjlink.PJLinkNotReady) as err_not_ready:
+            with self.assertRaises(aiopjlink.PJLinkNotReadyError) as err_not_ready:
                 async with server.when(b"%1POWR 0\r", respond_with=b"%1POWR=ERR3\r"):
                     await client.power.set(client.power.State.OFF)
             self.assertEqual(str(err_not_ready.exception), "unavailable in the current state")
 
             # Power set not possible (test duplicated in test_response_parsing)
-            with self.assertRaises(aiopjlink.PJLinkDeviceFailure) as err_device_failure:
+            with self.assertRaises(aiopjlink.PJLinkMalfunctionError) as err_device_failure:
                 async with server.when(b"%1POWR 0\r", respond_with=b"%1POWR=ERR4\r"):
                     await client.power.set(client.power.State.OFF)
             self.assertEqual(str(err_device_failure.exception), "projector or display failure")
 
             # Unexpected projector reply to a sensible message.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err_unexpected_response_parameter:
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err_unexpected_response_parameter:
                 async with server.when(b"%1POWR 0\r", respond_with=b"%1POWR=UGH\r"):
                     await client.power.set(aiopjlink.Power.State.OFF)
             self.assertEqual(str(err_unexpected_response_parameter.exception), "expected OK response")

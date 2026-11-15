@@ -23,7 +23,7 @@ def make_client(port: int, **options: Any) -> aiopjlink.PJLink:
 class TimeoutTests(unittest.IsolatedAsyncioTestCase):
     """One overall deadline per command, and the error names the phase that ran out of time."""
 
-    async def _expect_timeout(self, port: int, exc_type: type[Exception] = aiopjlink.PJLinkNoConnection) -> str:
+    async def _expect_timeout(self, port: int, exc_type: type[Exception] = aiopjlink.PJLinkNoConnectionError) -> str:
         """Run a command on `port`, return the exception and check it took about one timeout."""
         start = time.monotonic()
         with self.assertRaises(exc_type) as err:
@@ -77,7 +77,7 @@ class TimeoutTests(unittest.IsolatedAsyncioTestCase):
             await until_hung_up(reader, writer)
 
         async with raw_tcp_server(slow) as server:
-            with self.assertRaises(aiopjlink.PJLinkNoConnection):
+            with self.assertRaises(aiopjlink.PJLinkNoConnectionError):
                 await make_client(server.port).power.get()
 
     async def test_close_is_bounded(self) -> None:

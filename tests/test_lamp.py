@@ -32,24 +32,24 @@ class LampGroup(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(state, aiopjlink.Lamp.State.OFF)
 
             # No lamps in the projector.
-            with self.assertRaises(aiopjlink.PJLinkNotSupported):
+            with self.assertRaises(aiopjlink.PJLinkNotSupportedError):
                 async with server.when(b"%1LAMP ?\r", respond_with=b"%1LAMP=ERR1\r"):
                     lamps = await client.lamps.status()
 
             # Unparsable feedback from projector.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%1LAMP ?\r", respond_with=b"%1LAMP=1 0 10\r"):
                     lamps = await client.lamps.status()
             self.assertEqual(str(err.exception), "unparsable lamp status")
 
             # Bad feedback from the projector.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%1LAMP ?\r", respond_with=b"%1LAMP=\r"):
                     lamps = await client.lamps.status()
             self.assertEqual(str(err.exception), "unparsable lamp status")
 
             # Bad feedback from the projector.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedResponseParameter) as err:
+            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%1LAMP ?\r", respond_with=b"%1LAMP=100 3\r"):
                     lamps = await client.lamps.status()
             self.assertEqual(str(err.exception), "unparsable lamp status")

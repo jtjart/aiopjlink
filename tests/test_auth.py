@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import aiopjlink
 from aiopjlink._debug import redact_debug_payload
-from aiopjlink._transport import Transport, _Session
+from aiopjlink.client import _Session
 from mock_projector import client_for, mock_tcp_pjlink, raw_tcp_server, unused_port
 
 
@@ -60,7 +60,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("unrecognised auth method", str(err.exception))
 
     async def test_auth_no_welcome(self) -> None:
-        """A projector that accepts the connection but sends no welcome message is a `PJLinkNoConnection`."""
+        """A projector that accepts the connection but sends no welcome message is a `PJLinkNoConnectionError`."""
 
         # Start server with no auth.
         async with mock_tcp_pjlink() as server:
@@ -68,7 +68,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             # server.open_and_send(b'PJLINK XXX\r')
 
             # Expect the same error as for a missing response to a command.
-            with self.assertRaises(aiopjlink.PJLinkNoConnection) as err:
+            with self.assertRaises(aiopjlink.PJLinkNoConnectionError) as err:
                 link = server.client(timeout_seconds=0.5)
                 await link.power.get()
 
@@ -78,7 +78,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
         """Tests that the client honours the timeout if no server responds to the connection."""
 
         # CONDITION 1: The host can be reached by the OS but no response (aiotimeout).
-        with self.assertRaises(aiopjlink.PJLinkNoConnection) as err:
+        with self.assertRaises(aiopjlink.PJLinkNoConnectionError) as err:
             link = client_for(unused_port(), timeout_seconds=0.5)
             await link.power.get()
         # Accept either error message for compatibility
@@ -89,7 +89,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
         )
 
         # CONDITION 2: The host cannot be reached by the OS.
-        with self.assertRaises(aiopjlink.PJLinkNoConnection) as err:
+        with self.assertRaises(aiopjlink.PJLinkNoConnectionError) as err:
             link = aiopjlink.PJLink(address="0.0.0.0", port=unused_port(), password=None, timeout_seconds=0.5)
             await link.power.get()
         self.assertIn("connection failed", str(err.exception))
@@ -124,7 +124,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             cmd = bytes(salted_password) + b"%1POWR ?\r"
             async with server.when(cmd, respond_with=b"PJLINK ERRA\r"):
                 # Send the power request and check the response is expected.
-                with self.assertRaises(aiopjlink.PJLinkPassword):
+                with self.assertRaises(aiopjlink.PJLinkAuthenticationError):
                     link = server.client(password="INVALIDPW", authentication=aiopjlink.PJAuth.MD5)
                     await link.power.get()
 
@@ -134,7 +134,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK 1 21d0e96e\r")
 
-            with self.assertRaises(aiopjlink.PJLinkPassword) as err:
+            with self.assertRaises(aiopjlink.PJLinkAuthenticationError) as err:
                 link = server.client()
                 await link.power.get()
             self.assertEqual(str(err.exception), "password required")
@@ -150,7 +150,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
 
         async with raw_tcp_server(hang_up) as server:
             link = server.client(password="wrong", timeout_seconds=2.0)
-            with self.assertRaises(aiopjlink.PJLinkPassword):
+            with self.assertRaises(aiopjlink.PJLinkAuthenticationError):
                 await link.power.get()
 
     async def test_send_failure_is_not_reported_as_a_password_error(self) -> None:
@@ -162,15 +162,15 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             await reader.read()
             writer.close()
 
-        async def fail_send(transport: Transport, session: _Session, command_line: str) -> None:
+        async def fail_send(link: aiopjlink.PJLink, session: _Session, command_line: str) -> None:
             session.digest_sent = True
-            raise aiopjlink.PJLinkConnectionClosed("simulated send failure")
+            raise aiopjlink.PJLinkConnectionClosedError("simulated send failure")
 
         async with raw_tcp_server(handler) as server:
             link = server.client(timeout_seconds=0.5)
             with (
-                patch.object(Transport, "_send", fail_send),
-                self.assertRaises(aiopjlink.PJLinkConnectionClosed),
+                patch.object(aiopjlink.PJLink, "_send", fail_send),
+                self.assertRaises(aiopjlink.PJLinkConnectionClosedError),
             ):
                 await link.power.get()
 
@@ -194,5 +194,5 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
                 password="abc123", timeout_seconds=0.5, persistent=False, authentication=aiopjlink.PJAuth.MD5
             )
             await link.power.get()
-            with self.assertRaises(aiopjlink.PJLinkConnectionClosed):
+            with self.assertRaises(aiopjlink.PJLinkConnectionClosedError):
                 await link.power.get()

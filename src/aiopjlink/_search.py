@@ -8,7 +8,7 @@ MAC address (`%2ACKN=xx:xx:xx:xx:xx:xx`). The controller listens for 30 seconds 
 the projectors it found, by the address the answer came from. No authentication is involved (§6), and since it
 is UDP either datagram can get lost, so a projector that does not show up is not necessarily absent.
 
-Nothing here uses `Transport`: there is no connection, no password and no per-command answer, so the search
+Nothing here uses `PJLink`: there is no connection, no password and no per-command answer, so the search
 has a socket of its own. Everything a stranger on the network might send to port 4352 is ignored, not raised.
 """
 
@@ -20,8 +20,8 @@ from typing import Any
 
 from ._debug import LOGGER
 from ._protocol import SEARCH_REQUEST, parse_search_response
-from ._udp import MAX_PORT_NUMBER, PJLINK_UDP_PORT, open_socket, resolve_address, source_address
-from .exceptions import PJLinkNoConnection, PJLinkProtocolError
+from ._udp import MAX_PORT_NUMBER, PJLINK_UDP_PORT, open_endpoint, resolve_address, source_address
+from .exceptions import PJLinkNoConnectionError, PJLinkProtocolError
 
 DEFAULT_SEARCH_DURATION_SECONDS = 30.0
 """How long the controller listens for answers (§3.2.1, step 2), in seconds."""
@@ -108,7 +108,7 @@ def _send_requests(udp_socket: socket.socket, targets: list[tuple[Any, ...]]) ->
             LOGGER.debug("could not send search request to %s: %s", target_sockaddr[0], err)
             send_errors.append(err)
     if len(send_errors) == len(targets):
-        raise PJLinkNoConnection(f"search failed - {send_errors[0]}") from send_errors[0]
+        raise PJLinkNoConnectionError(f"search failed - {send_errors[0]}") from send_errors[0]
 
 
 async def _next_result(answers: asyncio.Queue[SearchResult], deadline: float) -> SearchResult | None:
@@ -125,7 +125,7 @@ async def _next_result(answers: asyncio.Queue[SearchResult], deadline: float) ->
         return None
 
 
-async def search_iter(
+async def search(
     *,
     duration_seconds: float = DEFAULT_SEARCH_DURATION_SECONDS,
     broadcast_address: str | Sequence[str] = DEFAULT_BROADCAST_ADDRESS,
@@ -138,9 +138,10 @@ async def search_iter(
     Sends the search start instruction, then listens for `duration_seconds`. A projector that answers more than
     once is yielded once. Datagrams that are not search responses are ignored.
 
+    To wait for all of them, iterate to the end: `[found async for found in search()]`
     To stop early, leave the loop and close the generator, so the socket is released at once::
 
-        async with contextlib.aclosing(search_iter()) as results:
+        async with contextlib.aclosing(search()) as results:
             async for result in results:
                 if result.mac_address == wanted:
                     break
@@ -159,7 +160,7 @@ async def search_iter(
         local_port: The local UDP port to send from and listen on. The projector may answer the port the
             request came from or port 4352 (Fig. 1 of the spec leaves that open), and 4352 is right for both,
             so that is the default. It means that only one search can run per local address at a time:
-            a second one fails with `PJLinkNoConnection`. 0 lets the operating system choose a port,
+            a second one fails with `PJLinkNoConnectionError`. 0 lets the operating system choose a port,
             which only suits projectors that answer the port the request came from.
 
     Yields:
@@ -167,60 +168,24 @@ async def search_iter(
 
     Raises:
         ValueError: An argument is not valid (raised when the iteration starts, before anything is sent).
-        PJLinkNoConnection: The socket could not be opened or bound (e.g. the local port is in use), or the
+        PJLinkNoConnectionError: The socket could not be opened or bound (e.g. the local port is in use), or the
             search start instruction could not be sent at all (e.g. there is no network).
     """
     if duration_seconds <= 0:
         raise ValueError("duration_seconds must be positive")
-    if not 0 < port < MAX_PORT_NUMBER:
+    if not 0 < port <= MAX_PORT_NUMBER:
         raise ValueError("port must be between 1 and 65535")
-    if not 0 <= local_port < MAX_PORT_NUMBER:
+    if not 0 <= local_port <= MAX_PORT_NUMBER:
         raise ValueError("local_port must be between 0 and 65535")
     family, targets = _resolve_targets(broadcast_address, port)
     local_sockaddr = _resolve_local(local_address, local_port, family)
 
     loop = asyncio.get_running_loop()
     answers: asyncio.Queue[SearchResult] = asyncio.Queue()
-    try:
-        udp_socket = open_socket(family, local_sockaddr, enable_broadcast=True)
-    except OSError as err:
-        raise PJLinkNoConnection(f"search failed - {err}") from err
-    try:
-        transport, _ = await loop.create_datagram_endpoint(lambda: _SearchProtocol(answers), sock=udp_socket)
-    except BaseException:
-        udp_socket.close()
-        raise
-
-    try:
+    async with open_endpoint(
+        _SearchProtocol(answers), family, local_sockaddr, enable_broadcast=True, purpose="search"
+    ) as udp_socket:
         _send_requests(udp_socket, targets)
         deadline = loop.time() + duration_seconds
         while (result := await _next_result(answers, deadline)) is not None:
             yield result
-    finally:
-        transport.close()
-        await asyncio.sleep(0)
-
-
-async def search(
-    *,
-    duration_seconds: float = DEFAULT_SEARCH_DURATION_SECONDS,
-    broadcast_address: str | Sequence[str] = DEFAULT_BROADCAST_ADDRESS,
-    port: int = PJLINK_UDP_PORT,
-    local_address: str | None = None,
-    local_port: int = PJLINK_UDP_PORT,
-) -> list[SearchResult]:
-    """Search for projectors, wait `duration_seconds` and return all that answered (§3.2).
-
-    This is `search_iter` collected into a list; see there for the arguments and the exceptions.
-    Use `search_iter` instead to react to a projector as soon as it answers.
-    """
-    return [
-        result
-        async for result in search_iter(
-            duration_seconds=duration_seconds,
-            broadcast_address=broadcast_address,
-            port=port,
-            local_address=local_address,
-            local_port=local_port,
-        )
-    ]

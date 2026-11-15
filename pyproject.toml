@@ -84,6 +84,10 @@ select = [
     "PLR1702", # pylint: too-many-nested-blocks
     "PLR0904", # pylint: too-many-public-methods
     "SLF",     # flake8-self
+    "ARG",     # flake8-unused-arguments
+    "PLR0914", # pylint: too-many-locals
+    "RUF029",  # ruff: unused-async
+    "N",       # pep8-naming
 ]
 preview = true
 explicit-preview-rules = true
@@ -92,7 +96,7 @@ ignore = [
     "TRY003", # tryceratops: raise-vanilla-args
 ]
 
-per-file-ignores = { "tests/**" = ["SLF001"] }
+per-file-ignores = { "tests/**" = ["SLF001", "ARG", "RUF029"] }
 
 [tool.ruff.format]
 quote-style = "preserve"

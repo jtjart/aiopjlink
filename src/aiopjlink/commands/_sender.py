@@ -3,22 +3,26 @@
 Sending one command to the projector and reading its answer the way the command groups need it.
 """
 
+from collections.abc import Awaitable, Callable
+
 from .._protocol import PJCommand
-from .._transport import Transport
 from ..enums import PJClass
-from ..exceptions import PJLinkNotReady, PJLinkNotSupported, PJLinkUnexpectedResponseParameter
+from ..exceptions import PJLinkNotReadyError, PJLinkNotSupportedError, PJLinkUnexpectedValueError
+
+TransmitCommand = Callable[[PJCommand], Awaitable[str]]
+"""Sends one command and returns the response parameter: what `PJLink` gives to the command groups."""
 
 
 class CommandSender:
     """What every command group uses to talk to the projector.
 
     A group is given one instead of inheriting these methods, so it only contains what is particular to its
-    own commands. The sender adds to `Transport.transmit` what the spec says about the meaning of answers
+    own commands. The sender adds to what `PJLink` transmits what the spec says about the meaning of answers
     (`ERR1` for "no lamp", `OK` where a value was asked for, ...).
     """
 
-    def __init__(self, transport: Transport) -> None:
-        self._transport = transport
+    def __init__(self, transmit_command: TransmitCommand) -> None:
+        self._transmit_command = transmit_command
 
     async def transmit(
         self, command: str, parameter: str, pjclass: PJClass, *, not_supported_message: str | None = None
@@ -30,10 +34,10 @@ class CommandSender:
         as its message.
         """
         try:
-            return await self._transport.transmit(PJCommand(command, parameter, pjclass))
-        except PJLinkNotSupported as err:
+            return await self._transmit_command(PJCommand(command, parameter, pjclass))
+        except PJLinkNotSupportedError as err:
             if not_supported_message is not None and err.command is not None:
-                raise PJLinkNotSupported(not_supported_message, command=command) from err
+                raise PJLinkNotSupportedError(not_supported_message, command=command) from err
             raise
 
     async def query_status(self, command: str, pjclass: PJClass, *, not_supported_message: str | None = None) -> str:
@@ -48,7 +52,7 @@ class CommandSender:
         """
         response_parameter = await self.transmit(command, "?", pjclass, not_supported_message=not_supported_message)
         if response_parameter.upper() == "OK":
-            raise PJLinkNotReady("projector answered a status query with OK", command=command)
+            raise PJLinkNotReadyError("projector answered a status query with OK", command=command)
         return response_parameter
 
     async def transmit_expecting_ok(
@@ -62,4 +66,4 @@ class CommandSender:
             command, parameter, pjclass, not_supported_message=not_supported_message
         )
         if response_parameter.upper() != "OK":
-            raise PJLinkUnexpectedResponseParameter("expected OK response")
+            raise PJLinkUnexpectedValueError("expected OK response")
