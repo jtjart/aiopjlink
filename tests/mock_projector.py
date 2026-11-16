@@ -64,7 +64,7 @@ class UnexpectedClientMessageError(PJLinkTestFrameworkError):
 
 
 class NoExpectationsError(PJLinkTestFrameworkError):
-    """The test case fails because the mock projector recieves a command before it is told how to respond."""
+    """The test case fails because the mock projector receives a command before it is told how to respond."""
 
 
 class PJLinkServerProtocol(asyncio.Protocol):
@@ -78,20 +78,16 @@ class PJLinkServerProtocol(asyncio.Protocol):
     """
 
     def __init__(self, loop: asyncio.AbstractEventLoop, debug: bool = False) -> None:
-
-        # Event loop of the current test case.
         self.loop = loop
-
-        # Should send and recieve messages be printed.
         self.debug = debug
 
-        # An opening message is sent as soon as a connection is established.
+        # Sent as soon as a connection is established.
         self._opening_message: bytes | None = None
 
-        # What the projector should expect to recieve / do next (as defined by the test case).
+        # What the projector should expect to receive next and how to react (as defined by the test case).
         self._expected_events: list[ExpectedEvent] = []
 
-        # Buffer fore incoming messages until \r.
+        # What has arrived so far of the message in progress. A message ends with CR.
         self._receive_buffer = b""
 
         # The port the server listens on (chosen by the OS, set by `mock_tcp_pjlink`).
@@ -105,13 +101,11 @@ class PJLinkServerProtocol(asyncio.Protocol):
         return client_for(self.port, **options)
 
     def _write(self, data: bytes) -> None:
-        """Send data to the client."""
         if self.debug:
             print("PJLinkServerProtocol SEND:", data)
         self.transport.write(data)
 
     def connection_made(self, transport: asyncio.BaseTransport) -> None:
-        """Called when a connection is first made to this projector."""
         self.transport = cast(asyncio.Transport, transport)
         if self.debug:
             peer = self.transport.get_extra_info("peername")
@@ -120,28 +114,23 @@ class PJLinkServerProtocol(asyncio.Protocol):
             self._write(self._opening_message)
 
     def connection_lost(self, exc: Exception | None) -> None:
-        """Called when the connection is lost or closed."""
         if self.debug:
             peer = self.transport.get_extra_info("peername")
             print("PJLinkServerProtocol CONNECTION_LOST:", peer)
 
     def data_received(self, data: bytes) -> None:
-        """Called when the projector recieves data from the client."""
         if self.debug:
             print("PJLinkServerProtocol RECV:", data)
 
-        # Buffer up writes until we get a terminator.
         self._receive_buffer += data
         if self._receive_buffer.endswith(b"\r"):
-            # Handle bad test case programming.
             if not len(self._expected_events):
                 raise NoExpectationsError("mock projector got a message before it was told to expect data")
 
-            # Pop the next expected event off.
             expected = self._expected_events.pop(0)
 
-            # If the client sent an _unexpected_ message, flag it as incorrect
-            # then save the contents of the buffer, and close the connection.
+            # A message other than the expected one is recorded for `when` to report, and the connection is
+            # closed, which the client sees as a disconnection.
             if self._receive_buffer != expected.incoming:
                 if self.debug:
                     print("PJLinkServerProtocol UNEXPECTED:", self._receive_buffer, "expected", expected.incoming)
@@ -149,10 +138,6 @@ class PJLinkServerProtocol(asyncio.Protocol):
                 self.loop.call_soon_threadsafe(expected.received.set)
                 self._receive_buffer = b""
                 self.transport.close()
-
-            # If the client sent an _expected_ message, flag it as correct,
-            # save the buffer contents, and then reply with the expected
-            # response.
             else:
                 expected.receive_buffer_contents = self._receive_buffer[:]
                 self.loop.call_soon_threadsafe(expected.received.set)
@@ -168,46 +153,38 @@ class PJLinkServerProtocol(asyncio.Protocol):
         self, incoming: bytes, respond_with: bytes, within_seconds: float = 1
     ) -> AsyncGenerator["ExpectedEvent", None]:
         """
-        When the projector recieves an incoming message, it should respond with
+        When the projector receives an incoming message, it should respond with
         a reply within n seconds.
 
-        If the projector recieves nothing from the client, raise `NoClientMessageError`.
-        If the projector recieves a different message, raise `UnexpectedClientMessageError`.
+        If the projector receives nothing from the client, raise `NoClientMessageError`.
+        If the projector receives a different message, raise `UnexpectedClientMessageError`.
 
         Other exceptions are passed through for handling by the test case.
         """
-        # Define the expected incoming message and response.
         expected = ExpectedEvent(incoming, respond_with, within_seconds=within_seconds)
         self._expected_events.append(expected)
 
-        # Give the event back to the application.
         try:
             yield expected
             await asyncio.wait_for(expected.received.wait(), timeout=expected.timeout_seconds)
 
             # The projector hangs up on a message it did not expect. A client that reconnects after a
-            # hang-up (see `aiopjlink2._transport`) does not see an error, so check the message here as well.
+            # hang-up (see `aiopjlink2.client`) does not see an error, so check the message here as well.
             if expected.receive_buffer_contents != expected.incoming:
                 raise UnexpectedClientMessageError(
                     f"projector expected {expected.incoming!r} from the client "
                     f"but got {expected.receive_buffer_contents!r}"
                 )
 
-        # Our mock protocol closes the server if it finds an error.
-        # This results in the client seeing a disconnection (it doesn't know its mocked)
-        # so we check the result of our event.
-
-        # Handle reasons our tests might not be written correctly.
         except asyncio.exceptions.TimeoutError as err:
-            # print("⌚ probably no message from client")
+            # No complete message arrived from the client in time.
             if not expected.receive_buffer_contents:
                 raise NoClientMessageError(
                     f"projector recieved no data from client (within={expected.timeout_seconds}s)"
                 ) from err
 
         except aiopjlink2.PJLinkConnectionClosedError:
-            # print("🚌 probably transport closed on purpose after bad message")
-            # Check the object state to see if it got a bad message.
+            # The mock hangs up on a message it did not expect (see `data_received`).
             if expected.receive_buffer_contents != expected.incoming:
                 raise UnexpectedClientMessageError(
                     f"projector expected {expected.incoming!r} from the client "
@@ -224,13 +201,8 @@ class PJLinkServerProtocol(asyncio.Protocol):
                 ) from None
             raise
 
-        # Ensure the event is removed.
-        # Handles the edge case where the client API raises an exception before transmission.
         finally:
-            # # Check the object state to see if it ever got a message from the client.
-            # print("📋 expected.incoming", expected.incoming)
-            # print("📋 expected.receive_buffer_contents", expected.receive_buffer_contents)
-
+            # The client API can raise before it transmits anything, which leaves the event waiting: remove it.
             if expected in self._expected_events:
                 self._expected_events.remove(expected)
 

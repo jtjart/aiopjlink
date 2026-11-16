@@ -19,13 +19,11 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
     async def test_inpt(self) -> None:
         """Check the INPT instructions work."""
         async with mock_client_server_noauth() as (server, client):
-            # Get current source.
             async with server.when(b"%1INPT ?\r", respond_with=b"%1INPT=31\r"):
                 mode, index = await client.sources.get()
                 self.assertEqual(mode, client.sources.Mode.DIGITAL)
                 self.assertEqual(index, "1")
 
-            # Set current source.
             async with server.when(b"%1INPT 21\r", respond_with=b"%1INPT=OK\r"):
                 await client.sources.set(aiopjlink2.Sources.Mode.VIDEO, "1")
 
@@ -44,39 +42,31 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
     async def test_inst_class1(self) -> None:
         """Test that available sources can be enumerated."""
         async with mock_client_server_noauth() as (server, client):
-            # List available clients
             async with server.when(b"%1INST ?\r", respond_with=b"%1INST=11 31 32 41 52 56\r"):
                 sources = await client.sources.available()
 
-                # Length
                 self.assertEqual(len(sources), 6)
 
-                # RGB 1
                 mode, index = sources[0]
                 self.assertEqual(mode, aiopjlink2.Sources.Mode.RGB)
                 self.assertEqual(index, "1")
 
-                # DIGITAL 1
                 mode, index = sources[1]
                 self.assertEqual(mode, aiopjlink2.Sources.Mode.DIGITAL)
                 self.assertEqual(index, "1")
 
-                # DIGITAL 2
                 mode, index = sources[2]
                 self.assertEqual(mode, aiopjlink2.Sources.Mode.DIGITAL)
                 self.assertEqual(index, "2")
 
-                # STORAGE 1
                 mode, index = sources[3]
                 self.assertEqual(mode, aiopjlink2.Sources.Mode.STORAGE)
                 self.assertEqual(index, "1")
 
-                # NETWORK 2
                 mode, index = sources[4]
                 self.assertEqual(mode, aiopjlink2.Sources.Mode.NETWORK)
                 self.assertEqual(index, "2")
 
-                # NETWORK 6
                 mode, index = sources[5]
                 self.assertEqual(mode, aiopjlink2.Sources.Mode.NETWORK)
                 self.assertEqual(index, "6")
@@ -91,7 +81,7 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
     async def test_inst_innm_class2(self) -> None:
         """Test that available sources and their names can be enumerated."""
         async with mock_client_server_noauth() as (server, client):
-            # List available clients (Class 2) - brief as the Class 1 shares the logic.
+            # Class 2 lists the sources like Class 1 does, so this is brief.
             async with server.when(b"%2INST ?\r", respond_with=b"%2INST=11 31 32 41 52 56\r"):
                 sources = await client.sources.available(pjclass=aiopjlink2.PJClass.TWO)
                 self.assertEqual(len(sources), 6)
@@ -116,7 +106,6 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(ValueError):
                     await client.sources.get_source_name(aiopjlink2.Sources.Mode.DIGITAL, bad_index)
 
-            # Get the names of available.
             async with (
                 server.when(b"%2INST ?\r", respond_with=b"%2INST=11\r"),
                 server.when(b"%2INNM ?11\r", respond_with=b"%2INNM=Computer\r"),
@@ -154,42 +143,40 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
                 await client.sources.set(mode, 0)
 
     async def test_ires(self) -> None:
-        """Test that the resolution of the current input can be recieved."""
+        """Test that the resolution of the current input can be received."""
         async with mock_client_server_noauth() as (server, client):
-            # Get resolution.
             async with server.when(b"%2IRES ?\r", respond_with=b"%2IRES=100x200\r"):
                 width, height = await client.sources.resolution()
                 self.assertEqual(width, 100)
                 self.assertEqual(height, 200)
 
-            # Handle spec edge cases.
+            # `-` means there is no signal input.
             with self.assertRaises(aiopjlink2.PJLinkProjectorError) as err:
                 async with server.when(b"%2IRES ?\r", respond_with=b"%2IRES=-\r"):
                     await client.sources.resolution()
             self.assertEqual(str(err.exception), "no signal input")
 
-            # Handle spec edge cases.
+            # `*` means the signal is unknown.
             with self.assertRaises(aiopjlink2.PJLinkProjectorError) as err:
                 async with server.when(b"%2IRES ?\r", respond_with=b"%2IRES=*\r"):
                     await client.sources.resolution()
             self.assertEqual(str(err.exception), "unknown signal")
 
-            # Bad response from the projecetor.
+            # Bad response from the projector.
             with self.assertRaises(aiopjlink2.PJLinkUnexpectedValueError) as err_unexpected_response_parameter:
                 async with server.when(b"%2IRES ?\r", respond_with=b"%2IRES=\r"):
                     width, height = await client.sources.resolution()
             self.assertIn("unable to parse resolution", str(err_unexpected_response_parameter.exception))
 
     async def test_rres(self) -> None:
-        """Test that the recommended resolution for the current input can be recieved."""
+        """Test that the recommended resolution for the current input can be received."""
         async with mock_client_server_noauth() as (server, client):
-            # Get resolution.
             async with server.when(b"%2RRES ?\r", respond_with=b"%2RRES=1920x1080\r"):
                 width, height = await client.sources.recommended_resolution()
                 self.assertEqual(width, 1920)
                 self.assertEqual(height, 1080)
 
-            # Bad response from the projecetor.
+            # Bad response from the projector.
             with self.assertRaises(aiopjlink2.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%2RRES ?\r", respond_with=b"%2RRES=\r"):
                     width, height = await client.sources.recommended_resolution()

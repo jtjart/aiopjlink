@@ -42,13 +42,13 @@ class LampGroup(unittest.IsolatedAsyncioTestCase):
                     lamps = await client.lamps.status()
             self.assertEqual(str(err.exception), "unparsable lamp status")
 
-            # Bad feedback from the projector.
+            # No lamp at all in the answer.
             with self.assertRaises(aiopjlink2.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%1LAMP ?\r", respond_with=b"%1LAMP=\r"):
                     lamps = await client.lamps.status()
             self.assertEqual(str(err.exception), "unparsable lamp status")
 
-            # Bad feedback from the projector.
+            # A lamp state that does not exist.
             with self.assertRaises(aiopjlink2.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%1LAMP ?\r", respond_with=b"%1LAMP=100 3\r"):
                     lamps = await client.lamps.status()
@@ -67,7 +67,7 @@ class LampGroup(unittest.IsolatedAsyncioTestCase):
     async def test_replacement_model(self) -> None:
         """Get a list of replacement lamp models."""
         async with mock_client_server_noauth() as (server, client):
-            # Once replacement.
+            # One replacement.
             async with server.when(b"%2RLMP ?\r", respond_with=b"%2RLMP=SampleLamp\r"):
                 models = await client.lamps.replacement_models()
                 self.assertEqual(len(models), 1)

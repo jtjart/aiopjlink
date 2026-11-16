@@ -14,7 +14,7 @@ from mock_projector import (
 
 
 class ProtocolTests(unittest.IsolatedAsyncioTestCase):
-    """PJLink protocol managment behaves as expected."""
+    """PJLink protocol management behaves as expected."""
 
     async def test_response_parsing_high_level(self) -> None:
         """Check that responses are handled correctly by the client."""
@@ -24,7 +24,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             server.open_and_send(b"PJLINK 0\r")
             client = server.client()
 
-            # Unxpected command sent as a result of a request.
+            # The answer names another command (`ROWP`) than the one that was asked (`POWR`).
             async with server.when(b"%1POWR ?\r", respond_with=b"%1ROWP=A\r"):
                 with self.assertRaises(aiopjlink2.PJLinkProtocolError):
                     await client.power.get()
@@ -58,6 +58,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             result = PJCommand("ABCD", large_param, PJClass.ONE)
         self.assertEqual(str(err.exception), "command param is larger than 128 bytes")
 
+        # Not a `PJClass` on purpose (hence the type checker suppressions): that is a programming error.
         with self.assertRaises(ValueError) as err_value_error:
             result = PJCommand("ABCD", "?", "3")  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
         self.assertEqual(str(err_value_error.exception), "'3' is not a valid PJClass")
@@ -164,7 +165,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             parse_response(response_line="%1abcd=err4\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err_device_failure.exception), "projector or display failure")
 
-        # Check that a respone does not fail if there is a CR right after
+        # Check that a response does not fail if there is a CR right after
         # an equals (e.g. §4.12 of the spec)
         command, param = parse_response(response_line="%1INF2=\r", expect_command="INF2", expect_pjclass=PJClass.ONE)
         self.assertEqual(command, "INF2")

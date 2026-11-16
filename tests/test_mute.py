@@ -46,41 +46,32 @@ class MuteGroup(unittest.IsolatedAsyncioTestCase):
     async def test_control_api(self) -> None:
         """Mute status can be set OK using expressive methods."""
         async with mock_client_server_noauth() as (server, client):
-            # VIDEO
-            # %1AVMT 11	%1AVMT=OK	blanking on
             async with server.when(b"%1AVMT 11\r", respond_with=b"%1AVMT=OK\r"):
                 await client.mute.video(True)
-            # %1AVMT 10	%1AVMT=OK	blanking off
             async with server.when(b"%1AVMT 10\r", respond_with=b"%1AVMT=OK\r"):
                 await client.mute.video(False)
 
-            # AUDIO
-            # %1AVMT 21	%1AVMT=OK	audio muting on
             async with server.when(b"%1AVMT 21\r", respond_with=b"%1AVMT=OK\r"):
                 await client.mute.audio(True)
-            # %1AVMT 20	%1AVMT=OK	audio muting off
             async with server.when(b"%1AVMT 20\r", respond_with=b"%1AVMT=OK\r"):
                 await client.mute.audio(False)
 
-            # BOTH AT ONCE
-            # %1AVMT 31	%1AVMT=OK	blanking on and audio muting on
             async with server.when(b"%1AVMT 31\r", respond_with=b"%1AVMT=OK\r"):
                 await client.mute.both(True)
 
-            # %1AVMT 30	%1AVMT=OK	blanking on and audio muting off
             async with server.when(b"%1AVMT 30\r", respond_with=b"%1AVMT=OK\r"):
                 await client.mute.both(False)
 
     async def test_set(self) -> None:
         """Mute status can be set OK using the shortcut set method."""
         async with mock_client_server_noauth() as (server, client):
-            # Fully specified (3x condition).
+            # The same setting for both tracks takes one command.
             async with server.when(b"%1AVMT 31\r", respond_with=b"%1AVMT=OK\r"):
                 await client.mute.set(True, True)
             async with server.when(b"%1AVMT 30\r", respond_with=b"%1AVMT=OK\r"):
                 await client.mute.set(False, False)
 
-            # Fully specified (2x instructions)
+            # Different settings take one command per track.
             async with (
                 server.when(b"%1AVMT 11\r", respond_with=b"%1AVMT=OK\r"),
                 server.when(b"%1AVMT 20\r", respond_with=b"%1AVMT=OK\r"),
@@ -93,19 +84,18 @@ class MuteGroup(unittest.IsolatedAsyncioTestCase):
             ):
                 await client.mute.set(False, True)
 
-            # Partially specified (for audio) (1x instruction)
+            # A single track takes one command.
             async with server.when(b"%1AVMT 21\r", respond_with=b"%1AVMT=OK\r"):
                 await client.mute.set(video=None, audio=True)
             async with server.when(b"%1AVMT 20\r", respond_with=b"%1AVMT=OK\r"):
                 await client.mute.set(video=None, audio=False)
 
-            # Partially specified (for video) (1x instruction)
             async with server.when(b"%1AVMT 11\r", respond_with=b"%1AVMT=OK\r"):
                 await client.mute.set(video=True, audio=None)
             async with server.when(b"%1AVMT 10\r", respond_with=b"%1AVMT=OK\r"):
                 await client.mute.set(video=False, audio=None)
 
-            # Nothing specified - so no messages sent.
+            # Nothing to change: nothing is sent.
             with self.assertRaises(NoClientMessageError):
                 async with server.when(b"%1XXXX 11\r", respond_with=b"NOTHING\r"):
                     await client.mute.set(None, None)

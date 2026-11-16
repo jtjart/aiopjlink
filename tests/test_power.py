@@ -9,7 +9,6 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
 
     async def test_state_enum_coercion(self) -> None:
         """Do the enums behave logically."""
-        # Power commands.
         self.assertEqual(bool(aiopjlink2.Power.State.ON), True)
         self.assertEqual(bool(aiopjlink2.Power.State.OFF), False)
         self.assertTrue(aiopjlink2.Power.State.ON)
@@ -32,27 +31,23 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
             client = server.client()
             self.addAsyncCleanup(client.close)
 
-            # Power off.
             async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r"):
                 status = await client.power.get()
                 self.assertEqual(status, aiopjlink2.Power.State.OFF)
 
-            # Power on.
             async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=1\r"):
                 status = await client.power.get()
                 self.assertEqual(status, aiopjlink2.Power.State.ON)
 
-            # Power cooling.
             async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=2\r"):
                 status = await client.power.get()
                 self.assertEqual(status, aiopjlink2.Power.State.COOLING)
 
-            # Power warming.
             async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=3\r"):
                 status = await client.power.get()
                 self.assertEqual(status, aiopjlink2.Power.State.WARMING)
 
-            # Unxpected power result.
+            # Unexpected power result.
             with self.assertRaises(aiopjlink2.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=A\r"):
                     await client.power.get()
@@ -67,19 +62,15 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
             client = server.client()
             self.addAsyncCleanup(client.close)
 
-            # Power ON
             async with server.when(b"%1POWR 1\r", respond_with=b"%1POWR=OK\r"):
                 await client.power.set(aiopjlink2.Power.State.ON)
 
-            # Power OFF
             async with server.when(b"%1POWR 0\r", respond_with=b"%1POWR=OK\r"):
                 await client.power.set(aiopjlink2.Power.State.OFF)
 
-            # Power ON
             async with server.when(b"%2POWR 1\r", respond_with=b"%2POWR=OK\r"):
                 await client.power.set(aiopjlink2.Power.State.ON, pjclass=aiopjlink2.PJClass.TWO)
 
-            # Power OFF
             async with server.when(b"%2POWR 0\r", respond_with=b"%2POWR=OK\r"):
                 await client.power.set(aiopjlink2.Power.State.OFF, pjclass=aiopjlink2.PJClass.TWO)
 
@@ -101,7 +92,7 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
                     await client.power.set(aiopjlink2.Power.State.OFF)
             self.assertEqual(str(err_unexpected_response_parameter.exception), "expected OK response")
 
-            # Expect enums.
+            # Only `ON` and `OFF` can be set.
             with self.assertRaises(ValueError) as err_value_error:
                 async with server.when(b"%1POWR 0\r", respond_with=b"%1POWR=OK\r"):
                     await client.power.set(aiopjlink2.Power.State.COOLING)
@@ -116,10 +107,8 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
             client = server.client()
             self.addAsyncCleanup(client.close)
 
-            # Power ON
             async with server.when(b"%1POWR 1\r", respond_with=b"%1POWR=OK\r"):
                 await client.power.turn_on()
 
-            # Power OFF
             async with server.when(b"%1POWR 0\r", respond_with=b"%1POWR=OK\r"):
                 await client.power.turn_off()

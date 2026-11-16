@@ -23,15 +23,15 @@ class InfoGroup(unittest.IsolatedAsyncioTestCase):
     async def test_serial_number(self) -> None:
         """Get the device serial number string."""
         async with mock_client_server_noauth() as (server, client):
-            # Version provided.
+            # Serial number provided.
             async with server.when(b"%2SNUM ?\r", respond_with=b"%2SNUM=XA3C2400119\r"):
-                version = await client.info.serial_number()
-                self.assertEqual(version, "XA3C2400119")
+                serial_number = await client.info.serial_number()
+                self.assertEqual(serial_number, "XA3C2400119")
 
-            # No version provided.
+            # No serial number provided.
             async with server.when(b"%2SNUM ?\r", respond_with=b"%2SNUM=\r"):
-                version = await client.info.serial_number()
-                self.assertEqual(version, "")
+                serial_number = await client.info.serial_number()
+                self.assertEqual(serial_number, "")
 
     async def test_pjlink_class(self) -> None:
         """Query the PJLink class support."""
@@ -44,7 +44,7 @@ class InfoGroup(unittest.IsolatedAsyncioTestCase):
             async with server.when(b"%1CLSS ?\r", respond_with=b"%1CLSS=2\r"):
                 self.assertEqual(await client.info.pjlink_class(), aiopjlink2.PJClass.TWO)
 
-            # Class 2 support from class 2 query (default).
+            # Class 2 support from a class 2 query.
             async with server.when(b"%2CLSS ?\r", respond_with=b"%2CLSS=2\r"):
                 response = await client.info.pjlink_class(pjclass=aiopjlink2.PJClass.TWO)
                 self.assertEqual(response, aiopjlink2.PJClass.TWO)

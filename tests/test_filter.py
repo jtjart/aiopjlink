@@ -30,7 +30,7 @@ class FilterGroup(unittest.IsolatedAsyncioTestCase):
     async def test_replacement_model(self) -> None:
         """Get a list of replacement filter models."""
         async with mock_client_server_noauth() as (server, client):
-            # Once replacement.
+            # One replacement.
             async with server.when(b"%2RFIL ?\r", respond_with=b"%2RFIL=SampleFilter\r"):
                 models = await client.filter.replacement_models()
                 self.assertEqual(len(models), 1)
