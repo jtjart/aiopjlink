@@ -14,8 +14,8 @@ from collections.abc import AsyncGenerator
 from typing import Any
 from unittest import mock
 
-import aiopjlink
-from aiopjlink import (
+import aiopjlink2
+from aiopjlink2 import (
     ErrorsChanged,
     InputChanged,
     LinkUp,
@@ -23,8 +23,8 @@ from aiopjlink import (
     PowerChanged,
     listen_notifications,
 )
-from aiopjlink._notify import _MAX_PENDING_NOTIFICATIONS, _NotificationProtocol, parse_event
-from aiopjlink._protocol import parse_mac_address, split_notification
+from aiopjlink2._notify import _MAX_PENDING_NOTIFICATIONS, _NotificationProtocol, parse_event
+from aiopjlink2._protocol import parse_mac_address, split_notification
 from mock_projector import LOCALHOST, ipv6_loopback_available, search_all, unused_udp_port
 
 MAC = "00:11:22:33:44:55"
@@ -33,7 +33,7 @@ MAX_WAIT_SECONDS = 2.0
 LISTENER_START_TIMEOUT_SECONDS = 10.0
 """The most a test waits for the listener to bind its socket."""
 
-ALL_OK = dict.fromkeys(aiopjlink.Errors.Category, aiopjlink.Errors.Level.OK)
+ALL_OK = dict.fromkeys(aiopjlink2.Errors.Category, aiopjlink2.Errors.Level.OK)
 
 
 def send_datagram(port: int, datagram: bytes, *, host: str = LOCALHOST) -> None:
@@ -105,14 +105,14 @@ class WireFormatTests(unittest.TestCase):
                 self.assertEqual(split_notification(data), ("POWR", "1"))
 
     def test_empty_parameter(self) -> None:
-        self.assertRaises(aiopjlink.PJLinkProtocolError, split_notification, "%2POWR=\r")
+        self.assertRaises(aiopjlink2.PJLinkProtocolError, split_notification, "%2POWR=\r")
 
     def test_not_a_notification(self) -> None:
         # The search start instruction and a Class 1 line are not notifications either.
         for data in ("", "\r", "garbage", "%2SRCH\r", "%1POWR=1\r", "%2POWR 1\r", "%2POW=1\r", "2POWR=1\r"):
             with self.subTest(data=data):
                 line = data.rstrip("\r\n")
-                with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
+                with self.assertRaises(aiopjlink2.PJLinkProtocolError) as err:
                     split_notification(data)
                 self.assertEqual(str(err.exception), f"unexpected status notification: {line}")
 
@@ -137,12 +137,12 @@ class ParseEventTests(unittest.TestCase):
             event,
             ErrorsChanged(
                 {
-                    aiopjlink.Errors.Category.FAN: aiopjlink.Errors.Level.WARN,
-                    aiopjlink.Errors.Category.LAMP: aiopjlink.Errors.Level.OK,
-                    aiopjlink.Errors.Category.TEMP: aiopjlink.Errors.Level.WARN,
-                    aiopjlink.Errors.Category.COVER: aiopjlink.Errors.Level.OK,
-                    aiopjlink.Errors.Category.FILTER: aiopjlink.Errors.Level.ERROR,
-                    aiopjlink.Errors.Category.OTHER: aiopjlink.Errors.Level.OK,
+                    aiopjlink2.Errors.Category.FAN: aiopjlink2.Errors.Level.WARN,
+                    aiopjlink2.Errors.Category.LAMP: aiopjlink2.Errors.Level.OK,
+                    aiopjlink2.Errors.Category.TEMP: aiopjlink2.Errors.Level.WARN,
+                    aiopjlink2.Errors.Category.COVER: aiopjlink2.Errors.Level.OK,
+                    aiopjlink2.Errors.Category.FILTER: aiopjlink2.Errors.Level.ERROR,
+                    aiopjlink2.Errors.Category.OTHER: aiopjlink2.Errors.Level.OK,
                 }
             ),
         )
@@ -152,14 +152,14 @@ class ParseEventTests(unittest.TestCase):
         self.assertEqual(parse_event("%2POWR=0\r"), PowerChanged(powered_on=False))
 
     def test_input(self) -> None:
-        self.assertEqual(parse_event("%2INPT=31\r"), InputChanged(aiopjlink.Sources.Mode.DIGITAL, "1"))
+        self.assertEqual(parse_event("%2INPT=31\r"), InputChanged(aiopjlink2.Sources.Mode.DIGITAL, "1"))
         # Class 2 indexes go up to Z (§3.3.2: "11 to 6Z").
-        self.assertEqual(parse_event("%2INPT=6Z\r"), InputChanged(aiopjlink.Sources.Mode.INTERNAL, "Z"))
+        self.assertEqual(parse_event("%2INPT=6Z\r"), InputChanged(aiopjlink2.Sources.Mode.INTERNAL, "Z"))
 
     def test_invalid_protocol(self) -> None:
         """Not what a projector would send: `PJLinkProtocolError`."""
         for data in ("%2LKUP=nonsense\r", "%2LKUP=\r", "%2LKUP=00:11:22:33:44\r", "%2ACKN=" + MAC + "\r", "%2XXXX=1\r"):
-            with self.subTest(data=data), self.assertRaises(aiopjlink.PJLinkProtocolError):
+            with self.subTest(data=data), self.assertRaises(aiopjlink2.PJLinkProtocolError):
                 parse_event(data)
 
     def test_invalid_value(self) -> None:
@@ -176,7 +176,7 @@ class ParseEventTests(unittest.TestCase):
         }
         for data, message in cases.items():
             with self.subTest(data=data):
-                with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
+                with self.assertRaises(aiopjlink2.PJLinkUnexpectedValueError) as err:
                     parse_event(data)
                 self.assertEqual(str(err.exception), message)
 
@@ -196,7 +196,7 @@ class ParseEventTests(unittest.TestCase):
             "PowerChanged",
             "InputChanged",
         ):
-            self.assertIn(name, aiopjlink.__all__)
+            self.assertIn(name, aiopjlink2.__all__)
 
 
 class ListenTests(unittest.IsolatedAsyncioTestCase):
@@ -218,7 +218,7 @@ class ListenTests(unittest.IsolatedAsyncioTestCase):
                 Notification(LOCALHOST, LinkUp(MAC)),
                 Notification(LOCALHOST, ErrorsChanged(ALL_OK)),
                 Notification(LOCALHOST, PowerChanged(powered_on=True)),
-                Notification(LOCALHOST, InputChanged(aiopjlink.Sources.Mode.DIGITAL, "2")),
+                Notification(LOCALHOST, InputChanged(aiopjlink2.Sources.Mode.DIGITAL, "2")),
             ],
         )
 
@@ -237,7 +237,8 @@ class ListenTests(unittest.IsolatedAsyncioTestCase):
         port = unused_udp_port()
         found = await listen_and_send(port, b"%2powr=1", b"%2INPT=31\r\n", count=2)
         self.assertEqual(
-            [n.event for n in found], [PowerChanged(powered_on=True), InputChanged(aiopjlink.Sources.Mode.DIGITAL, "1")]
+            [n.event for n in found],
+            [PowerChanged(powered_on=True), InputChanged(aiopjlink2.Sources.Mode.DIGITAL, "1")],
         )
 
     async def test_other_datagrams_are_ignored(self) -> None:
@@ -263,7 +264,7 @@ class ListenTests(unittest.IsolatedAsyncioTestCase):
     async def test_what_is_ignored_is_logged(self) -> None:
         """So that it can be seen what the projector sends."""
         port = unused_udp_port()
-        with self.assertLogs("aiopjlink", level="DEBUG") as logs:
+        with self.assertLogs("aiopjlink2", level="DEBUG") as logs:
             await listen_and_send(port, b"%2POWR=2\r", b"%2POWR=1\r", count=1)
         output = "\n".join(logs.output)
         self.assertIn("ignoring datagram from 127.0.0.1: unexpected power status notification", output)
@@ -273,14 +274,14 @@ class ListenTests(unittest.IsolatedAsyncioTestCase):
         """When more are waiting than the queue holds, the newest are dropped: the oldest are the ones kept."""
         queue: asyncio.Queue[Notification] = asyncio.Queue(2)
         protocol = _NotificationProtocol(queue)
-        with self.assertLogs("aiopjlink", level="DEBUG") as logs:
+        with self.assertLogs("aiopjlink2", level="DEBUG") as logs:
             for index in "1234":
                 protocol.datagram_received(f"%2INPT=3{index}\r".encode(), (LOCALHOST, 4352))
         self.assertEqual(
             [queue.get_nowait().event for _ in range(2)],
             [
-                InputChanged(aiopjlink.Sources.Mode.DIGITAL, "1"),
-                InputChanged(aiopjlink.Sources.Mode.DIGITAL, "2"),
+                InputChanged(aiopjlink2.Sources.Mode.DIGITAL, "1"),
+                InputChanged(aiopjlink2.Sources.Mode.DIGITAL, "2"),
             ],
         )
         self.assertTrue(queue.empty())
@@ -293,7 +294,7 @@ class ListenTests(unittest.IsolatedAsyncioTestCase):
     async def test_the_listener_bounds_its_queue(self) -> None:
         """What keeps a flood on the open port from filling memory is that the listener's queue has a limit."""
         port = unused_udp_port()
-        with mock.patch("aiopjlink._notify.asyncio.Queue", wraps=asyncio.Queue) as queue_class:
+        with mock.patch("aiopjlink2._notify.asyncio.Queue", wraps=asyncio.Queue) as queue_class:
             await listen_and_send(port, b"%2POWR=1\r", count=1)
         queue_class.assert_called_once_with(_MAX_PENDING_NOTIFICATIONS)
         self.assertGreater(_MAX_PENDING_NOTIFICATIONS, 0)
@@ -363,17 +364,17 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as blocker:
             blocker.bind((LOCALHOST, 0))
             port = blocker.getsockname()[1]
-            with self.assertRaises(aiopjlink.PJLinkNoConnectionError) as err:
+            with self.assertRaises(aiopjlink2.PJLinkNoConnectionError) as err:
                 await start_listening(**listener_arguments(port))
         self.assertTrue(str(err.exception).startswith("listening for notifications failed - "), str(err.exception))
-        self.assertIsInstance(err.exception, aiopjlink.PJLinkConnectionError)
+        self.assertIsInstance(err.exception, aiopjlink2.PJLinkConnectionError)
 
     async def test_only_one_listener_per_port(self) -> None:
         port = unused_udp_port()
         async with contextlib.aclosing(listen_notifications(**listener_arguments(port))) as first:
             pending = asyncio.ensure_future(take_notifications(first, 1))
             await asyncio.sleep(0)
-            with self.assertRaises(aiopjlink.PJLinkNoConnectionError):
+            with self.assertRaises(aiopjlink2.PJLinkNoConnectionError):
                 await start_listening(**listener_arguments(port))
             pending.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -385,7 +386,7 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
         async with contextlib.aclosing(listen_notifications(**listener_arguments(port))) as found:
             pending = asyncio.ensure_future(take_notifications(found, 1))
             await asyncio.sleep(0)
-            with self.assertRaises(aiopjlink.PJLinkNoConnectionError):
+            with self.assertRaises(aiopjlink2.PJLinkNoConnectionError):
                 await search_all(
                     duration_seconds=0.1, broadcast_address=LOCALHOST, local_address=LOCALHOST, local_port=port
                 )
@@ -394,7 +395,7 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
                 await pending
 
     async def test_local_address_not_on_this_machine(self) -> None:
-        with self.assertRaises(aiopjlink.PJLinkNoConnectionError):
+        with self.assertRaises(aiopjlink2.PJLinkNoConnectionError):
             await start_listening(local_address="192.0.2.1", local_port=unused_udp_port())
 
     async def test_no_socket_can_be_made(self) -> None:
@@ -402,7 +403,7 @@ class ListenErrorTests(unittest.IsolatedAsyncioTestCase):
         port = unused_udp_port()
         with (
             mock.patch.object(socket, "socket", side_effect=OSError(errno.EAFNOSUPPORT, "not supported")),
-            self.assertRaises(aiopjlink.PJLinkNoConnectionError) as err,
+            self.assertRaises(aiopjlink2.PJLinkNoConnectionError) as err,
         ):
             await start_listening(**listener_arguments(port))
         self.assertEqual(

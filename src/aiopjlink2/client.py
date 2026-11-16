@@ -3,8 +3,8 @@
 The `PJLink` class is a connection to a projector using the PJLink protocol.
 
 To provide a "pythonic" API for the different PJLink commands, `PJLink` hands every group of related commands in
-`aiopjlink.commands` a `CommandSender` that sends through `PJLink._transmit`. The groups are given that function,
-not the `PJLink` object, so `aiopjlink.commands` never imports this module.
+`aiopjlink2.commands` a `CommandSender` that sends through `PJLink._transmit`. The groups are given that function,
+not the `PJLink` object, so `aiopjlink2.commands` never imports this module.
 
 Connection handling
 -------------------
@@ -62,7 +62,7 @@ a projector that dislikes it waits two seconds before saying so (§5.1), and tha
 
 Error handling
 --------------
-See `aiopjlink.exceptions`: everything raised here is a subclass of `PJLinkError`.
+See `aiopjlink2.exceptions`: everything raised here is a subclass of `PJLinkError`.
 """
 
 import asyncio

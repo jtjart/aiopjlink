@@ -5,7 +5,7 @@ Shared logging helpers for projector traffic debugging.
 
 import logging
 
-LOGGER = logging.getLogger("aiopjlink")
+LOGGER = logging.getLogger("aiopjlink2")
 
 
 def redact_debug_payload(payload: str) -> str:

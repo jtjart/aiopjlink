@@ -1,6 +1,6 @@
 import unittest
 
-import aiopjlink
+import aiopjlink2
 from mock_projector import mock_tcp_pjlink
 
 
@@ -10,18 +10,18 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
     async def test_state_enum_coercion(self) -> None:
         """Do the enums behave logically."""
         # Power commands.
-        self.assertEqual(bool(aiopjlink.Power.State.ON), True)
-        self.assertEqual(bool(aiopjlink.Power.State.OFF), False)
-        self.assertTrue(aiopjlink.Power.State.ON)
-        self.assertFalse(aiopjlink.Power.State.OFF)
+        self.assertEqual(bool(aiopjlink2.Power.State.ON), True)
+        self.assertEqual(bool(aiopjlink2.Power.State.OFF), False)
+        self.assertTrue(aiopjlink2.Power.State.ON)
+        self.assertFalse(aiopjlink2.Power.State.OFF)
 
         # Power status (truthy).
-        self.assertTrue(aiopjlink.Power.State.ON)
-        self.assertTrue(aiopjlink.Power.State.WARMING)
+        self.assertTrue(aiopjlink2.Power.State.ON)
+        self.assertTrue(aiopjlink2.Power.State.WARMING)
 
         # Power status (falsy).
-        self.assertFalse(aiopjlink.Power.State.COOLING)
-        self.assertFalse(aiopjlink.Power.State.OFF)
+        self.assertFalse(aiopjlink2.Power.State.COOLING)
+        self.assertFalse(aiopjlink2.Power.State.OFF)
 
     async def test_power_get(self) -> None:
         """Get power status."""
@@ -35,25 +35,25 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
             # Power off.
             async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r"):
                 status = await client.power.get()
-                self.assertEqual(status, aiopjlink.Power.State.OFF)
+                self.assertEqual(status, aiopjlink2.Power.State.OFF)
 
             # Power on.
             async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=1\r"):
                 status = await client.power.get()
-                self.assertEqual(status, aiopjlink.Power.State.ON)
+                self.assertEqual(status, aiopjlink2.Power.State.ON)
 
             # Power cooling.
             async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=2\r"):
                 status = await client.power.get()
-                self.assertEqual(status, aiopjlink.Power.State.COOLING)
+                self.assertEqual(status, aiopjlink2.Power.State.COOLING)
 
             # Power warming.
             async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=3\r"):
                 status = await client.power.get()
-                self.assertEqual(status, aiopjlink.Power.State.WARMING)
+                self.assertEqual(status, aiopjlink2.Power.State.WARMING)
 
             # Unxpected power result.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
+            with self.assertRaises(aiopjlink2.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=A\r"):
                     await client.power.get()
             self.assertEqual(str(err.exception), "unexpected power state")
@@ -69,42 +69,42 @@ class PowerGroup(unittest.IsolatedAsyncioTestCase):
 
             # Power ON
             async with server.when(b"%1POWR 1\r", respond_with=b"%1POWR=OK\r"):
-                await client.power.set(aiopjlink.Power.State.ON)
+                await client.power.set(aiopjlink2.Power.State.ON)
 
             # Power OFF
             async with server.when(b"%1POWR 0\r", respond_with=b"%1POWR=OK\r"):
-                await client.power.set(aiopjlink.Power.State.OFF)
+                await client.power.set(aiopjlink2.Power.State.OFF)
 
             # Power ON
             async with server.when(b"%2POWR 1\r", respond_with=b"%2POWR=OK\r"):
-                await client.power.set(aiopjlink.Power.State.ON, pjclass=aiopjlink.PJClass.TWO)
+                await client.power.set(aiopjlink2.Power.State.ON, pjclass=aiopjlink2.PJClass.TWO)
 
             # Power OFF
             async with server.when(b"%2POWR 0\r", respond_with=b"%2POWR=OK\r"):
-                await client.power.set(aiopjlink.Power.State.OFF, pjclass=aiopjlink.PJClass.TWO)
+                await client.power.set(aiopjlink2.Power.State.OFF, pjclass=aiopjlink2.PJClass.TWO)
 
             # Power set unavailable (test duplicated in test_response_parsing)
-            with self.assertRaises(aiopjlink.PJLinkNotReadyError) as err_not_ready:
+            with self.assertRaises(aiopjlink2.PJLinkNotReadyError) as err_not_ready:
                 async with server.when(b"%1POWR 0\r", respond_with=b"%1POWR=ERR3\r"):
                     await client.power.set(client.power.State.OFF)
             self.assertEqual(str(err_not_ready.exception), "unavailable in the current state")
 
             # Power set not possible (test duplicated in test_response_parsing)
-            with self.assertRaises(aiopjlink.PJLinkMalfunctionError) as err_device_failure:
+            with self.assertRaises(aiopjlink2.PJLinkMalfunctionError) as err_device_failure:
                 async with server.when(b"%1POWR 0\r", respond_with=b"%1POWR=ERR4\r"):
                     await client.power.set(client.power.State.OFF)
             self.assertEqual(str(err_device_failure.exception), "projector or display failure")
 
             # Unexpected projector reply to a sensible message.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err_unexpected_response_parameter:
+            with self.assertRaises(aiopjlink2.PJLinkUnexpectedValueError) as err_unexpected_response_parameter:
                 async with server.when(b"%1POWR 0\r", respond_with=b"%1POWR=UGH\r"):
-                    await client.power.set(aiopjlink.Power.State.OFF)
+                    await client.power.set(aiopjlink2.Power.State.OFF)
             self.assertEqual(str(err_unexpected_response_parameter.exception), "expected OK response")
 
             # Expect enums.
             with self.assertRaises(ValueError) as err_value_error:
                 async with server.when(b"%1POWR 0\r", respond_with=b"%1POWR=OK\r"):
-                    await client.power.set(aiopjlink.Power.State.COOLING)
+                    await client.power.set(aiopjlink2.Power.State.COOLING)
             self.assertEqual(str(err_value_error.exception), "expected Power.State.ON or Power.State.OFF")
 
     async def test_power_shortcuts(self) -> None:
