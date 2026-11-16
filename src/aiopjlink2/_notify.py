@@ -12,7 +12,7 @@ anyone on the network can send one. A notification says that something changed, 
 a controller that acts on it should ask the projector (over the authenticated TCP connection) what the state is.
 
 Nothing here uses `PJLink`. There is no connection and no password, so the listener has a socket of its own,
-opened like the search's (see `aiopjlink._udp`). Everything a stranger on the network might send to port 4352,
+opened like the search's (see `aiopjlink2._udp`). Everything a stranger on the network might send to port 4352,
 including the search protocol's own datagrams, is ignored, not raised.
 """
 

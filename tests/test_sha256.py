@@ -14,9 +14,9 @@ import unittest
 from collections.abc import Iterable
 from unittest.mock import patch
 
-import aiopjlink
-from aiopjlink import PJAuth, Power
-from aiopjlink._auth import authentication_required, build_sha256_request, parse_security_reply
+import aiopjlink2
+from aiopjlink2 import PJAuth, Power
+from aiopjlink2._auth import authentication_required, build_sha256_request, parse_security_reply
 from mock_projector import raw_tcp_server
 
 PASSWORD = "abc123"
@@ -204,7 +204,7 @@ class SpecExampleTests(unittest.TestCase):
     DIGEST = b"70ab129eac6924d4c129c9c4fcf45be42e1e776325a66db67e5b6eee50f2a692"
 
     def test_first_command_of_the_example(self) -> None:
-        with patch("aiopjlink._auth.secrets.token_bytes", return_value=self.CONTROLLER_NONCE):
+        with patch("aiopjlink2._auth.secrets.token_bytes", return_value=self.CONTROLLER_NONCE):
             request = build_sha256_request(self.PROJECTOR_NONCE, "%1POWR 1\r", "JBMIAProjectorLink")
         self.assertEqual(request, b"c14b279e603d8a5f17e849ba360f2dc5" + self.DIGEST + b"%1POWR 1\r")
 
@@ -214,7 +214,7 @@ class SpecExampleTests(unittest.TestCase):
         self.assertEqual(len(first), 32 + 64 + len(b"%1POWR ?\r"))
 
     def test_upper_case_projector_number_is_accepted(self) -> None:
-        with patch("aiopjlink._auth.secrets.token_bytes", return_value=self.CONTROLLER_NONCE):
+        with patch("aiopjlink2._auth.secrets.token_bytes", return_value=self.CONTROLLER_NONCE):
             lower = build_sha256_request(self.PROJECTOR_NONCE, "%1POWR 1\r", "pw")
             upper = build_sha256_request(self.PROJECTOR_NONCE.upper(), "%1POWR 1\r", "pw")
         self.assertEqual(lower, upper)
@@ -241,7 +241,7 @@ class SpecExampleTests(unittest.TestCase):
         self.assertTrue(authentication_required("PJLINK 1 21d0e96e\r"))
         self.assertFalse(authentication_required("PJLINK 0\r"))
         for bad in ("PJLINK\r", "PJLINK X\r", "PJLINK 1X21d0e96e\r", "PJLINK 2 21d0e96e\r", "HELLO WORLD\r"):
-            with self.subTest(welcome=bad), self.assertRaises(aiopjlink.PJLinkProtocolError):
+            with self.subTest(welcome=bad), self.assertRaises(aiopjlink2.PJLinkProtocolError):
                 authentication_required(bad)
 
 
@@ -275,14 +275,14 @@ class Sha256Tests(unittest.IsolatedAsyncioTestCase):
         projector = SecureProjector(md5=False)
         async with raw_tcp_server(projector) as server:
             link = server.client(password="wrong", timeout_seconds=2)
-            with self.assertRaises(aiopjlink.PJLinkAuthenticationError):
+            with self.assertRaises(aiopjlink2.PJLinkAuthenticationError):
                 await link.power.get()
         self.assertEqual(projector.connections, 1)
 
     async def test_missing_password_is_reported_before_anything_is_asked(self) -> None:
         projector = SecureProjector()
         async with raw_tcp_server(projector) as server:
-            with self.assertRaises(aiopjlink.PJLinkAuthenticationError) as err:
+            with self.assertRaises(aiopjlink2.PJLinkAuthenticationError) as err:
                 await server.client(timeout_seconds=2).power.get()
         self.assertEqual(str(err.exception), "password required")
         self.assertEqual(projector.lines, [])
@@ -343,7 +343,7 @@ class LegacyFallbackTests(unittest.IsolatedAsyncioTestCase):
         projector = SecureProjector(sha256=False)
         async with raw_tcp_server(projector) as server:
             link = server.client(password="wrong", timeout_seconds=2)
-            with self.assertRaises(aiopjlink.PJLinkAuthenticationError):
+            with self.assertRaises(aiopjlink2.PJLinkAuthenticationError):
                 await link.power.get()
 
     async def test_sha256_only_mode_never_downgrades(self) -> None:
@@ -352,7 +352,7 @@ class LegacyFallbackTests(unittest.IsolatedAsyncioTestCase):
                 projector = SecureProjector(sha256=False, on_inquiry=behaviour)
                 async with raw_tcp_server(projector) as server:
                     link = server.client(password=PASSWORD, timeout_seconds=2, authentication=PJAuth.SHA256)
-                    with self.assertRaises(aiopjlink.PJLinkNotSupportedError) as err:
+                    with self.assertRaises(aiopjlink2.PJLinkNotSupportedError) as err:
                         await link.lamps.hours()
                     self.assertEqual(str(err.exception), "SHA256 authentication not supported by the projector")
                 self.assertEqual(projector.authenticated_with, [])
@@ -392,7 +392,7 @@ class LegacyFallbackTests(unittest.IsolatedAsyncioTestCase):
         projector = SecureProjector(sha256=False, on_inquiry="ERR1")
         async with raw_tcp_server(projector) as server:
             link = server.client(password="wrong", timeout_seconds=3)
-            with self.assertRaises(aiopjlink.PJLinkAuthenticationError):
+            with self.assertRaises(aiopjlink2.PJLinkAuthenticationError):
                 await link.power.get()
         self.assertEqual((projector.inquiries, projector.connections), (1, 2))
 
@@ -402,7 +402,7 @@ class LegacyFallbackTests(unittest.IsolatedAsyncioTestCase):
         async with raw_tcp_server(projector) as server:
             link = server.client(password="wrong", timeout_seconds=2)
             start = time.monotonic()
-            with self.assertRaises(aiopjlink.PJLinkAuthenticationError):
+            with self.assertRaises(aiopjlink2.PJLinkAuthenticationError):
                 await link.power.get()
             self.assertLess(time.monotonic() - start, 3)
         self.assertEqual(projector.inquiries, 2)
@@ -429,7 +429,7 @@ class LegacyFallbackTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(procedure=name):
                 async with raw_tcp_server(projector) as server:
                     link = server.client(password="wrong", timeout_seconds=1)
-                    with self.assertRaises(aiopjlink.PJLinkAuthenticationError):
+                    with self.assertRaises(aiopjlink2.PJLinkAuthenticationError):
                         await link.power.get()
 
     async def test_wrong_password_on_the_second_try_is_a_password_error_not_a_timeout(self) -> None:
@@ -442,7 +442,7 @@ class LegacyFallbackTests(unittest.IsolatedAsyncioTestCase):
         async with raw_tcp_server(projector) as server:
             link = server.client(password="wrong", timeout_seconds=3)
             start = time.monotonic()
-            with self.assertRaises(aiopjlink.PJLinkAuthenticationError):
+            with self.assertRaises(aiopjlink2.PJLinkAuthenticationError):
                 await link.power.get()
             self.assertLess(time.monotonic() - start, 6)
 
@@ -450,7 +450,7 @@ class LegacyFallbackTests(unittest.IsolatedAsyncioTestCase):
         projector = SecureProjector(sha256=True, md5=False, password="right")
         async with raw_tcp_server(projector) as server:
             link = server.client(password="wrong", timeout_seconds=2, authentication=PJAuth.SHA256)
-            with self.assertRaises(aiopjlink.PJLinkAuthenticationError):
+            with self.assertRaises(aiopjlink2.PJLinkAuthenticationError):
                 await link.power.get()
         self.assertEqual(projector.connections, 1)
 
@@ -463,7 +463,7 @@ class LegacyFallbackTests(unittest.IsolatedAsyncioTestCase):
         projector = SecureProjector(sha256=False, on_inquiry="silent", drop={2})
         async with raw_tcp_server(projector) as server:
             link = server.client(password=PASSWORD, timeout_seconds=2)
-            with self.assertRaises(aiopjlink.PJLinkConnectionClosedError):
+            with self.assertRaises(aiopjlink2.PJLinkConnectionClosedError):
                 await link.power.get()
             self.assertEqual(await link.power.get(), Power.State.ON)
             await link.close()
@@ -475,7 +475,7 @@ class LegacyFallbackTests(unittest.IsolatedAsyncioTestCase):
         projector = SecureProjector(sha256=True, md5=False, ignore_inquiries=1, drop={2})
         async with raw_tcp_server(projector) as server:
             link = server.client(password=PASSWORD, timeout_seconds=2)
-            with self.assertRaises(aiopjlink.PJLinkConnectionClosedError):
+            with self.assertRaises(aiopjlink2.PJLinkConnectionClosedError):
                 await link.power.get()
             self.assertEqual(await link.power.get(), Power.State.ON)  # MD5 rejected, SHA256 at once.
             await link.close()
@@ -486,7 +486,7 @@ class LegacyFallbackTests(unittest.IsolatedAsyncioTestCase):
         projector = SecureProjector(sha256=False, on_inquiry="silent", password="other")
         async with raw_tcp_server(projector) as server:
             link = server.client(password=PASSWORD, timeout_seconds=2)
-            with self.assertRaises(aiopjlink.PJLinkAuthenticationError):
+            with self.assertRaises(aiopjlink2.PJLinkAuthenticationError):
                 await link.power.get()
             projector.password = PASSWORD
             self.assertEqual(await link.power.get(), Power.State.ON)
@@ -507,7 +507,7 @@ class DigestAnswerTimeTests(unittest.IsolatedAsyncioTestCase):
         async with raw_tcp_server(deaf) as server:
             link = server.client(password=PASSWORD, timeout_seconds=1, authentication=PJAuth.MD5)
             start = time.monotonic()
-            with self.assertRaises(aiopjlink.PJLinkNoConnectionError):
+            with self.assertRaises(aiopjlink2.PJLinkNoConnectionError):
                 await link.power.get()
             self.assertGreater(time.monotonic() - start, 2.5)
             self.assertLess(time.monotonic() - start, 4)
@@ -524,7 +524,7 @@ class DigestAnswerTimeTests(unittest.IsolatedAsyncioTestCase):
         async with raw_tcp_server(deaf) as server:
             link = server.client(timeout_seconds=1)
             start = time.monotonic()
-            with self.assertRaises(aiopjlink.PJLinkNoConnectionError):
+            with self.assertRaises(aiopjlink2.PJLinkNoConnectionError):
                 await link.power.get()
             self.assertLess(time.monotonic() - start, 2)
 
@@ -545,11 +545,11 @@ class ModeTests(unittest.IsolatedAsyncioTestCase):
         projector = SecureProjector(sha256=True, md5=False)
         async with raw_tcp_server(projector) as server:
             link = server.client(password=PASSWORD, timeout_seconds=2, authentication=PJAuth.MD5)
-            with self.assertRaises(aiopjlink.PJLinkAuthenticationError):
+            with self.assertRaises(aiopjlink2.PJLinkAuthenticationError):
                 await link.power.get()
 
     async def test_default_is_auto(self) -> None:
-        self.assertIs(aiopjlink.PJLink(address="127.0.0.1").authentication, PJAuth.AUTO)
+        self.assertIs(aiopjlink2.PJLink(address="127.0.0.1").authentication, PJAuth.AUTO)
 
     async def test_exported(self) -> None:
-        self.assertIn("PJAuth", aiopjlink.__all__)
+        self.assertIn("PJAuth", aiopjlink2.__all__)

@@ -3,7 +3,7 @@
 Enumerations shared by the whole library.
 
 Enumerations that belong to a single command group (e.g. `Power.State`,
-`Sources.Mode`) live next to that group in `aiopjlink.commands`.
+`Sources.Mode`) live next to that group in `aiopjlink2.commands`.
 """
 
 from enum import Enum

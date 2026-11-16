@@ -1,6 +1,6 @@
 import unittest
 
-import aiopjlink
+import aiopjlink2
 from mock_projector import mock_client_server_noauth
 
 
@@ -16,13 +16,13 @@ class FilterGroup(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(hours, 100)
 
             # No filter handled correctly.
-            with self.assertRaises(aiopjlink.PJLinkNotSupportedError) as err:
+            with self.assertRaises(aiopjlink2.PJLinkNotSupportedError) as err:
                 async with server.when(b"%2FILT ?\r", respond_with=b"%2FILT=ERR1\r"):
                     hours = await client.filter.hours()
             self.assertEqual(str(err.exception), "no filter")
 
             # Unparsable usage time.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err_unexpected_response_parameter:
+            with self.assertRaises(aiopjlink2.PJLinkUnexpectedValueError) as err_unexpected_response_parameter:
                 async with server.when(b"%2FILT ?\r", respond_with=b"%2FILT=abc\r"):
                     hours = await client.filter.hours()
             self.assertEqual(str(err_unexpected_response_parameter.exception), "filter usage not parsable")

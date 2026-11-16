@@ -55,7 +55,7 @@ Create one `PJLink` object and call its command groups. The first command connec
 ```python
 import asyncio
 
-from aiopjlink import PJLink
+from aiopjlink2 import PJLink
 
 
 async def main() -> None:
@@ -77,7 +77,7 @@ One object may be shared between tasks: commands are sent one after the other.
 
 ```python
 import asyncio
-from aiopjlink import search
+from aiopjlink2 import search
 
 
 async def main() -> None:
@@ -96,7 +96,7 @@ A `SearchResult` has the `address` the answer came from, which goes straight int
 
 ```python
 from contextlib import aclosing
-from aiopjlink import search
+from aiopjlink2 import search
 
 
 async def find_address(mac_address: str) -> str | None:
@@ -130,7 +130,7 @@ A projector can report changes of its state by itself (§3.3): it started warmin
 ```python
 import asyncio
 
-from aiopjlink import ErrorsChanged, InputChanged, LinkUp, PowerChanged, listen_notifications
+from aiopjlink2 import ErrorsChanged, InputChanged, LinkUp, PowerChanged, listen_notifications
 
 
 async def main() -> None:
@@ -239,11 +239,11 @@ except PJLinkError:
     ...  # anything else
 ```
 
-`ValueError` is raised for invalid arguments (a programming error). The full table of situations is in `aiopjlink/exceptions.py`.
+`ValueError` is raised for invalid arguments (a programming error). The full table of situations is in `aiopjlink2/exceptions.py`.
 
 ## Debug logging
 
-Traffic is logged at `DEBUG` level on the `aiopjlink` logger (authentication tokens are redacted):
+Traffic is logged at `DEBUG` level on the `aiopjlink2` logger (authentication tokens are redacted):
 
 ```python
 import logging
@@ -256,7 +256,7 @@ logging.basicConfig(level=logging.DEBUG)
 The easiest way to start is the [dev container](.devcontainer/devcontainer.json): open the repository in VS Code and choose "Reopen in Container". Python 3.14, [uv](https://docs.astral.sh/uv/), the dependencies and the pre-commit hooks are set up automatically.
 Working without the container is possible too. See [CONTRIBUTING.md](CONTRIBUTING.md) for the setup, the checks and the code layout.
 
-Only names exported from `aiopjlink` are public API.
+Only names exported from `aiopjlink2` are public API.
 
 ## Roadmap
 

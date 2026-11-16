@@ -1,6 +1,6 @@
 import unittest
 
-import aiopjlink
+import aiopjlink2
 from mock_projector import mock_client_server_noauth
 
 
@@ -17,11 +17,11 @@ class LampGroup(unittest.IsolatedAsyncioTestCase):
 
                 hours, state = lamps[0]
                 self.assertEqual(hours, 8253)
-                self.assertEqual(state, aiopjlink.Lamp.State.ON)
+                self.assertEqual(state, aiopjlink2.Lamp.State.ON)
 
                 hours, state = lamps[1]
                 self.assertEqual(hours, 13442)
-                self.assertEqual(state, aiopjlink.Lamp.State.ON)
+                self.assertEqual(state, aiopjlink2.Lamp.State.ON)
 
             # One lamp off
             async with server.when(b"%1LAMP ?\r", respond_with=b"%1LAMP=8253 0\r"):
@@ -29,27 +29,27 @@ class LampGroup(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(len(lamps), 1)
                 hours, state = lamps[0]
                 self.assertEqual(hours, 8253)
-                self.assertEqual(state, aiopjlink.Lamp.State.OFF)
+                self.assertEqual(state, aiopjlink2.Lamp.State.OFF)
 
             # No lamps in the projector.
-            with self.assertRaises(aiopjlink.PJLinkNotSupportedError):
+            with self.assertRaises(aiopjlink2.PJLinkNotSupportedError):
                 async with server.when(b"%1LAMP ?\r", respond_with=b"%1LAMP=ERR1\r"):
                     lamps = await client.lamps.status()
 
             # Unparsable feedback from projector.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
+            with self.assertRaises(aiopjlink2.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%1LAMP ?\r", respond_with=b"%1LAMP=1 0 10\r"):
                     lamps = await client.lamps.status()
             self.assertEqual(str(err.exception), "unparsable lamp status")
 
             # Bad feedback from the projector.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
+            with self.assertRaises(aiopjlink2.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%1LAMP ?\r", respond_with=b"%1LAMP=\r"):
                     lamps = await client.lamps.status()
             self.assertEqual(str(err.exception), "unparsable lamp status")
 
             # Bad feedback from the projector.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
+            with self.assertRaises(aiopjlink2.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%1LAMP ?\r", respond_with=b"%1LAMP=100 3\r"):
                     lamps = await client.lamps.status()
             self.assertEqual(str(err.exception), "unparsable lamp status")

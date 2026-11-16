@@ -35,10 +35,10 @@ Issues = "https://github.com/jtjart/aiopjlink/issues"
 source = "vcs"
 
 [tool.hatch.build.hooks.vcs]
-version-file = "src/aiopjlink/_version.py"
+version-file = "src/aiopjlink2/_version.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/aiopjlink"]
+packages = ["src/aiopjlink2"]
 
 [dependency-groups]
 dev = [
@@ -156,7 +156,7 @@ testpaths = ["tests"]
 
 [tool.coverage.run]
 branch = true
-source = ["aiopjlink"]
+source = ["aiopjlink2"]
 
 [tool.coverage.report]
 exclude_also = ["if TYPE_CHECKING:", "@overload", "raise NotImplementedError"]

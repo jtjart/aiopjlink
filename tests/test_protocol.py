@@ -1,9 +1,9 @@
 import asyncio
 import unittest
 
-import aiopjlink
-from aiopjlink._protocol import PJCommand, parse_response
-from aiopjlink.enums import PJClass
+import aiopjlink2
+from aiopjlink2._protocol import PJCommand, parse_response
+from aiopjlink2.enums import PJClass
 from mock_projector import (
     client_for,
     mock_client_server_noauth,
@@ -26,7 +26,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
 
             # Unxpected command sent as a result of a request.
             async with server.when(b"%1POWR ?\r", respond_with=b"%1ROWP=A\r"):
-                with self.assertRaises(aiopjlink.PJLinkProtocolError):
+                with self.assertRaises(aiopjlink2.PJLinkProtocolError):
                     await client.power.get()
 
     async def test_command_construction(self) -> None:
@@ -45,15 +45,15 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.line, "%2ABCD ?\r")
 
         # Bad commands.
-        with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
+        with self.assertRaises(aiopjlink2.PJLinkProtocolError) as err:
             result = PJCommand("abcd", "?", PJClass.ONE)
         self.assertEqual(str(err.exception), "command is not uppercase")
 
-        with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
+        with self.assertRaises(aiopjlink2.PJLinkProtocolError) as err:
             result = PJCommand("ABCDE", "?", PJClass.ONE)
         self.assertEqual(str(err.exception), "command is not 4 bytes")
 
-        with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
+        with self.assertRaises(aiopjlink2.PJLinkProtocolError) as err:
             large_param = "X" * 129
             result = PJCommand("ABCD", large_param, PJClass.ONE)
         self.assertEqual(str(err.exception), "command param is larger than 128 bytes")
@@ -64,7 +64,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
 
         # The limit is 128 bytes, not 128 characters (§2.1): "é" takes two bytes in UTF-8 ...
         PJCommand("ABCD", "é" * 64, PJClass.ONE)
-        with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
+        with self.assertRaises(aiopjlink2.PJLinkProtocolError) as err:
             PJCommand("ABCD", "é" * 65, PJClass.ONE)
         self.assertEqual(str(err.exception), "command param is larger than 128 bytes")
 
@@ -77,14 +77,14 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         # No server is running: if the library tried to connect first,
         # this would be a `PJLinkNoConnectionError` instead.
         link = client_for(unused_port(), timeout_seconds=0.5)
-        with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
+        with self.assertRaises(aiopjlink2.PJLinkProtocolError) as err:
             await link._transmit(PJCommand("abcd", "?", PJClass.ONE))
         self.assertEqual(str(err.exception), "command is not uppercase")
 
     async def test_oversized_or_unencodable_command_rejected_before_connecting(self) -> None:
         """The byte limit is checked in the link's encoding, and bad input never reaches the network."""
         link = client_for(unused_port(), timeout_seconds=0.5)
-        with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
+        with self.assertRaises(aiopjlink2.PJLinkProtocolError) as err:
             await link._transmit(PJCommand("NAME", "é" * 65, PJClass.ONE))
         self.assertEqual(str(err.exception), "command param is larger than 128 bytes")
 
@@ -95,7 +95,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         # Text the encoding cannot represent is a `ValueError` too (`UnicodeEncodeError` is one).
         ascii_link = client_for(unused_port(), timeout_seconds=0.5, encoding="ascii")
         with self.assertRaises(ValueError):
-            await ascii_link._transmit(PJCommand("NAME", "é", pjclass=aiopjlink.PJClass.ONE, encoding="ascii"))
+            await ascii_link._transmit(PJCommand("NAME", "é", pjclass=aiopjlink2.PJClass.ONE, encoding="ascii"))
 
     async def test_response_parsing(self) -> None:
         """Ensure that errors generate the correct responses."""
@@ -109,58 +109,58 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
 
         # Response too short to be a PJLink response.
         for response_line in ("", "\r", "%\r", "%1ABCD\r"):
-            with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
+            with self.assertRaises(aiopjlink2.PJLinkProtocolError) as err:
                 parse_response(response_line=response_line, expect_command="ABCD", expect_pjclass=PJClass.ONE)
             self.assertEqual(str(err.exception), "unexpected response - too short")
 
         # Bad response header.
-        with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
+        with self.assertRaises(aiopjlink2.PJLinkProtocolError) as err:
             parse_response(response_line="#1ABCD=5\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "unexpected response header")
 
         # Bad class version.
-        with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
+        with self.assertRaises(aiopjlink2.PJLinkProtocolError) as err:
             parse_response(response_line="%2ABCD=5\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "unexpected response protocol class")
 
         # Bad separator.
-        with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
+        with self.assertRaises(aiopjlink2.PJLinkProtocolError) as err:
             parse_response(response_line="%1ABCD/5\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "unexpected response separator")
 
         # Bad command length.
-        with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
+        with self.assertRaises(aiopjlink2.PJLinkProtocolError) as err:
             parse_response(response_line="%1ABCDE/5\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "unexpected response separator")
 
         # Unexpected command (not the one that was asked for).
-        with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
+        with self.assertRaises(aiopjlink2.PJLinkProtocolError) as err:
             parse_response(response_line="%1ABCD=5\r", expect_command="XXXX", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err.exception), "unexpected response command")
 
         # ERR1 - unsupported command
-        with self.assertRaises(aiopjlink.PJLinkNotSupportedError) as err_not_supported:
+        with self.assertRaises(aiopjlink2.PJLinkNotSupportedError) as err_not_supported:
             parse_response(response_line="%1ABCD=ERR1\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err_not_supported.exception), "unsupported command")
 
         # ERR2 - out of parameter
-        with self.assertRaises(aiopjlink.PJLinkInvalidParameterError) as err_invalid_parameter:
+        with self.assertRaises(aiopjlink2.PJLinkInvalidParameterError) as err_invalid_parameter:
             parse_response(response_line="%1ABCD=ERR2\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err_invalid_parameter.exception), "out of parameter")
 
         # ERR3 - unavailable in the current state
-        with self.assertRaises(aiopjlink.PJLinkNotReadyError) as err_not_ready:
+        with self.assertRaises(aiopjlink2.PJLinkNotReadyError) as err_not_ready:
             parse_response(response_line="%1ABCD=ERR3\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err_not_ready.exception), "unavailable in the current state")
 
         # ERR4 - projector or display failure
-        with self.assertRaises(aiopjlink.PJLinkMalfunctionError) as err_device_failure:
+        with self.assertRaises(aiopjlink2.PJLinkMalfunctionError) as err_device_failure:
             parse_response(response_line="%1ABCD=ERR4\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err_device_failure.exception), "projector or display failure")
 
         # Check error parsing is case insensitive (from projector) and error
         # parsing is handled in the same way too (Postel's law).
-        with self.assertRaises(aiopjlink.PJLinkMalfunctionError) as err_device_failure:
+        with self.assertRaises(aiopjlink2.PJLinkMalfunctionError) as err_device_failure:
             parse_response(response_line="%1abcd=err4\r", expect_command="ABCD", expect_pjclass=PJClass.ONE)
         self.assertEqual(str(err_device_failure.exception), "projector or display failure")
 
@@ -174,7 +174,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         """A truncated response is a protocol error, not an `IndexError`."""
         async with mock_client_server_noauth() as (server, client):
             async with server.when(b"%1POWR ?\r", respond_with=b"%\r"):
-                with self.assertRaises(aiopjlink.PJLinkProtocolError) as err:
+                with self.assertRaises(aiopjlink2.PJLinkProtocolError) as err:
                     await client.power.get()
             self.assertEqual(str(err.exception), "unexpected response - too short")
 
@@ -186,7 +186,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
 
             # The mock reads the command but sends nothing back.
             async with server.when(b"%1POWR ?\r", respond_with=b""):
-                with self.assertRaises(aiopjlink.PJLinkNoConnectionError) as err:
+                with self.assertRaises(aiopjlink2.PJLinkNoConnectionError) as err:
                     await client.power.get()
             self.assertIn("did not respond in time", str(err.exception))
 
@@ -213,7 +213,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
 
         async with raw_tcp_server(hang_up) as server:
             client = server.client(timeout_seconds=0.5)
-            with self.assertRaises(aiopjlink.PJLinkConnectionClosedError):
+            with self.assertRaises(aiopjlink2.PJLinkConnectionClosedError):
                 await client.power.get()
 
     async def test_free_text_in_another_encoding_is_still_returned(self) -> None:
@@ -237,7 +237,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             mock_client_server_noauth() as (server, client),
             server.when(b"%1POWR ?\r", respond_with=b"%1POWR=\xff\r"),
         ):
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError):
+            with self.assertRaises(aiopjlink2.PJLinkUnexpectedValueError):
                 await client.power.get()
 
     async def test_undecodable_response(self) -> None:
@@ -253,5 +253,5 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
 
         async with raw_tcp_server(send_garbage) as server:
             client = server.client(timeout_seconds=0.5)
-            with self.assertRaises(aiopjlink.PJLinkProtocolError):
+            with self.assertRaises(aiopjlink2.PJLinkProtocolError):
                 await client.power.get()

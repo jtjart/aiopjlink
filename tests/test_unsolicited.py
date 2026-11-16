@@ -8,7 +8,7 @@ command", and would have made a `POWR ?` return the wrong state without any erro
 import asyncio
 import unittest
 
-import aiopjlink
+import aiopjlink2
 from mock_projector import raw_tcp_server
 
 TIMEOUT_SECONDS = 2.0
@@ -59,7 +59,7 @@ class UnsolicitedDataTests(unittest.IsolatedAsyncioTestCase):
         async with raw_tcp_server(projector) as server, server.client(timeout_seconds=TIMEOUT_SECONDS) as link:
             await link.power.turn_on()
             errors = await link.errors.query()
-        self.assertEqual(set(errors.values()), {aiopjlink.Errors.Level.OK})
+        self.assertEqual(set(errors.values()), {aiopjlink2.Errors.Level.OK})
 
     async def test_it_is_not_taken_for_the_answer(self) -> None:
         """The worse case: the same command, so nothing looks wrong. The projector is warming up, not off."""
@@ -67,13 +67,13 @@ class UnsolicitedDataTests(unittest.IsolatedAsyncioTestCase):
         async with raw_tcp_server(projector) as server, server.client(timeout_seconds=TIMEOUT_SECONDS) as link:
             await link.power.turn_on()
             await asyncio.sleep(0.4)
-            self.assertEqual(await link.power.get(), aiopjlink.Power.State.WARMING)
+            self.assertEqual(await link.power.get(), aiopjlink2.Power.State.WARMING)
 
     async def test_two_lines_arriving_together(self) -> None:
         projector = StrayLineProjector(same_segment=True)
         async with raw_tcp_server(projector) as server, server.client(timeout_seconds=TIMEOUT_SECONDS) as link:
             await link.power.turn_on()
-            self.assertEqual(await link.power.get(), aiopjlink.Power.State.WARMING)
+            self.assertEqual(await link.power.get(), aiopjlink2.Power.State.WARMING)
 
     async def test_connection_is_kept(self) -> None:
         """Discarding the line is not a reason to throw the connection away."""
@@ -90,7 +90,7 @@ class UnsolicitedDataTests(unittest.IsolatedAsyncioTestCase):
         projector = StrayLineProjector(same_segment=True)
         async with raw_tcp_server(projector) as server, server.client(timeout_seconds=TIMEOUT_SECONDS) as link:
             await link.power.turn_on()
-            with self.assertLogs("aiopjlink", level="DEBUG") as logs:
+            with self.assertLogs("aiopjlink2", level="DEBUG") as logs:
                 await link.errors.query()
         self.assertIn("discarded unsolicited data from the projector: b'%1powr=0\\r'", "\n".join(logs.output))
 
@@ -98,7 +98,7 @@ class UnsolicitedDataTests(unittest.IsolatedAsyncioTestCase):
         projector = StrayLineProjector()
         async with raw_tcp_server(projector) as server, server.client(timeout_seconds=TIMEOUT_SECONDS) as link:
             await link.errors.query()
-            with self.assertLogs("aiopjlink", level="DEBUG") as logs:
+            with self.assertLogs("aiopjlink2", level="DEBUG") as logs:
                 await link.errors.query()
                 await link.power.get()
         self.assertNotIn("discarded", "\n".join(logs.output))

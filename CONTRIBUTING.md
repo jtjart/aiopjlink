@@ -38,7 +38,7 @@ uv run pyright
 
 The tests are type-checked as strictly as the library (mypy `strict` and pyright `strict`, configured once in `pyproject.toml`
 and shared by the editor, pre-commit and CI): annotate every test method (`-> None`) and helper. Tests may use private
-modules such as `aiopjlink._protocol`; that is the only rule pyright relaxes for them.
+modules such as `aiopjlink2._protocol`; that is the only rule pyright relaxes for them.
 
 The pre-commit hooks run the same tools, including the full test suite, so a commit takes a moment.
 CI runs them too, with the tests on Linux, macOS and Windows with Python 3.11–3.14.
@@ -49,10 +49,10 @@ The UDP tests (`tests/test_search.py`, `tests/test_notifications.py`) do the sam
 ## Code layout
 
 Modules are grouped by feature, not by spec chapter. Each module docstring lists the spec sections it implements.
-Modules starting with `_` are internal; only the names in `aiopjlink.__all__` are public API.
+Modules starting with `_` are internal; only the names in `aiopjlink2.__all__` are public API.
 
 ```
-src/aiopjlink/
+src/aiopjlink2/
 ├── __init__.py       public API (everything in __all__)
 ├── client.py         PJLink: connection, lock, deadline, authentication; wires the command groups onto it
 ├── _protocol.py      command / response line format (§2), search (§3.2.2) and notification (§3.3.2) datagrams
