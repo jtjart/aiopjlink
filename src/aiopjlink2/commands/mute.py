@@ -1,7 +1,4 @@
-"""commands/mute.py
-
-Audio and video mute (§4.5 AVMT, §4.6 AVMT ?).
-"""
+"""Audio and video mute (§4.5 AVMT, §4.6 AVMT ?)."""
 
 from ..enums import PJClass
 from ..exceptions import PJLinkUnexpectedValueError
@@ -54,13 +51,16 @@ class Mute:
         await self._sender.transmit_expecting_ok("AVMT", f"3{parameter}", pjclass=PJClass.ONE)
 
     async def set(self, video: bool | None, audio: bool | None) -> None:
-        """Enable or disable mute for each track (call mirrors output of `status`).
-        :param video (bool): True to mute. False to unmute. None to skip.
-        :param audio (bool): True to mute. False to unmutes. None to skip.
+        """Enable or disable mute for each track (the call mirrors the output of `status`).
+
+        Args:
+            video: True to mute, False to unmute, None to leave the video track as it is.
+            audio: True to mute, False to unmute, None to leave the audio track as it is.
         """
         if video is None and audio is None:
             return
 
+        # One command is enough when both tracks get the same setting.
         if None not in (video, audio) and bool(video) == bool(audio):
             await self.both(bool(video))
             return

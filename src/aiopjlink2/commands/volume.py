@@ -1,7 +1,4 @@
-"""commands/volume.py
-
-Speaker and microphone volume (§4.23 SVOL, §4.24 MVOL).
-"""
+"""Speaker and microphone volume (§4.23 SVOL, §4.24 MVOL)."""
 
 from ..enums import PJClass
 from ._sender import CommandSender
@@ -10,8 +7,10 @@ _NOT_INSTALLED_MESSAGES = {"SVOL": "no speaker installed", "MVOL": "no microphon
 
 
 class Volume:
-    """Controls a xVOL style command (e.g. for speakers and microphones) as
-    defined in (§4.23, §4.24).
+    """Controls the volume of the speaker (§4.23) or of the microphone (§4.24), one unit at a time.
+
+    A projector without the speaker or the microphone raises `PJLinkNotSupportedError` ("no speaker installed"
+    or "no microphone installed").
 
     According to the spec:
         "As for a specification to increase the microphone volume by one level when it

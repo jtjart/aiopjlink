@@ -1,7 +1,4 @@
-"""commands/_sender.py
-
-Sending one command to the projector and reading its answer the way the command groups need it.
-"""
+"""Sending one command to the projector and reading its answer the way the command groups need it."""
 
 from collections.abc import Awaitable, Callable
 
@@ -30,12 +27,14 @@ class CommandSender:
         """Transmit a command and return the response parameter.
 
         The spec gives `ERR1` a specific meaning for some commands ("no lamp", "speaker not installed", ...).
-        Pass that meaning as `not_supported_message` and a `PJLinkNotSupported` raised for this command carries it
-        as its message.
+        Pass that meaning as `not_supported_message` and a `PJLinkNotSupportedError` raised for this command
+        carries it as its message.
         """
         try:
             return await self._transmit_command(PJCommand(command, parameter, pjclass))
         except PJLinkNotSupportedError as err:
+            # Without a command it is not the projector's `ERR1` (it is also raised for a projector that lacks
+            # SHA256), so its own message is the right one.
             if not_supported_message is not None and err.command is not None:
                 raise PJLinkNotSupportedError(not_supported_message, command=command) from err
             raise
@@ -44,7 +43,7 @@ class CommandSender:
         """Query a status value (numbers, flags, lists - never free text) and return the response parameter.
 
         Some projectors answer `OK` instead of a value while they are not ready (just after a state
-        change, or in standby). `OK` is not a valid answer to a query, so it is reported as `PJLinkNotReady`
+        change, or in standby). `OK` is not a valid answer to a query, so it is reported as `PJLinkNotReadyError`
         ("unavailable in the current state"), exactly as if the projector had said so.
 
         Do not use this for queries that return free text (names, serial numbers, ...): `OK` is a valid value there.

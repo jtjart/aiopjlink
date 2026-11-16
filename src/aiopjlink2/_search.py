@@ -1,6 +1,4 @@
-"""_search.py
-
-Searching the network for projectors (§3.2 SRCH, ACKN).
+"""Searching the network for projectors (§3.2 SRCH, ACKN).
 
 The search protocol is connectionless: the controller broadcasts one UDP datagram (`%2SRCH`) to port 4352 and
 every projector that hears it answers, after a random delay of 0 to 10 seconds, with a datagram that holds its

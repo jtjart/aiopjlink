@@ -1,7 +1,4 @@
-"""_protocol.py
-
-The wire format of PJLink command and response lines (§2), of the UDP search
-request and response (§3.2.2) and of the UDP status notifications (§3.3.2).
+"""The wire format of PJLink lines (§2) and of the UDP search and notification datagrams (§3.2.2, §3.3.2).
 
 Pure functions only: nothing here touches the network.
 """
@@ -31,6 +28,12 @@ _MIN_RESPONSE_LENGTH = 8
 
 @dataclass(frozen=True, slots=True)
 class PJCommand:
+    """A command line to send: a four-letter command with its parameter, in the format of §2.1.
+
+    Creating one checks what the spec limits: the command is upper case and exactly 4 bytes, and the parameter is
+    at most 128 bytes, both counted in `encoding`. `line` is the text to send, ending in CR.
+    """
+
     name: str
     parameter: str
     pjclass: PJClass
@@ -39,6 +42,8 @@ class PJCommand:
     line: str = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
+        # The dataclass is frozen, so its fields are set through `object.__setattr__`. The class is converted
+        # (`"1"` becomes `PJClass.ONE`) and anything that is not a class raises `ValueError`.
         object.__setattr__(self, "pjclass", PJClass(self.pjclass))
 
         if not self.name.isupper():
@@ -60,7 +65,12 @@ class PJCommand:
 def parse_response(
     response_line: str, expect_command: str | None = None, expect_pjclass: PJClass = PJClass.ONE
 ) -> tuple[str, str]:
-    """Split a response line into `(COMMAND, parameter)` (§2.2)."""
+    """Split a response line into `(COMMAND, parameter)` (§2.2).
+
+    `expect_command` and `expect_pjclass` say what the response has to answer. A response that does not match them
+    raises `PJLinkProtocolError`, and the error parameters `ERR1` to `ERR4` (§2.3) raise the matching
+    `PJLinkProjectorError`.
+    """
     LOGGER.debug("received response: %s", redact_debug_payload(response_line.strip()))
 
     if len(response_line) < _MIN_RESPONSE_LENGTH:
@@ -70,6 +80,7 @@ def parse_response(
     class_digit = response_line[1]
     command = response_line[2:6].upper()
     separator = response_line[6]
+    # Between the separator and the terminating CR.
     parameter = response_line[7:-1]
 
     if header_character != "%":

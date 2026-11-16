@@ -1,6 +1,4 @@
-"""client.py
-
-The `PJLink` class is a connection to a projector using the PJLink protocol.
+"""The `PJLink` class is a connection to a projector using the PJLink protocol.
 
 To provide a "pythonic" API for the different PJLink commands, `PJLink` hands every group of related commands in
 `aiopjlink2.commands` a `CommandSender` that sends through `PJLink._transmit`. The groups are given that function,
@@ -174,6 +172,9 @@ class PJLink:
     One object can safely be shared between several tasks: commands are sent one after
     the other.
 
+    The commands are grouped by feature, one attribute for each: `power`, `sources`, `mute`, `errors`, `lamps`,
+    `filter`, `freeze`, `speaker`, `microphone` and `info`.
+
     `idle_timeout_seconds` is how long a kept connection waits for the next command before it
     is released (default 25, the projector drops it after 30). A projector that dislikes long
     sessions can be given a short one, e.g. 2: commands sent in quick succession (one poll) then
@@ -207,6 +208,7 @@ class PJLink:
 
     """
 
+    # Each argument is a setting of the public API, and all but `address` have a default.
     def __init__(  # noqa: PLR0913
         self,
         address: str,
@@ -249,7 +251,6 @@ class PJLink:
         # Only a success is remembered: a silent projector may just be having a bad moment.
         self._learned_authentication_method: PJAuth | None = None
 
-        # Add the different API namespaces, all of them sending through this connection.
         sender = CommandSender(self._transmit)
         self.info: Information = Information(sender)
         self.power: Power = Power(sender)
@@ -293,14 +294,8 @@ class PJLink:
             if session is not None:
                 await self._close_session(session)
 
-    # ------------------------------------------------------------------
-    # Commands
-    # ------------------------------------------------------------------
-
     async def _read_line(self, reader: asyncio.StreamReader) -> str:
-        """Read data until the next terminator (CR) and return the
-        message (including CR) as a decoded string.
-        """
+        """Read until the next terminator (CR) and return the message, including the CR, as a decoded string."""
         try:
             raw_line = await reader.readuntil(b"\r")
         except asyncio.IncompleteReadError as err:

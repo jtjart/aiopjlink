@@ -1,7 +1,6 @@
-"""commands/sources.py
+"""Input source selection and information (§4.3, §4.4, §4.9, §4.17 - §4.19).
 
-Input source selection and information (§4.3 INPT, §4.4 INPT ?, §4.9 INST ?,
-§4.17 INNM ?, §4.18 IRES ?, §4.19 RRES ?).
+Commands: `INPT`, `INPT ?`, `INST ?`, `INNM ?`, `IRES ?` and `RRES ?`.
 """
 
 import re
@@ -49,8 +48,14 @@ class Sources:
     async def set(self, mode: Mode, index: str | int, pjclass: PJClass = PJClass.ONE) -> None:
         """Set the current source input selection (§4.3).
 
-        `mode` is a `Sources.Mode`
-        `index` is 1-9 for both Class 1 and Class 2 projectors, and A-Z (or the integer 10-35) for a Class 2 projector.
+        Args:
+            mode: The kind of input.
+            index: 1-9 for both Class 1 and Class 2 projectors, and A-Z for a Class 2 projector. An int is mapped
+                onto that alphabet (11 is "B").
+            pjclass: The class of the command line (`PJClass.TWO` for the indexes A-Z).
+
+        Raises:
+            ValueError: `index` is not a valid input index. Nothing is sent.
         """
         await self._sender.transmit_expecting_ok(
             command="INPT", parameter=f"{mode.value}{self._to_index_character(index)}", pjclass=pjclass
@@ -61,6 +66,7 @@ class Sources:
         return parse_input_source(await self._sender.query_status("INPT", pjclass))
 
     _INDEX_CHARACTERS = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    """The input indexes of the protocol, in the order integers map onto them: 1 is "1", 10 is "A"."""
 
     @staticmethod
     def _to_index_character(index: int | str) -> str:
@@ -94,16 +100,24 @@ class Sources:
             raise PJLinkUnexpectedValueError(_UNPARSABLE_SOURCES) from err
 
     async def get_source_name(self, mode: Mode, index: str | int) -> str:
-        """Get the name of a given input source (§4.17).
-        :param mode Sources.Mode: The input mode to select.
-        :param index str: A single character.
+        """Get the name of an input source (§4.17).
+
+        Args:
+            mode: The kind of input.
+            index: The input index, as for `set`.
+
+        Raises:
+            ValueError: `index` is not a valid input index. Nothing is sent.
         """
         return await self._sender.transmit("INNM", f"?{mode.value}{self._to_index_character(index)}", PJClass.TWO)
 
     async def available_with_names(self) -> list[tuple[Mode, str, str | None]]:
-        """List all the available input sources with names (§4.17).
+        """List all the available input sources with their names (§4.17).
+
+        A source the projector has no name for (it answers `ERR2`) has `None` as its name.
+
         Returns:
-            A list of available input sources in the format (Source.Mode, index str, name str).
+            A list of available input sources in the format (Sources.Mode, index str, name str or None).
             For example:
                 [(<Mode.RGB: '1'>, '1', 'Computer'), (<Mode.DIGITAL: '3'>, '1', 'DVI-D'), ...]
         """
@@ -118,9 +132,14 @@ class Sources:
             return None
 
     async def resolution(self) -> tuple[int, int]:
-        """Get the current projector resolution (§4.18)
+        """Get the resolution of the current input signal (§4.18).
+
         Returns:
-            (x:int, y:int) tuple: Horizontal and vertical resolutions of input signal respectively.
+            The horizontal and vertical resolution, in that order.
+
+        Raises:
+            PJLinkProjectorError: There is no signal input, or the signal is unknown (the projector answers `-`
+                or `*`).
         """
         response_parameter = await self._sender.query_status("IRES", PJClass.TWO)
         if response_parameter == "-":
@@ -130,9 +149,10 @@ class Sources:
         return _parse_resolution(response_parameter)
 
     async def recommended_resolution(self) -> tuple[int, int]:
-        """Get the current recommended resolution (§4.19)
+        """Get the recommended resolution of the current input (§4.19).
+
         Returns:
-            (x:int, y:int) tuple: Horizontal and vertical resolutions of input signal respectively.
+            The horizontal and vertical resolution, in that order.
         """
         return _parse_resolution(await self._sender.query_status("RRES", PJClass.TWO))
 

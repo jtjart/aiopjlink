@@ -1,6 +1,4 @@
-"""_udp.py
-
-Socket plumbing shared by the two UDP protocols: the search (§3.2) and the status notifications (§3.3).
+"""Socket plumbing shared by the two UDP protocols: the search (§3.2) and the status notifications (§3.3).
 
 Both use UDP port 4352 on the controller's side as well as on the projector's, so they open their sockets the
 same way and report the sender of a datagram the same way. What they do with a datagram is up to them.
@@ -18,7 +16,9 @@ PJLINK_UDP_PORT = 4352
 """The UDP port of the PJLink search and status notification protocols (§3.2, §3.3)."""
 
 MAX_PORT_NUMBER = 65535
+
 IPV6_SCOPE_ID_INDEX = 3
+"""Position of the scope id in the `sockaddr` of an IPv6 socket: `(host, port, flowinfo, scope_id)`."""
 
 
 def source_address(datagram_sender: tuple[Any, ...]) -> str:
@@ -87,6 +87,7 @@ async def open_endpoint(
     try:
         transport, _ = await asyncio.get_running_loop().create_datagram_endpoint(lambda: protocol, sock=udp_socket)
     except BaseException:
+        # The transport does not own the socket yet, so closing it is up to us (also when we are cancelled).
         udp_socket.close()
         raise
 

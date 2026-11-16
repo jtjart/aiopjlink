@@ -1,6 +1,4 @@
-"""_notify.py
-
-Status notifications sent by projectors on their own (§3.3 LKUP, ERST, POWR, INPT).
+"""Status notifications sent by projectors on their own (§3.3 LKUP, ERST, POWR, INPT).
 
 A projector that has been told the controller's address (how is not part of the specification: it is a setting
 of the projector) sends a UDP datagram to port 4352 of the controller whenever its state changes: it starts

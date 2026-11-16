@@ -1,8 +1,4 @@
-"""commands/information.py
-
-Information queries (§4.10 NAME ?, §4.11 INF1 ?, §4.12 INF2 ?, §4.13 INFO ?,
-§4.14 CLSS ?, §4.15 SNUM ?, §4.16 SVER ?).
-"""
+"""Information queries (§4.10 NAME, §4.11 INF1, §4.12 INF2, §4.13 INFO, §4.14 CLSS, §4.15 SNUM, §4.16 SVER)."""
 
 from ..enums import PJClass
 from ..exceptions import PJLinkUnexpectedValueError
@@ -12,38 +8,41 @@ from ._sender import CommandSender
 class Information:
     """Gathers information about the projector."""
 
+    # The queries for free text use `transmit`, not `query_status`: unlike for a status, `OK` is a legitimate answer
+    # there (a projector may be called "OK"). Only `CLSS` is a status.
+
     def __init__(self, sender: CommandSender) -> None:
         self._sender = sender
 
     async def software_version(self) -> str:
-        """Request software version of the projector (§4.16).
-        The version information of the software defined by the manufacturer is indicated.
-        Version information can be expressed in any way.
+        """Request the software version of the projector (§4.16).
+
+        The manufacturer decides how the version is written.
 
         Returns:
-            str: The version string.
+            The version string.
         """
         return await self._sender.transmit("SVER", "?", PJClass.TWO)
 
     async def serial_number(self) -> str:
         """Request the projector serial number (§4.15).
-        The serial number information defined by the manufacturer is indicated.
+
+        The manufacturer decides how the serial number is written.
 
         Returns:
-            str: The serial number string.
+            The serial number string.
         """
         return await self._sender.transmit("SNUM", "?", PJClass.TWO)
 
     async def pjlink_class(self, pjclass: PJClass = PJClass.ONE) -> PJClass:
-        """Get projectors PJLink class number as a `PJClass` enumeration (§4.14)"""
+        """Get the PJLink class number of the projector as a `PJClass` (§4.14)."""
         try:
             return PJClass(await self._sender.query_status("CLSS", pjclass))
         except ValueError as err:
             raise PJLinkUnexpectedValueError("unexpected PJLink class") from err
 
     async def other_information(self) -> str:
-        """Query the projector for other information about the projector/display
-        described by the manufacture. Defined as in (§4.13).
+        """Query the other information the manufacturer gives about the projector or display (§4.13).
 
         If there is no other information, this returns an empty string.
         """

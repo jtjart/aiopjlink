@@ -1,7 +1,4 @@
-"""commands/power.py
-
-Control and query the projector's power state (§4.1 POWR, §4.2 POWR ?).
-"""
+"""Control and query the projector's power state (§4.1 POWR, §4.2 POWR ?)."""
 
 from enum import Enum
 
@@ -29,7 +26,11 @@ class Power:
         self._sender = sender
 
     async def set(self, state: State, pjclass: PJClass = PJClass.ONE) -> None:
-        """Send a power control instruction to power the projector lamp on or off."""
+        """Send a power control instruction to power the projector lamp on or off.
+
+        Raises:
+            ValueError: `state` is `COOLING` or `WARMING`: only `ON` and `OFF` can be set. Nothing is sent.
+        """
         if state in (Power.State.COOLING, Power.State.WARMING):
             raise ValueError("expected Power.State.ON or Power.State.OFF")
         await self._sender.transmit_expecting_ok("POWR", state.value, pjclass=pjclass)

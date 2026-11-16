@@ -1,6 +1,4 @@
-"""_auth.py
-
-The opening handshake of a PJLink connection and its password authentication (§5).
+"""The opening handshake of a PJLink connection and its password authentication (§5).
 
 Pure functions only: nothing here touches the network.
 """
@@ -31,11 +29,10 @@ def authentication_required(welcome_line: str) -> bool:
     if greeting_prefix.upper() != "PJLINK ":
         raise PJLinkProtocolError("unexpected opening header message from projector - not PJLink")
 
-    # No authentication required.
     if security_flag == "0":
         return False
 
-    # Connection requires auth: `PJLINK 1 <token>`.
+    # `PJLINK 1 <token>` is the only other greeting the spec defines.
     if security_flag != "1" or separator != " ":
         raise PJLinkProtocolError("unexpected opening security message from projector - unrecognised auth method")
 
@@ -83,7 +80,9 @@ def parse_security_reply(reply: str) -> str | None:
 def build_sha256_request(projector_nonce: str, command_line: str, password: str, encoding: str = "utf-8") -> bytes:
     """The bytes to send for the first command of a SHA256 connection (§5.1, (1-4) and (1-5)).
 
-    `projector_nonce` is the 32 hex characters the projector answered with.
+    `projector_nonce` is the 32 hex characters the projector answered with. The digest is the SHA256 of the two
+    random numbers combined with XOR (as hex) followed by the password; the controller's own random number goes
+    in front of the digest, so that the projector can combine them the same way.
     """
     own_nonce = secrets.token_bytes(16)
     combined_nonce = bytes(
