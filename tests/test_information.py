@@ -1,6 +1,6 @@
 import unittest
 
-import aiopjlink
+import aiopjlink2
 from mock_projector import mock_client_server_noauth
 
 
@@ -38,19 +38,19 @@ class InfoGroup(unittest.IsolatedAsyncioTestCase):
         async with mock_client_server_noauth() as (server, client):
             # Class 1 query (default).
             async with server.when(b"%1CLSS ?\r", respond_with=b"%1CLSS=1\r"):
-                self.assertEqual(await client.info.pjlink_class(), aiopjlink.PJClass.ONE)
+                self.assertEqual(await client.info.pjlink_class(), aiopjlink2.PJClass.ONE)
 
             # Class 2 support from class 1 query (default).
             async with server.when(b"%1CLSS ?\r", respond_with=b"%1CLSS=2\r"):
-                self.assertEqual(await client.info.pjlink_class(), aiopjlink.PJClass.TWO)
+                self.assertEqual(await client.info.pjlink_class(), aiopjlink2.PJClass.TWO)
 
             # Class 2 support from class 2 query (default).
             async with server.when(b"%2CLSS ?\r", respond_with=b"%2CLSS=2\r"):
-                response = await client.info.pjlink_class(pjclass=aiopjlink.PJClass.TWO)
-                self.assertEqual(response, aiopjlink.PJClass.TWO)
+                response = await client.info.pjlink_class(pjclass=aiopjlink2.PJClass.TWO)
+                self.assertEqual(response, aiopjlink2.PJClass.TWO)
 
             # Unexpected class.
-            with self.assertRaises(aiopjlink.PJLinkUnexpectedValueError) as err:
+            with self.assertRaises(aiopjlink2.PJLinkUnexpectedValueError) as err:
                 async with server.when(b"%1CLSS ?\r", respond_with=b"%1CLSS=9\r"):
                     await client.info.pjlink_class()
             self.assertEqual(str(err.exception), "unexpected PJLink class")

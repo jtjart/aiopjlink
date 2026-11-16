@@ -1,4 +1,4 @@
-"""aiopjlink: asyncio control of PJLink-compatible projectors over TCP/IP.
+"""aiopjlink2: asyncio control of PJLink-compatible projectors over TCP/IP.
 
 Create one `PJLink` and use its command groups (`power`, `sources`, `mute`, `errors`,
 `lamps`, `filter`, `freeze`, `speaker`, `microphone`, `info`)::

@@ -5,7 +5,7 @@ import unittest
 from typing import Any
 from unittest import mock
 
-import aiopjlink
+import aiopjlink2
 from mock_projector import client_for, raw_tcp_server, until_hung_up, unused_port
 
 TIMEOUT_SECONDS = 0.5
@@ -16,14 +16,14 @@ async def hang(*_args: object, **_kwargs: object) -> None:
     await asyncio.sleep(3600)
 
 
-def make_client(port: int, **options: Any) -> aiopjlink.PJLink:
+def make_client(port: int, **options: Any) -> aiopjlink2.PJLink:
     return client_for(port, timeout_seconds=TIMEOUT_SECONDS, **options)
 
 
 class TimeoutTests(unittest.IsolatedAsyncioTestCase):
     """One overall deadline per command, and the error names the phase that ran out of time."""
 
-    async def _expect_timeout(self, port: int, exc_type: type[Exception] = aiopjlink.PJLinkNoConnectionError) -> str:
+    async def _expect_timeout(self, port: int, exc_type: type[Exception] = aiopjlink2.PJLinkNoConnectionError) -> str:
         """Run a command on `port`, return the exception and check it took about one timeout."""
         start = time.monotonic()
         with self.assertRaises(exc_type) as err:
@@ -77,7 +77,7 @@ class TimeoutTests(unittest.IsolatedAsyncioTestCase):
             await until_hung_up(reader, writer)
 
         async with raw_tcp_server(slow) as server:
-            with self.assertRaises(aiopjlink.PJLinkNoConnectionError):
+            with self.assertRaises(aiopjlink2.PJLinkNoConnectionError):
                 await make_client(server.port).power.get()
 
     async def test_close_is_bounded(self) -> None:
@@ -96,5 +96,5 @@ class TimeoutTests(unittest.IsolatedAsyncioTestCase):
             with mock.patch.object(asyncio.StreamWriter, "wait_closed", hang):
                 status = await make_client(server.port, persistent=False).power.get()
             elapsed = time.monotonic() - start
-        self.assertEqual(status, aiopjlink.Power.State.OFF)
+        self.assertEqual(status, aiopjlink2.Power.State.OFF)
         self.assertLess(elapsed, 2)

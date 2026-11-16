@@ -6,7 +6,7 @@ import struct
 import unittest
 from unittest import mock
 
-import aiopjlink
+import aiopjlink2
 from mock_projector import PJLinkServerProtocol, RawServer, client_for, mock_tcp_pjlink, raw_tcp_server, unused_port
 
 
@@ -20,23 +20,23 @@ def _reset(writer: asyncio.StreamWriter) -> None:
 class ConnectionErrorTests(unittest.IsolatedAsyncioTestCase):
     async def _assert_connection_error(
         self,
-        expected: type[aiopjlink.PJLinkConnectionError],
+        expected: type[aiopjlink2.PJLinkConnectionError],
         server: RawServer | PJLinkServerProtocol | None = None,
-    ) -> aiopjlink.PJLinkConnectionError:
+    ) -> aiopjlink2.PJLinkConnectionError:
         """Run a command on `server` (default: nothing listens) and check it fails with `expected`,
         which is also a `PJLinkConnectionError`.
         """
         client = (
             client_for(unused_port(), timeout_seconds=0.5) if server is None else server.client(timeout_seconds=0.5)
         )
-        with self.assertRaises(aiopjlink.PJLinkConnectionError) as ctx:
+        with self.assertRaises(aiopjlink2.PJLinkConnectionError) as ctx:
             await client.power.get()
         self.assertIsInstance(ctx.exception, expected)
         return ctx.exception
 
     async def test_connect_refused(self) -> None:
         """Nothing listens on the port."""
-        await self._assert_connection_error(aiopjlink.PJLinkNoConnectionError)
+        await self._assert_connection_error(aiopjlink2.PJLinkNoConnectionError)
 
     async def test_connect_failure_says_why(self) -> None:
         """A refused connection or an unknown host is not called a timeout: the message carries the reason."""
@@ -44,7 +44,7 @@ class ConnectionErrorTests(unittest.IsolatedAsyncioTestCase):
         # SYNs to unused ports instead, which correctly produces a connection timeout.
         refused = ConnectionRefusedError("actively refused")
         with mock.patch.object(asyncio, "open_connection", side_effect=refused):
-            err = await self._assert_connection_error(aiopjlink.PJLinkNoConnectionError)
+            err = await self._assert_connection_error(aiopjlink2.PJLinkNoConnectionError)
         self.assertTrue(str(err).startswith("connection failed - "), str(err))
         self.assertIn("actively refused", str(err))
         self.assertNotIn("timeout", str(err))
@@ -52,14 +52,14 @@ class ConnectionErrorTests(unittest.IsolatedAsyncioTestCase):
         # The host name does not resolve (simulated, so the test does not depend on a DNS server).
         unresolvable = socket.gaierror(socket.EAI_NONAME, "Name or service not known")
         with mock.patch.object(asyncio, "open_connection", side_effect=unresolvable):
-            err = await self._assert_connection_error(aiopjlink.PJLinkNoConnectionError)
+            err = await self._assert_connection_error(aiopjlink2.PJLinkNoConnectionError)
         self.assertIn("Name or service not known", str(err))
         self.assertNotIn("timeout", str(err))
 
     async def test_no_greeting(self) -> None:
         """TCP is accepted, but the projector never says `PJLINK ...`."""
         async with mock_tcp_pjlink() as server:
-            err = await self._assert_connection_error(aiopjlink.PJLinkNoConnectionError, server)
+            err = await self._assert_connection_error(aiopjlink2.PJLinkNoConnectionError, server)
         self.assertIn("welcome message", str(err))
 
     async def test_no_response_to_command(self) -> None:
@@ -67,7 +67,7 @@ class ConnectionErrorTests(unittest.IsolatedAsyncioTestCase):
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK 0\r")
             async with server.when(b"%1POWR ?\r", respond_with=b""):
-                err = await self._assert_connection_error(aiopjlink.PJLinkNoConnectionError, server)
+                err = await self._assert_connection_error(aiopjlink2.PJLinkNoConnectionError, server)
         self.assertIn("did not respond in time", str(err))
 
     async def test_closed_before_greeting(self) -> None:
@@ -75,7 +75,7 @@ class ConnectionErrorTests(unittest.IsolatedAsyncioTestCase):
             writer.close()
 
         async with raw_tcp_server(close) as server:
-            await self._assert_connection_error(aiopjlink.PJLinkConnectionClosedError, server)
+            await self._assert_connection_error(aiopjlink2.PJLinkConnectionClosedError, server)
 
     async def test_closed_after_command(self) -> None:
         async def hang_up(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
@@ -85,14 +85,14 @@ class ConnectionErrorTests(unittest.IsolatedAsyncioTestCase):
             writer.close()
 
         async with raw_tcp_server(hang_up) as server:
-            await self._assert_connection_error(aiopjlink.PJLinkConnectionClosedError, server)
+            await self._assert_connection_error(aiopjlink2.PJLinkConnectionClosedError, server)
 
     async def test_reset_before_greeting(self) -> None:
         async def reset(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             _reset(writer)
 
         async with raw_tcp_server(reset) as server:
-            await self._assert_connection_error(aiopjlink.PJLinkConnectionClosedError, server)
+            await self._assert_connection_error(aiopjlink2.PJLinkConnectionClosedError, server)
 
     async def test_reset_after_command(self) -> None:
         async def reset(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
@@ -102,7 +102,7 @@ class ConnectionErrorTests(unittest.IsolatedAsyncioTestCase):
             _reset(writer)
 
         async with raw_tcp_server(reset) as server:
-            await self._assert_connection_error(aiopjlink.PJLinkConnectionClosedError, server)
+            await self._assert_connection_error(aiopjlink2.PJLinkConnectionClosedError, server)
 
     async def test_bad_data_is_not_a_connection_error(self) -> None:
         """A projector that talks nonsense is reachable: that is a `PJLinkProtocolError`."""
@@ -110,6 +110,6 @@ class ConnectionErrorTests(unittest.IsolatedAsyncioTestCase):
             server.open_and_send(b"PJLINK 0\r")
             client = server.client(timeout_seconds=0.5)
             async with server.when(b"%1POWR ?\r", respond_with=b"%\r"):
-                with self.assertRaises(aiopjlink.PJLinkProtocolError) as ctx:
+                with self.assertRaises(aiopjlink2.PJLinkProtocolError) as ctx:
                     await client.power.get()
-        self.assertNotIsInstance(ctx.exception, aiopjlink.PJLinkConnectionError)
+        self.assertNotIsInstance(ctx.exception, aiopjlink2.PJLinkConnectionError)

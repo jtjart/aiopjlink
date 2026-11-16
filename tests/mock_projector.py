@@ -10,15 +10,15 @@ import socket
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from typing import Any, cast
 
-import aiopjlink
+import aiopjlink2
 
 LOCALHOST = "127.0.0.1"
 
 
-def client_for(port: int, **options: Any) -> aiopjlink.PJLink:
+def client_for(port: int, **options: Any) -> aiopjlink2.PJLink:
     """A `PJLink` for the mock projector on `port` (no password unless `options` give one)."""
     options.setdefault("password", None)
-    return aiopjlink.PJLink(address=LOCALHOST, port=port, **options)
+    return aiopjlink2.PJLink(address=LOCALHOST, port=port, **options)
 
 
 def unused_port() -> int:
@@ -46,9 +46,9 @@ def ipv6_loopback_available() -> bool:
     return True
 
 
-async def search_all(**arguments: Any) -> list[aiopjlink.SearchResult]:
-    """Run `aiopjlink.search` to the end and return everything it found."""
-    return [result async for result in aiopjlink.search(**arguments)]
+async def search_all(**arguments: Any) -> list[aiopjlink2.SearchResult]:
+    """Run `aiopjlink2.search` to the end and return everything it found."""
+    return [result async for result in aiopjlink2.search(**arguments)]
 
 
 class PJLinkTestFrameworkError(Exception):
@@ -100,7 +100,7 @@ class PJLinkServerProtocol(asyncio.Protocol):
         # The server side of the current connection (set by `connection_made`).
         self.transport: asyncio.Transport
 
-    def client(self, **options: Any) -> aiopjlink.PJLink:
+    def client(self, **options: Any) -> aiopjlink2.PJLink:
         """A `PJLink` connected to this mock projector. `options` are passed on to `PJLink`."""
         return client_for(self.port, **options)
 
@@ -186,7 +186,7 @@ class PJLinkServerProtocol(asyncio.Protocol):
             await asyncio.wait_for(expected.received.wait(), timeout=expected.timeout_seconds)
 
             # The projector hangs up on a message it did not expect. A client that reconnects after a
-            # hang-up (see `aiopjlink._transport`) does not see an error, so check the message here as well.
+            # hang-up (see `aiopjlink2._transport`) does not see an error, so check the message here as well.
             if expected.receive_buffer_contents != expected.incoming:
                 raise UnexpectedClientMessageError(
                     f"projector expected {expected.incoming!r} from the client "
@@ -205,7 +205,7 @@ class PJLinkServerProtocol(asyncio.Protocol):
                     f"projector recieved no data from client (within={expected.timeout_seconds}s)"
                 ) from err
 
-        except aiopjlink.PJLinkConnectionClosedError:
+        except aiopjlink2.PJLinkConnectionClosedError:
             # print("🚌 probably transport closed on purpose after bad message")
             # Check the object state to see if it got a bad message.
             if expected.receive_buffer_contents != expected.incoming:
@@ -214,7 +214,7 @@ class PJLinkServerProtocol(asyncio.Protocol):
                     f"but got {expected.receive_buffer_contents!r}"
                 ) from None
 
-        except aiopjlink.PJLinkAuthenticationError:
+        except aiopjlink2.PJLinkAuthenticationError:
             # A wrong password makes a projector hang up (or send ERRA). If the message was not the one
             # the test expected, that is a test bug; otherwise let the test case see the error.
             if expected.receive_buffer_contents != expected.incoming:
@@ -265,7 +265,7 @@ async def mock_tcp_pjlink(
 @contextlib.asynccontextmanager
 async def mock_client_server_noauth(
     **client_options: Any,
-) -> AsyncGenerator[tuple[PJLinkServerProtocol, aiopjlink.PJLink], None]:
+) -> AsyncGenerator[tuple[PJLinkServerProtocol, aiopjlink2.PJLink], None]:
     """A mock projector without authentication and a client connected to it.
 
     `client_options` are passed on to `PJLink` (e.g. `persistent=False`). The client is closed afterwards.
@@ -285,7 +285,7 @@ class RawServer:
     def __init__(self, server: asyncio.Server) -> None:
         self.port: int = server.sockets[0].getsockname()[1]
 
-    def client(self, **options: Any) -> aiopjlink.PJLink:
+    def client(self, **options: Any) -> aiopjlink2.PJLink:
         """A `PJLink` connected to this server. `options` are passed on to `PJLink`."""
         return client_for(self.port, **options)
 
