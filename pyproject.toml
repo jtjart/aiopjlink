@@ -88,15 +88,22 @@ select = [
     "PLR0914", # pylint: too-many-locals
     "RUF029",  # ruff: unused-async
     "N",       # pep8-naming
+    "D",       # pydocstyle: documented public API, well-formed docstrings
+    "ERA",     # eradicate: no commented-out code
 ]
 preview = true
 explicit-preview-rules = true
 
 ignore = [
     "TRY003", # tryceratops: raise-vanilla-args
+    "D105",   # pydocstyle: magic methods (`__aenter__`, ...) are documented by Python itself
+    "D107",   # pydocstyle: `__init__`; the class docstring documents the constructor arguments
 ]
 
-per-file-ignores = { "tests/**" = ["SLF001", "ARG", "RUF029"] }
+per-file-ignores = { "tests/**" = ["SLF001", "ARG", "RUF029", "D"] }
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.format]
 quote-style = "preserve"
