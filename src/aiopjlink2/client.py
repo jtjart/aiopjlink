@@ -208,7 +208,6 @@ class PJLink:
 
     """
 
-    # Each argument is a setting of the public API, and all but `address` have a default.
     def __init__(  # noqa: PLR0913
         self,
         address: str,
@@ -221,6 +220,7 @@ class PJLink:
         idle_timeout_seconds: float = DEFAULT_IDLE_TIMEOUT_SECONDS,
         authentication: PJAuth = PJAuth.AUTO,
     ) -> None:
+        """Initialize a PJLink client."""
         if idle_timeout_seconds <= 0:
             raise ValueError(
                 "idle_timeout_seconds must be positive (use persistent=False for one connection per command)"
@@ -274,11 +274,13 @@ class PJLink:
         return self._authentication
 
     async def __aenter__(self) -> Self:
+        """Return this client for use as an async context manager."""
         return self
 
     async def __aexit__(
         self, exc_type: type[BaseException] | None, exc: BaseException | None, tb: TracebackType | None
     ) -> None:
+        """Close the client when leaving an async context manager block."""
         await self.close()
 
     async def close(self) -> None:

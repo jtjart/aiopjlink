@@ -102,6 +102,7 @@ class PJLinkProjectorError(PJLinkError):
     """
 
     def __init__(self, message: str = "", *, command: str | None = None) -> None:
+        """Initialize the projector error with an optional message and command."""
         super().__init__(message)
         self.command = command
 

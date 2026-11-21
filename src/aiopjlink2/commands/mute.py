@@ -13,6 +13,7 @@ class Mute:
     """
 
     def __init__(self, sender: CommandSender) -> None:
+        """Initialize the mute command handler."""
         self._sender = sender
 
     async def status(self) -> tuple[bool, bool]:
@@ -60,7 +61,6 @@ class Mute:
         if video is None and audio is None:
             return
 
-        # One command is enough when both tracks get the same setting.
         if None not in (video, audio) and bool(video) == bool(audio):
             await self.both(bool(video))
             return

@@ -24,6 +24,7 @@ class Lamp:
         ON = "1"
 
     def __init__(self, sender: CommandSender) -> None:
+        """Initialize the lamp status command handler."""
         self._sender = sender
 
     async def status(self) -> list[tuple[int, State]]:

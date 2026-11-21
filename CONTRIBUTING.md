@@ -83,10 +83,7 @@ Rules the code follows:
 * Everything raised while talking to a projector is a `PJLinkError` (see `exceptions.py` for which one when). Invalid arguments are a `ValueError`, raised before anything is sent.
 * Commands that change something are never repeated after a dropped connection; queries may be.
 * New public names must be exported in `__init__.py` and new commands added to the README table.
-* Comments say why, not what. Leave out a comment that repeats the line below it, and put the reasons that are not
-  obvious (a quirk of the spec or of real projectors, an order that matters, a suppression) next to the code they
-  explain. Public names get a docstring that starts with a one-line summary. Ruff checks the form (`D` with the Google
-  convention, and `ERA`, which rejects commented-out code); whether a comment is worth having is up to the review.
+* Comments say why, not what. Leave out a comment that repeats the line below it, and put the reasons that are not obvious (a quirk of the spec or of real projectors, an order that matters, a suppression) next to the code they explain. Public names get a docstring that starts with a one-line summary. Ruff checks the form (`D` with the Google convention, and `ERA`, which rejects commented-out code); whether a comment is worth having is up to the review.
 
 ## Releases
 

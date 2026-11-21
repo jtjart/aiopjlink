@@ -23,6 +23,7 @@ class Power:
             return self in (Power.State.ON, Power.State.WARMING)
 
     def __init__(self, sender: CommandSender) -> None:
+        """Initialize the power command handler."""
         self._sender = sender
 
     async def set(self, state: State, pjclass: PJClass = PJClass.ONE) -> None:

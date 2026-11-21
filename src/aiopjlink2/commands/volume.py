@@ -26,6 +26,7 @@ class Volume:
     """
 
     def __init__(self, sender: CommandSender, command: str) -> None:
+        """Initialize the volume command handler."""
         self._sender = sender
         self.command = command
         # ERR1 means the device is not installed (§4.23, §4.24).

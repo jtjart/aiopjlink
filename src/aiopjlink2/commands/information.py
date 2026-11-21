@@ -12,6 +12,7 @@ class Information:
     # there (a projector may be called "OK"). Only `CLSS` is a status.
 
     def __init__(self, sender: CommandSender) -> None:
+        """Initialize the information command handler."""
         self._sender = sender
 
     async def software_version(self) -> str:

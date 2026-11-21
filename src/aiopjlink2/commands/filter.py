@@ -12,6 +12,7 @@ class Filter:
     """
 
     def __init__(self, sender: CommandSender) -> None:
+        """Initialize the filter status command handler."""
         self._sender = sender
 
     async def hours(self) -> int:

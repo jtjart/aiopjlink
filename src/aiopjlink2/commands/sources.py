@@ -43,6 +43,7 @@ class Sources:
         """ Class 2 only. """
 
     def __init__(self, sender: CommandSender) -> None:
+        """Initialize the input source command handler."""
         self._sender = sender
 
     async def set(self, mode: Mode, index: str | int, pjclass: PJClass = PJClass.ONE) -> None:

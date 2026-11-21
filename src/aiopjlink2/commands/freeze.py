@@ -12,6 +12,7 @@ class Freeze:
     """
 
     def __init__(self, sender: CommandSender) -> None:
+        """Initialize the freeze command handler."""
         self._sender = sender
 
     async def set(self, frozen: bool) -> None:

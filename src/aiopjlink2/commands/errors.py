@@ -30,6 +30,7 @@ class Errors:
         ERROR = "2"
 
     def __init__(self, sender: CommandSender) -> None:
+        """Initialize the error status command handler."""
         self._sender = sender
 
     async def query(self) -> dict[Category, Level]:
