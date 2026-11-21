@@ -32,24 +32,30 @@ class StrayLineProjector:
         writer.write(b"PJLINK 0\r")
         await writer.drain()
         try:
-            while True:
-                line = await reader.readuntil(b"\r")
-                self.lines.append(line)
-                if line == b"%1POWR 1\r":
-                    if self.same_segment:
-                        writer.write(b"%1powr=OK\r%1powr=0\r")
-                    else:
-                        writer.write(b"%1powr=OK\r")
-                        asyncio.get_running_loop().call_later(self.stray_delay_seconds, writer.write, b"%1powr=0\r")
-                elif line == b"%1ERST ?\r":
-                    writer.write(b"%1erst=000000\r")
-                elif line == b"%1POWR ?\r":
-                    writer.write(b"%1powr=3\r")
-                await writer.drain()
+            await self._serve_client(reader, writer)
         except (asyncio.IncompleteReadError, ConnectionError):
             pass
         finally:
             writer.close()
+
+    async def _serve_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        while True:
+            line = await reader.readuntil(b"\r")
+            self.lines.append(line)
+            self._handle_command(line, writer)
+            await writer.drain()
+
+    def _handle_command(self, line: bytes, writer: asyncio.StreamWriter) -> None:
+        if line == b"%1POWR 1\r":
+            if self.same_segment:
+                writer.write(b"%1powr=OK\r%1powr=0\r")
+            else:
+                writer.write(b"%1powr=OK\r")
+                asyncio.get_running_loop().call_later(self.stray_delay_seconds, writer.write, b"%1powr=0\r")
+        elif line == b"%1ERST ?\r":
+            writer.write(b"%1erst=000000\r")
+        elif line == b"%1POWR ?\r":
+            writer.write(b"%1powr=3\r")
 
 
 class UnsolicitedDataTests(unittest.IsolatedAsyncioTestCase):

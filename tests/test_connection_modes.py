@@ -60,26 +60,35 @@ class FakeProjector:
         self.connections += 1
         self.open_connections += 1
         try:
-            writer.write(b"PJLINK 0\r" if self.token is None else b"PJLINK 1 " + self.token + b"\r")
-            await writer.drain()
-            while True:
-                line = await reader.readuntil(b"\r")
-                number = len(self.lines)
-                self.lines.append(line)
-                self.command_received.set()
-                await asyncio.sleep(self.delays_seconds.get(number, 0))
-                if self.response_gate is not None:
-                    await self.response_gate.wait()
-                writer.write(self.replies[number] if number < len(self.replies) else POWER_ON_RESPONSE)
-                await writer.drain()
-                if self.hang_up_after_answer:
-                    break
+            await self._serve_client(reader, writer)
         except (asyncio.IncompleteReadError, ConnectionError):
             pass
         finally:
             self.open_connections -= 1
             writer.close()
             self.connection_closed.set()
+
+    async def _serve_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        greeting = b"PJLINK 0\r" if self.token is None else b"PJLINK 1 " + self.token + b"\r"
+        writer.write(greeting)
+        await writer.drain()
+        while True:
+            should_hang_up = await self._handle_next_command(reader, writer)
+            if should_hang_up:
+                break
+
+    async def _handle_next_command(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> bool:
+        line = await reader.readuntil(b"\r")
+        number = len(self.lines)
+        self.lines.append(line)
+        self.command_received.set()
+        await asyncio.sleep(self.delays_seconds.get(number, 0))
+        if self.response_gate is not None:
+            await self.response_gate.wait()
+        reply = self.replies[number] if number < len(self.replies) else POWER_ON_RESPONSE
+        writer.write(reply)
+        await writer.drain()
+        return self.hang_up_after_answer
 
 
 def client_for_server(server: RawServer, timeout_seconds: float = TIMEOUT_SECONDS, **options: Any) -> aiopjlink2.PJLink:
@@ -251,7 +260,8 @@ class PersistentTests(unittest.IsolatedAsyncioTestCase):
             await link.close()
         self.assertEqual(projector.connections, 2)
 
-    async def test_close_before_any_command(self) -> None:
+    @staticmethod
+    async def test_close_before_any_command() -> None:
         await aiopjlink2.PJLink(address="127.0.0.1").close()
 
     async def test_close_is_bounded(self) -> None:
@@ -309,7 +319,8 @@ class PerCommandTests(unittest.IsolatedAsyncioTestCase):
             await link.power.get()
         self.assertEqual(projector.lines, [digest + b"%1POWR ?\r"] * 2)
 
-    async def test_close_does_nothing(self) -> None:
+    @staticmethod
+    async def test_close_does_nothing() -> None:
         async with raw_tcp_server(FakeProjector()) as server:
             link = client_for_server(server, persistent=False)
             await link.close()

@@ -15,10 +15,13 @@ including the search protocol's own datagrams, is ignored, not raised.
 """
 
 import asyncio
+import contextlib
 import dataclasses
 import socket
 from collections.abc import AsyncGenerator
 from typing import Any
+
+from typing_extensions import override
 
 from ._debug import LOGGER
 from ._protocol import parse_mac_address, split_notification
@@ -103,7 +106,7 @@ def parse_event(datagram_text: str) -> NotificationEvent:
     if command == "ERST":
         return ErrorsChanged(parse_error_levels(parameter))
     if command == "POWR":
-        if parameter not in ("0", "1"):
+        if parameter not in {"0", "1"}:
             raise PJLinkUnexpectedValueError("unexpected power status notification")
         return PowerChanged(powered_on=parameter == "1")
     if command == "INPT":
@@ -134,6 +137,7 @@ class _NotificationProtocol(asyncio.DatagramProtocol):
             return
         LOGGER.debug("status notification from %s: %s", sender_address, event)
 
+    @override
     def error_received(self, exc: Exception) -> None:
         # The operating system reporting an earlier datagram as undeliverable (ICMP). Nothing to do about it.
         LOGGER.debug("status notification datagram error: %s", exc)
@@ -182,12 +186,18 @@ async def listen_notifications(
         family, local_sockaddr = resolve_address(local_address, local_port, "local_address")
 
     pending_notifications: asyncio.Queue[Notification] = asyncio.Queue(_MAX_PENDING_NOTIFICATIONS)
-    async with open_endpoint(
-        _NotificationProtocol(pending_notifications),
-        family,
-        local_sockaddr,
-        enable_broadcast=False,
-        purpose="listening for notifications",
-    ):
+    stack = contextlib.AsyncExitStack()
+    try:
+        await stack.enter_async_context(
+            open_endpoint(
+                _NotificationProtocol(pending_notifications),
+                family,
+                local_sockaddr,
+                enable_broadcast=False,
+                purpose="listening for notifications",
+            )
+        )
         while True:
             yield await pending_notifications.get()
+    finally:
+        await stack.aclose()

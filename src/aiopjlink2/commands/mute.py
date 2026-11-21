@@ -32,7 +32,7 @@ class Mute:
         if mute_code == "30":
             return False, False
         # Not defined as a query response (§4.6), but some projectors report "not muted" like this
-        if mute_code in ("10", "20"):
+        if mute_code in {"10", "20"}:
             return False, False
         raise PJLinkUnexpectedValueError("unexpected mute response")
 
@@ -61,7 +61,7 @@ class Mute:
         if video is None and audio is None:
             return
 
-        if None not in (video, audio) and bool(video) == bool(audio):
+        if None not in {video, audio} and bool(video) == bool(audio):
             await self.both(bool(video))
             return
 

@@ -43,7 +43,8 @@ class MuteGroup(unittest.IsolatedAsyncioTestCase):
                     video, audio = await client.mute.status()
             self.assertEqual(str(err.exception), "unexpected mute response")
 
-    async def test_control_api(self) -> None:
+    @staticmethod
+    async def test_control_api() -> None:
         """Mute status can be set OK using expressive methods."""
         async with mock_client_server_noauth() as (server, client):
             async with server.when(b"%1AVMT 11\r", respond_with=b"%1AVMT=OK\r"):

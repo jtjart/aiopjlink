@@ -11,10 +11,13 @@ has a socket of its own. Everything a stranger on the network might send to port
 """
 
 import asyncio
+import contextlib
 import dataclasses
 import socket
 from collections.abc import AsyncGenerator, Sequence
 from typing import Any
+
+from typing_extensions import override
 
 from ._debug import LOGGER
 from ._protocol import SEARCH_REQUEST, parse_search_response
@@ -63,6 +66,7 @@ class _SearchProtocol(asyncio.DatagramProtocol):
         LOGGER.debug("search response from %s", sender_address)
         self._results_queue.put_nowait(result)
 
+    @override
     def error_received(self, exc: Exception) -> None:
         LOGGER.debug("search datagram error: %s", exc)
 
@@ -180,10 +184,14 @@ async def search(
 
     loop = asyncio.get_running_loop()
     answers: asyncio.Queue[SearchResult] = asyncio.Queue()
-    async with open_endpoint(
-        _SearchProtocol(answers), family, local_sockaddr, enable_broadcast=True, purpose="search"
-    ) as udp_socket:
+    stack = contextlib.AsyncExitStack()
+    try:
+        udp_socket = await stack.enter_async_context(
+            open_endpoint(_SearchProtocol(answers), family, local_sockaddr, enable_broadcast=True, purpose="search")
+        )
         _send_requests(udp_socket, targets)
         deadline = loop.time() + duration_seconds
         while (result := await _next_result(answers, deadline)) is not None:
             yield result
+    finally:
+        await stack.aclose()

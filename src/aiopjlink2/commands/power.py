@@ -20,7 +20,7 @@ class Power:
 
         def __bool__(self) -> bool:
             """Truthy states for `on` and `warming`, falsy states for `off` and `cooling`."""
-            return self in (Power.State.ON, Power.State.WARMING)
+            return self in {Power.State.ON, Power.State.WARMING}
 
     def __init__(self, sender: CommandSender) -> None:
         """Initialize the power command handler."""
@@ -32,7 +32,7 @@ class Power:
         Raises:
             ValueError: `state` is `COOLING` or `WARMING`: only `ON` and `OFF` can be set. Nothing is sent.
         """
-        if state in (Power.State.COOLING, Power.State.WARMING):
+        if state in {Power.State.COOLING, Power.State.WARMING}:
             raise ValueError("expected Power.State.ON or Power.State.OFF")
         await self._sender.transmit_expecting_ok("POWR", state.value, pjclass=pjclass)
 

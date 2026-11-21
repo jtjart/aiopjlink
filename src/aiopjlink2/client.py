@@ -208,7 +208,7 @@ class PJLink:
 
     """
 
-    def __init__(  # noqa: PLR0913
+    def __init__(  # ruff: ignore[too-many-arguments]
         self,
         address: str,
         port: int = 4352,

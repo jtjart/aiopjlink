@@ -66,39 +66,44 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = [
-    "E",       # pycodestyle
-    "W",       # pycodestyle warnings
-    "F",       # pyflakes
-    "I",       # isort
-    "B",       # flake8-bugbear
-    "UP",      # pyupgrade
-    "ASYNC",   # flake8-async
-    "SIM",     # flake8-simplify
-    "C4",      # flake8-comprehensions
-    "PIE",     # flake8-pie
-    "RET",     # flake8-return
-    "RUF",     # Ruff-specific
-    "C90",     # mccabe
-    "TRY",     # tryceratops
-    "PL",      # pylint
-    "PLR1702", # pylint: too-many-nested-blocks
-    "PLR0904", # pylint: too-many-public-methods
-    "SLF",     # flake8-self
-    "ARG",     # flake8-unused-arguments
-    "PLR0914", # pylint: too-many-locals
-    "RUF029",  # ruff: unused-async
-    "N",       # pep8-naming
-    "D",       # pydocstyle
-    "ERA",     # eradicate: no commented-out code
+    "E",     # pycodestyle
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "B",     # flake8-bugbear
+    "UP",    # pyupgrade
+    "ASYNC", # flake8-async
+    "SIM",   # flake8-simplify
+    "C4",    # flake8-comprehensions
+    "PIE",   # flake8-pie
+    "RET",   # flake8-return
+    "RUF",   # Ruff-specific
+    "C90",   # mccabe
+    "TRY",   # tryceratops
+    "PL",    # pylint
+    "SLF",   # flake8-self
+    "ARG",   # flake8-unused-arguments
+    "N",     # pep8-naming
+    "D",     # pydocstyle
+    "ERA",   # eradicate
+    "FIX",   # flake8-fixme
+    "TD",    # flake8-todos
+    "PGH",   # pygrep-hooks
 ]
 preview = true
-explicit-preview-rules = true
+# explicit-preview-rules = true
 
 ignore = [
-    "TRY003", # tryceratops: raise-vanilla-args
+    "raise-vanilla-args", # tryceratops: raise-vanilla-args
 ]
 
-per-file-ignores = { "tests/**" = ["SLF001", "ARG", "RUF029", "D"] }
+per-file-ignores = { "tests/**" = [
+    "private-member-access",
+    "ARG",
+    "unused-async",
+    "D",
+    "import-private-name",
+] }
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
