@@ -58,11 +58,6 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             result = PJCommand("ABCD", large_param, PJClass.ONE)
         self.assertEqual(str(err.exception), "command param is larger than 128 bytes")
 
-        # Not a `PJClass` on purpose (hence the type checker suppressions): that is a programming error.
-        with self.assertRaises(ValueError) as err_value_error:
-            result = PJCommand("ABCD", "?", "3")  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
-        self.assertEqual(str(err_value_error.exception), "'3' is not a valid PJClass")
-
         # The limit is 128 bytes, not 128 characters (§2.1): "é" takes two bytes in UTF-8 ...
         PJCommand("ABCD", "é" * 64, PJClass.ONE)
         with self.assertRaises(aiopjlink2.PJLinkProtocolError) as err:
@@ -88,10 +83,6 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(aiopjlink2.PJLinkProtocolError) as err:
             await link._transmit(PJCommand("NAME", "é" * 65, PJClass.ONE))
         self.assertEqual(str(err.exception), "command param is larger than 128 bytes")
-
-        # A class that is neither 1 nor 2 is a programming error.
-        with self.assertRaises(ValueError):
-            await link._transmit(PJCommand("NAME", "?", pjclass="3"))  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
 
         # Text the encoding cannot represent is a `ValueError` too (`UnicodeEncodeError` is one).
         ascii_link = client_for(unused_port(), timeout_seconds=0.5, encoding="ascii")

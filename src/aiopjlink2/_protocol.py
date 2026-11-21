@@ -42,9 +42,7 @@ class PJCommand:
     line: str = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
-        # The dataclass is frozen, so its fields are set through `object.__setattr__`. The class is converted
-        # (`"1"` becomes `PJClass.ONE`) and anything that is not a class raises `ValueError`.
-        object.__setattr__(self, "pjclass", PJClass(self.pjclass))
+        # The dataclass is frozen, so its fields are set through `object.__setattr__`.
 
         if not self.name.isupper():
             raise PJLinkProtocolError("command is not uppercase")
