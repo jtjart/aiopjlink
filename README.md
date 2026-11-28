@@ -258,13 +258,6 @@ Working without the container is possible too. See [CONTRIBUTING.md](CONTRIBUTIN
 
 Only names exported from `aiopjlink2` are public API.
 
-## Roadmap
-
-Pull requests with tests are welcome:
-
-* [x] Search protocol (§3.2)
-* [x] Status notification protocol (§3.3)
-
 ## Honorable mentions
 
 Based on [HEInventions/aiopjlink](https://github.com/HEInventions/aiopjlink) and [Kwull/aiopjlink](https://github.com/Kwull/aiopjlink), and maintained as an independent project.
