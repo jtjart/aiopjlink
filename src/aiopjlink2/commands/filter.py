@@ -16,9 +16,13 @@ class Filter:
         self._sender = sender
 
     async def hours(self) -> int:
-        """Query the filter usage time (§4.20).
+        """Query filter usage time (§4.20).
 
-        The usage time is always 0 when the projector does not count it.
+        Returns:
+            Filter usage time in hours (0 if the projector does not count it).
+
+        Raises:
+            PJLinkUnexpectedValueError: The projector returned a value that is not an integer.
         """
         try:
             return int(await self._sender.query_status("FILT", PJClass.TWO, not_supported_message="no filter"))
@@ -28,7 +32,8 @@ class Filter:
     async def replacement_models(self) -> list[str]:
         """Get the filter replacement models listed in the projector (§4.22).
 
-        There may be more than one model number, so they are returned in a list.
+        Returns:
+            The listed filter replacement model numbers.
         """
         models = await self._sender.transmit("RFIL", "?", PJClass.TWO)
         return [model for model in models.split(" ") if model]

@@ -117,6 +117,16 @@ class SourcesGroup(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(index, "1")
                 self.assertEqual(source_name, "Computer")
 
+            with self.assertRaises(aiopjlink2.PJLinkUnexpectedValueError) as err:
+                async with server.when(b"%2INST ?\r", respond_with=b"%2INST=30\r"):
+                    await client.sources.available(pjclass=aiopjlink2.PJClass.TWO)
+            self.assertEqual(str(err.exception), "unable to parse available sources")
+
+            with self.assertRaises(aiopjlink2.PJLinkUnexpectedValueError) as err:
+                async with server.when(b"%2INST ?\r", respond_with=b"%2INST=30\r"):
+                    await client.sources.available_with_names()
+            self.assertEqual(str(err.exception), "unable to parse available sources")
+
     async def test_inpt_index_forms(self) -> None:
         """Setting a source accepts digits, letters (any case) and integers."""
         async with mock_client_server_noauth() as (server, client):

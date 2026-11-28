@@ -22,11 +22,13 @@ IPV6_SCOPE_ID_INDEX = 3
 
 
 def source_address(datagram_sender: tuple[Any, ...]) -> str:
-    """The IP address a datagram came from, as a string that can be connected to.
+    """Get the sender address of a datagram as a string that can be connected to.
 
-    An IPv6 link-local address is only meaningful together with the interface it was seen on. The operating
-    system reports that as a separate scope id (and some also write it after a `%` in the address), so it is
-    added here when it is missing: `fe80::1%3`.
+    For IPv6 link-local addresses, add the scope id if the operating system reports it separately, e.g.
+    `fe80::1%3`.
+
+    Returns:
+        The sender IP address, including an IPv6 scope id when needed.
     """
     host = str(datagram_sender[0])
     if len(datagram_sender) > IPV6_SCOPE_ID_INDEX and datagram_sender[IPV6_SCOPE_ID_INDEX] and "%" not in host:
@@ -35,10 +37,17 @@ def source_address(datagram_sender: tuple[Any, ...]) -> str:
 
 
 def resolve_address(host: str, port: int, argument_name: str) -> tuple[socket.AddressFamily, tuple[Any, ...]]:
-    """Turn an IP address literal (not a host name: nothing here may block on DNS) into `(family, sockaddr)`.
+    """Resolve a numeric IP address without performing DNS lookup.
 
-    The `sockaddr` is what the `socket` methods take. For IPv6 it carries the scope id of `ff02::1%eth0`,
-    which a plain `(host, port)` tuple would lose. `argument_name` names the argument in the `ValueError`.
+    Args:
+        argument_name: Name of the argument being validated.
+
+    Returns:
+        The address family and `sockaddr`. Returning a `sockaddr` rather than `(host, port)` preserves an IPv6 scope
+        id such as the interface in `ff02::1%eth0`.
+
+    Raises:
+        ValueError: `host` is empty or is not a numeric IP address.
     """
     if not host:
         raise ValueError(f"{argument_name} is not a usable IP address: {host!r}")
@@ -64,10 +73,14 @@ async def open_endpoint(
     Creates a non-blocking UDP socket, optionally enables IPv4 broadcast, binds it to the local address,
     and attaches the supplied datagram protocol.
 
-    Yields the socket so callers can send datagrams directly.
+    Args:
+        purpose: Operation name included in connection errors.
 
-    Raises `PJLinkNoConnectionError` if socket creation or binding fails.
-    The `purpose` argument identifies the operation in the resulting error.
+    Yields:
+        The open UDP socket.
+
+    Raises:
+        PJLinkNoConnectionError: Socket creation or binding fails.
     """
     try:
         udp_socket = socket.socket(family, socket.SOCK_DGRAM)

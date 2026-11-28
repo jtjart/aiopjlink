@@ -1,5 +1,7 @@
 """Speaker and microphone volume (§4.23 SVOL, §4.24 MVOL)."""
 
+from typing import Literal
+
 from ..enums import PJClass
 from ._sender import CommandSender
 
@@ -25,8 +27,12 @@ class Volume:
     to the model, etc.) is referred to as the microphone volume.
     """
 
-    def __init__(self, sender: CommandSender, command: str) -> None:
-        """Initialize the volume command handler."""
+    def __init__(self, sender: CommandSender, command: Literal["SVOL", "MVOL"]) -> None:
+        """Initialize the volume command handler.
+
+        Args:
+            command: PJLink volume command.
+        """
         self._sender = sender
         self.command = command
         # ERR1 means the device is not installed (§4.23, §4.24).

@@ -29,6 +29,12 @@ class CommandSender:
         The spec gives `ERR1` a specific meaning for some commands ("no lamp", "speaker not installed", ...).
         Pass that meaning as `not_supported_message` and a `PJLinkNotSupportedError` raised for this command
         carries it as its message.
+
+        Returns:
+            The response parameter.
+
+        Raises:
+            PJLinkNotSupportedError: The projector returned ERR1 for the command.
         """
         try:
             return await self._transmit_command(PJCommand(command, parameter, pjclass))
@@ -48,6 +54,12 @@ class CommandSender:
 
         Do not use this for queries that return free text (names, serial numbers, ...): `OK` is a valid value there.
         See `transmit` for `not_supported_message`.
+
+        Returns:
+            The response parameter.
+
+        Raises:
+            PJLinkNotReadyError: The projector returned OK to a status query.
         """
         response_parameter = await self.transmit(command, "?", pjclass, not_supported_message=not_supported_message)
         if response_parameter.upper() == "OK":
@@ -60,6 +72,9 @@ class CommandSender:
         """Transmit a command and check the response is OK.
 
         See `transmit` for `not_supported_message`.
+
+        Raises:
+            PJLinkUnexpectedValueError: The projector did not answer OK.
         """
         response_parameter = await self.transmit(
             command, parameter, pjclass, not_supported_message=not_supported_message

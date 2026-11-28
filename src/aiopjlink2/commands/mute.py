@@ -17,10 +17,13 @@ class Mute:
         self._sender = sender
 
     async def status(self) -> tuple[bool, bool]:
-        """Current (video, audio) track mute status returned as two booleans (§4.6).
+        """Query the audio and video mute status (§4.6).
 
         Returns:
-            tuple(video: bool, audio: bool): True if the track is muted.  False if not.
+            A ``(video, audio)`` pair; each value is True when that track is muted.
+
+        Raises:
+            PJLinkUnexpectedValueError: The projector returned an unknown mute status.
         """
         mute_code = await self._sender.query_status("AVMT", PJClass.ONE)
         if mute_code == "11":

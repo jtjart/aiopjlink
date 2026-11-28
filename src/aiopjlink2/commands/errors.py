@@ -43,7 +43,14 @@ class Errors:
 
 
 def parse_error_levels(levels_text: str) -> dict[Errors.Category, Errors.Level]:
-    """Parse the six error levels of an `ERST` query response (§4.7) or status notification (§3.3.2)."""
+    """Parse the six error levels of an `ERST` query response (§4.7) or status notification (§3.3.2).
+
+    Returns:
+        The error level for each error category.
+
+    Raises:
+        PJLinkUnexpectedValueError: The response has the wrong length or contains an unknown error level.
+    """
     if len(levels_text) != _NUMBER_OF_ERROR_CATEGORIES:
         raise PJLinkUnexpectedValueError("unexpected number of error types reported")
     try:

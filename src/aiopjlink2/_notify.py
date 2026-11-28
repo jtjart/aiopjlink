@@ -94,8 +94,12 @@ class Notification:
 def parse_event(datagram_text: str) -> NotificationEvent:
     """Turn the text of a notification datagram (§3.3.2) into the event it describes.
 
-    Raises `PJLinkProtocolError` if it is not a notification, and `PJLinkUnexpectedValueError`
-    if it is one but holds a value that is not defined for it.
+    Returns:
+        The notification event represented by the datagram.
+
+    Raises:
+        PJLinkProtocolError: The datagram is not a recognised PJLink status notification.
+        PJLinkUnexpectedValueError: The notification contains a value that is not defined.
     """
     command, parameter = split_notification(datagram_text)
     if command == "LKUP":

@@ -13,6 +13,7 @@ class PJClass(Enum):
     Class 1 performs the basic control of a projector: power, input selection, mute, error and lamp status,
     and information queries. Class 2 adds commands (input names and resolutions, filters, speaker and microphone
     volume, freeze, serial number, software version) as well as the device search and the status notifications.
+    Use `PJClass.TWO` for Class 2-only commands; `PJClass.ONE` is the default.
     """
 
     ONE = "1"

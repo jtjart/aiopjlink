@@ -28,12 +28,13 @@ class Lamp:
         self._sender = sender
 
     async def status(self) -> list[tuple[int, State]]:
-        """Query the current lamp hours and lamp statuses.
-
-        There may be more than one lamp in some projectors, so this is returned as a list.
+        """Query lamp usage and status (§4.8).
 
         Returns:
-            A list of ``(hours, state)`` tuples for each lamp.
+            One ``(hours, state)`` pair per lamp.
+
+        Raises:
+            PJLinkUnexpectedValueError: The lamp status response is malformed.
         """
         response_parameter = await self._sender.query_status("LAMP", PJClass.ONE, not_supported_message="no lamp")
         tokens = response_parameter.split()
@@ -47,16 +48,21 @@ class Lamp:
             raise PJLinkUnexpectedValueError(_UNPARSABLE_STATUS) from err
 
     async def hours(self) -> int:
-        """Return the usage time of the first lamp in hours (§4.8).
+        """Query the usage time of the first lamp (§4.8).
 
-        This is 0 when the projector does not count it.
+        Returns:
+            Usage time in hours (0 if the projector does not count it).
+
+        Raises:
+            PJLinkUnexpectedValueError: The lamp status response is malformed.
         """
         return (await self.status())[0][0]
 
     async def replacement_models(self) -> list[str]:
         """Get the lamp replacement models listed in the projector (§4.21).
 
-        There may be more than one model number, so they are returned in a list.
+        Returns:
+            The lamp replacement model numbers.
         """
         models = await self._sender.transmit("RLMP", "?", PJClass.TWO)
         return [model for model in models.split(" ") if model]

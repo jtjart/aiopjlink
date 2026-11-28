@@ -23,7 +23,14 @@ class Freeze:
         )
 
     async def get(self) -> bool:
-        """Return True if the screen is currently frozen, and False if not (§4.26)."""
+        """Return True if the screen is currently frozen, and False if not (§4.26).
+
+        Returns:
+            Whether the screen is frozen.
+
+        Raises:
+            PJLinkUnexpectedValueError: The projector returned an unknown freeze state.
+        """
         response_parameter = await self._sender.query_status(
             "FREZ", PJClass.TWO, not_supported_message="freeze not supported"
         )

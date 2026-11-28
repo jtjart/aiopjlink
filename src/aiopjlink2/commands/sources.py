@@ -21,7 +21,14 @@ _SOURCE_TOKEN_LENGTH = 2
 
 
 def _parse_resolution(resolution_text: str) -> tuple[int, int]:
-    """Parse `<width>x<height>` (§4.18, §4.19) into `(width, height)`."""
+    """Parse `<width>x<height>` (§4.18, §4.19) into `(width, height)`.
+
+    Returns:
+        The horizontal and vertical resolution.
+
+    Raises:
+        PJLinkUnexpectedValueError: The resolution text is not in `<width>x<height>` format.
+    """
     resolution_match = _RESOLUTION_PATTERN.fullmatch(resolution_text)
     if resolution_match is None:
         raise PJLinkUnexpectedValueError(f"unable to parse resolution: {resolution_text}")
@@ -63,7 +70,14 @@ class Sources:
         )
 
     async def get(self, pjclass: PJClass = PJClass.ONE) -> tuple[Mode, str]:
-        """Get the current source input selection (§4.4)."""
+        """Get the current source input selection (§4.4).
+
+        Returns:
+            The selected source mode and input index.
+
+        Raises:
+            PJLinkUnexpectedValueError: The response contains an invalid source mode.
+        """
         return parse_input_source(await self._sender.query_status("INPT", pjclass))
 
     _INDEX_CHARACTERS = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -73,8 +87,14 @@ class Sources:
     def _to_index_character(index: int | str) -> str:
         """Return the single character the protocol uses for an input index (1-9, A-Z).
 
-        An int maps onto that alphabet (11 is "B"). A string must already be a single
-        character, so "11" is rejected. Lower case is accepted.
+        Integer indexes map onto the sequence 1-9, A-Z (10 is "A"); strings must be a single
+        character from that sequence. Lower case is accepted.
+
+        Returns:
+            The protocol character for the input index.
+
+        Raises:
+            ValueError: The index is outside 1-9A-Z or is not a single character.
         """
         valid_characters = Sources._INDEX_CHARACTERS
         if isinstance(index, int):
@@ -91,12 +111,18 @@ class Sources:
         Returns:
             A list of available input sources in the format: (Sources.Mode, index str).  For example:
                 [(<Mode.RGB: '1'>, '1'), (<Mode.DIGITAL: '3'>, '1'), ...]
+
+        Raises:
+            PJLinkUnexpectedValueError: The source list is malformed or contains an unknown mode.
         """
         source_tokens = (await self._sender.query_status("INST", pjclass)).split()
         if not source_tokens or any(len(source_token) != _SOURCE_TOKEN_LENGTH for source_token in source_tokens):
             raise PJLinkUnexpectedValueError(_UNPARSABLE_SOURCES)
         try:
-            return [(Sources.Mode(source_token[0]), source_token[1]) for source_token in source_tokens]
+            return [
+                (Sources.Mode(source_token[0]), Sources._to_index_character(source_token[1]))
+                for source_token in source_tokens
+            ]
         except ValueError as err:
             raise PJLinkUnexpectedValueError(_UNPARSABLE_SOURCES) from err
 
@@ -107,6 +133,9 @@ class Sources:
             mode: The kind of input.
             index: The input index, as for `set`.
 
+        Returns:
+            The projector's name for the selected input source.
+
         Raises:
             ValueError: `index` is not a valid input index. Nothing is sent.
         """
@@ -115,18 +144,18 @@ class Sources:
     async def available_with_names(self) -> list[tuple[Mode, str, str | None]]:
         """List all the available input sources with their names (§4.17).
 
-        A source the projector has no name for (it answers `ERR2`) has `None` as its name.
-
         Returns:
-            A list of available input sources in the format (Sources.Mode, index str, name str or None).
-            For example:
-                [(<Mode.RGB: '1'>, '1', 'Computer'), (<Mode.DIGITAL: '3'>, '1', 'DVI-D'), ...]
+            Each source as a ``(mode, index, name)`` tuple. The name is None if the projector answers ERR2.
         """
         available_sources = await self.available(pjclass=PJClass.TWO)
         return [(mode, index, await self._source_name_or_none(mode, index)) for mode, index in available_sources]
 
     async def _source_name_or_none(self, mode: Mode, index: str) -> str | None:
-        """The name of an input, or None if the projector has no name for it (`ERR2`)."""
+        """Get the name of an input, treating ERR2 as no name.
+
+        Returns:
+            The source name, or None if the projector answers ERR2.
+        """
         try:
             return await self.get_source_name(mode, index)
         except PJLinkInvalidParameterError:
@@ -141,6 +170,7 @@ class Sources:
         Raises:
             PJLinkProjectorError: There is no signal input, or the signal is unknown (the projector answers `-`
                 or `*`).
+            PJLinkUnexpectedValueError: The resolution response is malformed.
         """
         response_parameter = await self._sender.query_status("IRES", PJClass.TWO)
         if response_parameter == "-":
@@ -154,12 +184,22 @@ class Sources:
 
         Returns:
             The horizontal and vertical resolution, in that order.
+
+        Raises:
+            PJLinkUnexpectedValueError: The resolution response is malformed.
         """
         return _parse_resolution(await self._sender.query_status("RRES", PJClass.TWO))
 
 
 def parse_input_source(input_parameter: str) -> tuple[Sources.Mode, str]:
-    """Parse `<mode><index>` of an `INPT` query response (§4.4) or status notification (§3.3.2)."""
+    """Parse `<mode><index>` of an `INPT` query response (§4.4) or status notification (§3.3.2).
+
+    Returns:
+        The parsed source mode and input index.
+
+    Raises:
+        PJLinkUnexpectedValueError: The input parameter is malformed or uses an unknown mode.
+    """
     if len(input_parameter) != _SOURCE_TOKEN_LENGTH:
         raise PJLinkUnexpectedValueError(f"expected {_SOURCE_TOKEN_LENGTH} INPT response characters")
     try:

@@ -84,6 +84,10 @@ Rules the code follows:
 * Commands that change something are never repeated after a dropped connection; queries may be.
 * New public names must be exported in `__init__.py` and new commands added to the README table.
 * Comments say why, not what. Leave out a comment that repeats the line below it, and put the reasons that are not obvious (a quirk of the spec or of real projectors, an order that matters, a suppression) next to the code they explain. Public names get a docstring that starts with a one-line summary. Ruff checks the form (`D` with the Google convention, and `ERA`, which rejects commented-out code); whether a comment is worth having is up to the review.
+* Docstrings follow Google style.
+* Use `Args` only for non-obvious parameters.
+* `Raises` lists a function's own raises, plus contract-level exceptions on the public API.
+* Do not repeat `PJLinkError` boilerplate on individual methods; document the contract once on `PJLink`.
 
 ## Releases
 

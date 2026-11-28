@@ -89,12 +89,15 @@ select = [
     "FIX",   # flake8-fixme
     "TD",    # flake8-todos
     "PGH",   # pygrep-hooks
+    "DOC",   # pydoclint
 ]
 preview = true
 # explicit-preview-rules = true
 
 ignore = [
-    "raise-vanilla-args", # tryceratops: raise-vanilla-args
+    "raise-vanilla-args",
+    "docstring-extraneous-exception",  # Public methods document exceptions raised by callees, which is part of their contract.
+    "undocumented-param",  # Args documents only non-obvious parameters by convention.
 ]
 
 per-file-ignores = { "tests/**" = [
@@ -102,11 +105,15 @@ per-file-ignores = { "tests/**" = [
     "ARG",
     "unused-async",
     "D",
+    "DOC",
     "import-private-name",
 ] }
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.ruff.lint.pydoclint]
+ignore-one-line-docstrings = true
 
 [tool.ruff.format]
 quote-style = "preserve"
