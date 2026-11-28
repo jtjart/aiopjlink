@@ -41,7 +41,7 @@ and shared by the editor, pre-commit and CI): annotate every test method (`-> No
 modules such as `aiopjlink2._protocol`; that is the only rule pyright relaxes for them.
 
 The pre-commit hooks run the same tools, including the full test suite, so a commit takes a moment.
-CI runs them too, with the tests on Linux, macOS and Windows with Python 3.11–3.14.
+CI runs them too, with the tests on Linux with Python 3.11–3.14 and on macOS and Windows with Python 3.11.
 
 The mock projectors in the tests listen on ports chosen by the operating system, so the tests neither collide with a real PJLink service on port 4352 nor with each other. They can run in parallel, e.g. `uv run --with pytest-xdist pytest -n auto`.
 The UDP tests (`tests/test_search.py`, `tests/test_notifications.py`) do the same: the search tests pass `local_port=0`, and the notification tests listen on a free port from `unused_udp_port()`, because both would otherwise bind port 4352 on this side too.
