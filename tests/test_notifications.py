@@ -299,7 +299,8 @@ class ListenTests(unittest.IsolatedAsyncioTestCase):
         queue_class.assert_called_once_with(_MAX_PENDING_NOTIFICATIONS)
         self.assertGreater(_MAX_PENDING_NOTIFICATIONS, 0)
 
-    async def test_nothing_happens_before_the_first_iteration(self) -> None:
+    @staticmethod
+    async def test_nothing_happens_before_the_first_iteration() -> None:
         port = unused_udp_port()
         listen_notifications(**listener_arguments(port))
         # The port is still free: nothing was bound.
@@ -316,7 +317,8 @@ class ListenTests(unittest.IsolatedAsyncioTestCase):
 class ReleaseTests(unittest.IsolatedAsyncioTestCase):
     """The port is given back as soon as the listener is done, so that the next one can use it."""
 
-    async def test_closing_releases_the_port_at_once(self) -> None:
+    @staticmethod
+    async def test_closing_releases_the_port_at_once() -> None:
         port = unused_udp_port()
         await listen_and_send(port, b"%2POWR=1\r", count=1)
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:

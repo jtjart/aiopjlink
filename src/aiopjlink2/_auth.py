@@ -1,6 +1,4 @@
-"""_auth.py
-
-The opening handshake of a PJLink connection and its password authentication (§5).
+"""The opening handshake of a PJLink connection and its password authentication (§5).
 
 Pure functions only: nothing here touches the network.
 """
@@ -20,9 +18,13 @@ _MIN_WELCOME_LENGTH = 9
 
 
 def authentication_required(welcome_line: str) -> bool:
-    """Check the projector's welcome line (§5.1, §5.2) and say whether it wants a password.
+    """Check the welcome line and say whether it wants a password (§5.1, §5.2).
 
-    Raises `PJLinkProtocolError` if the line is not valid.
+    Returns:
+        Whether the welcome line requests password authentication.
+
+    Raises:
+        PJLinkProtocolError: The welcome line is not a supported PJLink greeting.
     """
     if len(welcome_line) < _MIN_WELCOME_LENGTH:
         raise PJLinkProtocolError("unexpected opening header message from projector - too short")
@@ -31,11 +33,10 @@ def authentication_required(welcome_line: str) -> bool:
     if greeting_prefix.upper() != "PJLINK ":
         raise PJLinkProtocolError("unexpected opening header message from projector - not PJLink")
 
-    # No authentication required.
     if security_flag == "0":
         return False
 
-    # Connection requires auth: `PJLINK 1 <token>`.
+    # `PJLINK 1 <token>` is the only other greeting the spec defines.
     if security_flag != "1" or separator != " ":
         raise PJLinkProtocolError("unexpected opening security message from projector - unrecognised auth method")
 
@@ -45,8 +46,12 @@ def authentication_required(welcome_line: str) -> bool:
 def build_md5_request(welcome_line: str, command_line: str, password: str | None, encoding: str = "utf-8") -> bytes:
     """Turn the projector's welcome line and a command line into the bytes to send (§5.1, §5.2).
 
-    Raises `PJLinkProtocolError` if the welcome line is not valid,
-    and `PJLinkAuthenticationError` if the projector wants a password and none was given.
+    Returns:
+        The command line, with the MD5 authentication digest prepended when required.
+
+    Raises:
+        PJLinkProtocolError: The welcome line is invalid.
+        PJLinkAuthenticationError: Password authentication is required but no password was supplied.
     """
     if not authentication_required(welcome_line):
         return command_line.encode(encoding)
@@ -65,9 +70,11 @@ def build_md5_request(welcome_line: str, command_line: str, password: str | None
 def parse_security_reply(reply: str) -> str | None:
     """Read the projector's answer to `SHA256_INQUIRY` (§5.1, (1-3)).
 
-    Returns the projector's random number (32 hex characters) if it supports SHA256, and None for anything else:
-    `ERR1`, `ERR2`, `ERRA`, an echo of the question, a random number that is not 16 bytes, ... The spec treats
-    every one of them as "does not support SHA256".
+    Returns:
+        The projector's 32-hex-character random number, or None if the reply is not a valid SHA256 response.
+
+    The projector does not support SHA256 if it answers `ERR1`, `ERR2`, `ERRA`, or echoes the question, or if its
+    random number is not 16 bytes (32 hexadecimal characters).
     """
     fields = reply.strip().split(" ")
     if (
@@ -81,9 +88,19 @@ def parse_security_reply(reply: str) -> str | None:
 
 
 def build_sha256_request(projector_nonce: str, command_line: str, password: str, encoding: str = "utf-8") -> bytes:
-    """The bytes to send for the first command of a SHA256 connection (§5.1, (1-4) and (1-5)).
+    """Build the first command bytes for a SHA256-authenticated connection (§5.1, (1-4) and (1-5)).
 
-    `projector_nonce` is the 32 hex characters the projector answered with.
+    The digest uses the XOR of the projector and controller nonces followed by the password.
+    The controller's number goes in front of the digest so the projector can combine them the same way.
+
+    Args:
+        projector_nonce: The 32-hex-character nonce returned by the projector.
+        command_line: The PJLink command line to send.
+        password: The projector password.
+        encoding: The encoding used for the outgoing bytes.
+
+    Returns:
+        The controller nonce and SHA256 digest, followed by the command line.
     """
     own_nonce = secrets.token_bytes(16)
     combined_nonce = bytes(

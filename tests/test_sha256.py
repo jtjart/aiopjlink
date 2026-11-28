@@ -46,7 +46,7 @@ class SecureProjector:
     seconds).
     """
 
-    def __init__(  # noqa: PLR0913
+    def __init__(  # ruff: ignore[too-many-arguments]
         self,
         *,
         sha256: bool = True,
@@ -131,7 +131,7 @@ class SecureProjector:
         if self.sha256:
             nonce = NONCE
             writer.write(f"PJLINK 2 {NONCE}\r".encode())
-        elif self.on_inquiry in ("ERR1", "ERR2", "ERRA"):
+        elif self.on_inquiry in {"ERR1", "ERR2", "ERRA"}:
             writer.write(f"PJLINK {self.on_inquiry}\r".encode())
         elif self.on_inquiry == "echo":
             writer.write(b"PJLINK 2\r")

@@ -1,7 +1,4 @@
-"""commands/power.py
-
-Control and query the projector's power state (§4.1 POWR, §4.2 POWR ?).
-"""
+"""Control and query the projector's power state (§4.1 POWR, §4.2 POWR ?)."""
 
 from enum import Enum
 
@@ -22,20 +19,39 @@ class Power:
         WARMING = "3"
 
         def __bool__(self) -> bool:
-            """Truthy states for `on` and `warming`, falsy states for `off` and `cooling`."""
-            return self in (Power.State.ON, Power.State.WARMING)
+            """Tell whether the lamp is on or warming.
+
+            Returns:
+                True for ON and WARMING, False for OFF and COOLING.
+            """
+            return self in {Power.State.ON, Power.State.WARMING}
 
     def __init__(self, sender: CommandSender) -> None:
+        """Initialize the power command handler."""
         self._sender = sender
 
     async def set(self, state: State, pjclass: PJClass = PJClass.ONE) -> None:
-        """Send a power control instruction to power the projector lamp on or off."""
-        if state in (Power.State.COOLING, Power.State.WARMING):
+        """Set the projector lamp power state.
+
+        Args:
+            state: The requested state; only `ON` and `OFF` can be set.
+
+        Raises:
+            ValueError: `state` is `COOLING` or `WARMING`; no command is sent.
+        """
+        if state in {Power.State.COOLING, Power.State.WARMING}:
             raise ValueError("expected Power.State.ON or Power.State.OFF")
         await self._sender.transmit_expecting_ok("POWR", state.value, pjclass=pjclass)
 
     async def get(self, pjclass: PJClass = PJClass.ONE) -> State:
-        """Request the power status of the projector."""
+        """Request the power status of the projector.
+
+        Returns:
+            The projector lamp power state.
+
+        Raises:
+            PJLinkUnexpectedValueError: The projector returned an unknown power state.
+        """
         response_parameter = await self._sender.query_status("POWR", pjclass)
         try:
             return Power.State(response_parameter)

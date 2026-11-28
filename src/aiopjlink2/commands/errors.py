@@ -1,7 +1,4 @@
-"""commands/errors.py
-
-Error status (§4.7 ERST ?).
-"""
+"""Error status (§4.7 ERST ?)."""
 
 from enum import Enum
 
@@ -13,7 +10,7 @@ _NUMBER_OF_ERROR_CATEGORIES = 6
 
 
 class Errors:
-    """Provide information about errors occuring within the projector (§4.7)."""
+    """Provide information about errors occurring within the projector (§4.7)."""
 
     class Category(Enum):
         """The different types of error returned according to (§4.7)."""
@@ -33,20 +30,27 @@ class Errors:
         ERROR = "2"
 
     def __init__(self, sender: CommandSender) -> None:
+        """Initialize the error status command handler."""
         self._sender = sender
 
     async def query(self) -> dict[Category, Level]:
-        """Query the projecteor for the latest error status
-        information for each of the error categories (§4.7).
+        """Query the latest error level of each error category (§4.7).
 
         Returns:
-            dict[Category]: Level: Table of error categories to states.
+            The `Errors.Level` of every `Errors.Category`.
         """
         return parse_error_levels(await self._sender.query_status("ERST", PJClass.ONE))
 
 
 def parse_error_levels(levels_text: str) -> dict[Errors.Category, Errors.Level]:
-    """Parse the six error levels of an `ERST` query response (§4.7) or status notification (§3.3.2)."""
+    """Parse the six error levels of an `ERST` query response (§4.7) or status notification (§3.3.2).
+
+    Returns:
+        The error level for each error category.
+
+    Raises:
+        PJLinkUnexpectedValueError: The response has the wrong length or contains an unknown error level.
+    """
     if len(levels_text) != _NUMBER_OF_ERROR_CATEGORIES:
         raise PJLinkUnexpectedValueError("unexpected number of error types reported")
     try:

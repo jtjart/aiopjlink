@@ -1,7 +1,4 @@
-"""commands/mute.py
-
-Audio and video mute (§4.5 AVMT, §4.6 AVMT ?).
-"""
+"""Audio and video mute (§4.5 AVMT, §4.6 AVMT ?)."""
 
 from ..enums import PJClass
 from ..exceptions import PJLinkUnexpectedValueError
@@ -16,13 +13,17 @@ class Mute:
     """
 
     def __init__(self, sender: CommandSender) -> None:
+        """Initialize the mute command handler."""
         self._sender = sender
 
     async def status(self) -> tuple[bool, bool]:
-        """Current (video, audio) track mute status returned as two booleans (§4.6).
+        """Query the audio and video mute status (§4.6).
 
         Returns:
-            tuple(video: bool, audio: bool): True if the track is muted.  False if not.
+            A ``(video, audio)`` pair; each value is True when that track is muted.
+
+        Raises:
+            PJLinkUnexpectedValueError: The projector returned an unknown mute status.
         """
         mute_code = await self._sender.query_status("AVMT", PJClass.ONE)
         if mute_code == "11":
@@ -34,7 +35,7 @@ class Mute:
         if mute_code == "30":
             return False, False
         # Not defined as a query response (§4.6), but some projectors report "not muted" like this
-        if mute_code in ("10", "20"):
+        if mute_code in {"10", "20"}:
             return False, False
         raise PJLinkUnexpectedValueError("unexpected mute response")
 
@@ -54,14 +55,16 @@ class Mute:
         await self._sender.transmit_expecting_ok("AVMT", f"3{parameter}", pjclass=PJClass.ONE)
 
     async def set(self, video: bool | None, audio: bool | None) -> None:
-        """Enable or disable mute for each track (call mirrors output of `status`).
-        :param video (bool): True to mute. False to unmute. None to skip.
-        :param audio (bool): True to mute. False to unmutes. None to skip.
+        """Enable or disable mute for each track (the call mirrors the output of `status`).
+
+        Args:
+            video: True to mute, False to unmute, None to leave the video track as it is.
+            audio: True to mute, False to unmute, None to leave the audio track as it is.
         """
         if video is None and audio is None:
             return
 
-        if None not in (video, audio) and bool(video) == bool(audio):
+        if None not in {video, audio} and bool(video) == bool(audio):
             await self.both(bool(video))
             return
 

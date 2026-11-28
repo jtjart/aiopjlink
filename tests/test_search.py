@@ -264,7 +264,8 @@ class IterTests(unittest.IsolatedAsyncioTestCase):
                 found.append(result.mac_address)
         self.assertEqual(found, [MAC, "aa:bb:cc:dd:ee:ff"])
 
-    async def test_stopping_early_releases_the_port_at_once(self) -> None:
+    @staticmethod
+    async def test_stopping_early_releases_the_port_at_once() -> None:
         """The next search, on the same local port, must not find it still in use."""
         port = unused_udp_port()
         async with udp_projector(ACKN) as server:

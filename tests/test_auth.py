@@ -27,9 +27,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK 0\r")
 
-            # Prime the server to handle a power request.
             async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r"):
-                # Send the power request and check the response is expected.
                 client = server.client()
                 self.addAsyncCleanup(client.close)
                 value = await client.power.get()
@@ -38,11 +36,9 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
     async def test_auth_malformed(self) -> None:
         """Tests the projector sending back a malformed welcome message generates a `PJLinkProtocolError`."""
 
-        # Start server with no auth.
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK XXX\r")
 
-            # Expect to see a protocol error when we connect.
             with self.assertRaises(aiopjlink2.PJLinkProtocolError):
                 link = server.client()
                 await link.power.get()
@@ -62,12 +58,9 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
     async def test_auth_no_welcome(self) -> None:
         """A projector that accepts the connection but sends no welcome message is a `PJLinkNoConnectionError`."""
 
-        # Start server with no auth.
         async with mock_tcp_pjlink() as server:
-            # Do not send a message (i.e. the one commented out below).
-            # server.open_and_send(b'PJLINK XXX\r')
-
-            # Expect the same error as for a missing response to a command.
+            # No `open_and_send`: the projector accepts the connection but sends no welcome message.
+            # That is the same error as for a missing response to a command.
             with self.assertRaises(aiopjlink2.PJLinkNoConnectionError) as err:
                 link = server.client(timeout_seconds=0.5)
                 await link.power.get()
@@ -77,7 +70,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
     async def test_auth_no_server(self) -> None:
         """Tests that the client honours the timeout if no server responds to the connection."""
 
-        # CONDITION 1: The host can be reached by the OS but no response (aiotimeout).
+        # CONDITION 1: Nothing listens on the port: refused, or a timeout where the OS drops the packet.
         with self.assertRaises(aiopjlink2.PJLinkNoConnectionError) as err:
             link = client_for(unused_port(), timeout_seconds=0.5)
             await link.power.get()
@@ -101,13 +94,10 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK 1 21d0e96e\r")
 
-            # Calcuate the expected projector behaviour.
-            # NOTE: Our client implementation always sends a `POWR ?` since that is
-            # a commonly implemented command.
+            # The digest the projector expects in front of the command: MD5 of the token followed by the password.
             salted_password = hashlib.md5(b"21d0e96eabc123").hexdigest().encode()
             cmd = bytes(salted_password) + b"%1POWR ?\r"
             async with server.when(cmd, respond_with=b"%1POWR=0\r"):
-                # Send the power request and check the response is expected.
                 link = server.client(password="abc123", authentication=aiopjlink2.PJAuth.MD5)
                 self.addAsyncCleanup(link.close)
                 await link.power.get()
@@ -119,11 +109,10 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK 1 21d0e96e\r")
 
-            # Calcuate the expected projector behaviour.
+            # The client sends the digest of the wrong password, which the projector rejects.
             salted_password = hashlib.md5(b"21d0e96eINVALIDPW").hexdigest().encode()
             cmd = bytes(salted_password) + b"%1POWR ?\r"
             async with server.when(cmd, respond_with=b"PJLINK ERRA\r"):
-                # Send the power request and check the response is expected.
                 with self.assertRaises(aiopjlink2.PJLinkAuthenticationError):
                     link = server.client(password="INVALIDPW", authentication=aiopjlink2.PJAuth.MD5)
                     await link.power.get()

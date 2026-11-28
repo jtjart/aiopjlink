@@ -1,6 +1,4 @@
-"""_notify.py
-
-Status notifications sent by projectors on their own (§3.3 LKUP, ERST, POWR, INPT).
+"""Status notifications sent by projectors on their own (§3.3 LKUP, ERST, POWR, INPT).
 
 A projector that has been told the controller's address (how is not part of the specification: it is a setting
 of the projector) sends a UDP datagram to port 4352 of the controller whenever its state changes: it starts
@@ -17,6 +15,7 @@ including the search protocol's own datagrams, is ignored, not raised.
 """
 
 import asyncio
+import contextlib
 import dataclasses
 import socket
 from collections.abc import AsyncGenerator
@@ -93,8 +92,12 @@ class Notification:
 def parse_event(datagram_text: str) -> NotificationEvent:
     """Turn the text of a notification datagram (§3.3.2) into the event it describes.
 
-    Raises `PJLinkProtocolError` if it is not a notification, and `PJLinkUnexpectedValueError`
-    if it is one but holds a value that is not defined for it.
+    Returns:
+        The notification event represented by the datagram.
+
+    Raises:
+        PJLinkProtocolError: The datagram is not a recognised PJLink status notification.
+        PJLinkUnexpectedValueError: The notification contains a value that is not defined.
     """
     command, parameter = split_notification(datagram_text)
     if command == "LKUP":
@@ -105,7 +108,7 @@ def parse_event(datagram_text: str) -> NotificationEvent:
     if command == "ERST":
         return ErrorsChanged(parse_error_levels(parameter))
     if command == "POWR":
-        if parameter not in ("0", "1"):
+        if parameter not in {"0", "1"}:
             raise PJLinkUnexpectedValueError("unexpected power status notification")
         return PowerChanged(powered_on=parameter == "1")
     if command == "INPT":
@@ -136,7 +139,7 @@ class _NotificationProtocol(asyncio.DatagramProtocol):
             return
         LOGGER.debug("status notification from %s: %s", sender_address, event)
 
-    def error_received(self, exc: Exception) -> None:
+    def error_received(self, exc: Exception) -> None:  # ruff: ignore[no-self-use] @override
         # The operating system reporting an earlier datagram as undeliverable (ICMP). Nothing to do about it.
         LOGGER.debug("status notification datagram error: %s", exc)
 
@@ -184,12 +187,18 @@ async def listen_notifications(
         family, local_sockaddr = resolve_address(local_address, local_port, "local_address")
 
     pending_notifications: asyncio.Queue[Notification] = asyncio.Queue(_MAX_PENDING_NOTIFICATIONS)
-    async with open_endpoint(
-        _NotificationProtocol(pending_notifications),
-        family,
-        local_sockaddr,
-        enable_broadcast=False,
-        purpose="listening for notifications",
-    ):
+    stack = contextlib.AsyncExitStack()
+    try:
+        await stack.enter_async_context(
+            open_endpoint(
+                _NotificationProtocol(pending_notifications),
+                family,
+                local_sockaddr,
+                enable_broadcast=False,
+                purpose="listening for notifications",
+            )
+        )
         while True:
             yield await pending_notifications.get()
+    finally:
+        await stack.aclose()

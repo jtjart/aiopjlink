@@ -1,6 +1,4 @@
-"""_search.py
-
-Searching the network for projectors (§3.2 SRCH, ACKN).
+"""Searching the network for projectors (§3.2 SRCH, ACKN).
 
 The search protocol is connectionless: the controller broadcasts one UDP datagram (`%2SRCH`) to port 4352 and
 every projector that hears it answers, after a random delay of 0 to 10 seconds, with a datagram that holds its
@@ -13,6 +11,7 @@ has a socket of its own. Everything a stranger on the network might send to port
 """
 
 import asyncio
+import contextlib
 import dataclasses
 import socket
 from collections.abc import AsyncGenerator, Sequence
@@ -65,14 +64,21 @@ class _SearchProtocol(asyncio.DatagramProtocol):
         LOGGER.debug("search response from %s", sender_address)
         self._results_queue.put_nowait(result)
 
-    def error_received(self, exc: Exception) -> None:
+    def error_received(self, exc: Exception) -> None:  # ruff: ignore[no-self-use] @override
         LOGGER.debug("search datagram error: %s", exc)
 
 
 def _resolve_targets(
     broadcast_address: str | Sequence[str], port: int
 ) -> tuple[socket.AddressFamily, list[tuple[Any, ...]]]:
-    """The `sockaddr` to send the search to for each address given, and their (common) address family."""
+    """Resolve the search targets and their common address family.
+
+    Returns:
+        The common address family and resolved target socket addresses.
+
+    Raises:
+        ValueError: No targets were supplied, a target is invalid, or targets use mixed address families.
+    """
     addresses = [broadcast_address] if isinstance(broadcast_address, str) else list(broadcast_address)
     if not addresses:
         raise ValueError("at least one broadcast address is required")
@@ -84,7 +90,14 @@ def _resolve_targets(
 
 
 def _resolve_local(local_address: str | None, local_port: int, family: socket.AddressFamily) -> tuple[Any, ...]:
-    """The `sockaddr` to bind to: the wildcard address of `family`, or `local_address`, which must be of that family."""
+    """Resolve the local socket address to bind.
+
+    Returns:
+        The wildcard address for `family`, or the resolved `local_address`.
+
+    Raises:
+        ValueError: `local_address` is invalid or uses a different address family from `family`.
+    """
     if local_address is None:
         return ("0.0.0.0" if family == socket.AF_INET else "::", local_port)
     local_family, sockaddr = resolve_address(local_address, local_port, "local_address")
@@ -98,6 +111,9 @@ def _send_requests(udp_socket: socket.socket, targets: list[tuple[Any, ...]]) ->
 
     The datagram is sent on the socket itself rather than through the asyncio transport, because the transport
     reports a failed send to the protocol later, where the caller of the search can no longer see it.
+
+    Raises:
+        PJLinkNoConnectionError: None of the search datagrams could be sent.
     """
     send_errors: list[OSError] = []
     for target_sockaddr in targets:
@@ -112,9 +128,12 @@ def _send_requests(udp_socket: socket.socket, targets: list[tuple[Any, ...]]) ->
 
 
 async def _next_result(answers: asyncio.Queue[SearchResult], deadline: float) -> SearchResult | None:
-    """The next answer, or None once `deadline` (a loop time) has passed.
+    """Wait for the next answer until `deadline`, an event-loop time and not a duration.
 
-    An answer that is waiting already is returned even after the deadline: it came in time, only the caller was slow.
+    A queued answer is returned even if the caller resumes after the deadline.
+
+    Returns:
+        The next search result, or None if the deadline expires first.
     """
     if not answers.empty():
         return answers.get_nowait()
@@ -135,8 +154,8 @@ async def search(
 ) -> AsyncGenerator[SearchResult, None]:
     """Search for projectors and yield each one as soon as it answers (§3.2).
 
-    Sends the search start instruction, then listens for `duration_seconds`. A projector that answers more than
-    once is yielded once. Datagrams that are not search responses are ignored.
+    Sends the search start instruction, then listens for `duration_seconds`. Repeated responses are yielded once;
+    other datagrams are ignored.
 
     To wait for all of them, iterate to the end: `[found async for found in search()]`
     To stop early, leave the loop and close the generator, so the socket is released at once::
@@ -164,7 +183,7 @@ async def search(
             which only suits projectors that answer the port the request came from.
 
     Yields:
-        `SearchResult`, in the order the projectors answered.
+        SearchResult: in the order the projectors answered.
 
     Raises:
         ValueError: An argument is not valid (raised when the iteration starts, before anything is sent).
@@ -182,10 +201,14 @@ async def search(
 
     loop = asyncio.get_running_loop()
     answers: asyncio.Queue[SearchResult] = asyncio.Queue()
-    async with open_endpoint(
-        _SearchProtocol(answers), family, local_sockaddr, enable_broadcast=True, purpose="search"
-    ) as udp_socket:
+    stack = contextlib.AsyncExitStack()
+    try:
+        udp_socket = await stack.enter_async_context(
+            open_endpoint(_SearchProtocol(answers), family, local_sockaddr, enable_broadcast=True, purpose="search")
+        )
         _send_requests(udp_socket, targets)
         deadline = loop.time() + duration_seconds
         while (result := await _next_result(answers, deadline)) is not None:
             yield result
+    finally:
+        await stack.aclose()

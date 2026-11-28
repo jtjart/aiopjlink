@@ -1,8 +1,6 @@
-"""exceptions.py
+"""Everything that can go wrong while talking to the projector is raised as a subclass of `PJLinkError`.
 
-Everything that can go wrong while talking to the projector is raised as a
-subclass of `PJLinkError`, so callers only need to catch that one class.
-The hierarchy tells a caller what to do about it::
+Callers only need to catch that one class. The hierarchy tells them what to do about it::
 
     PJLinkError
     ├── PJLinkConnectionError            projector unreachable or not talking: try again later
@@ -104,6 +102,7 @@ class PJLinkProjectorError(PJLinkError):
     """
 
     def __init__(self, message: str = "", *, command: str | None = None) -> None:
+        """Initialize the projector error with an optional message and command."""
         super().__init__(message)
         self.command = command
 

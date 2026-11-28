@@ -1,7 +1,4 @@
-"""commands/freeze.py
-
-Freeze the picture (§4.25 FREZ, §4.26 FREZ ?).
-"""
+"""Freeze the picture (§4.25 FREZ, §4.26 FREZ ?)."""
 
 from ..enums import PJClass
 from ..exceptions import PJLinkUnexpectedValueError
@@ -9,9 +6,13 @@ from ._sender import CommandSender
 
 
 class Freeze:
-    """Controls freezing and unfreezing the current frame (§4.25, §4.26)."""
+    """Controls freezing and unfreezing the current frame (§4.25, §4.26).
+
+    A projector that cannot freeze raises `PJLinkNotSupportedError("freeze not supported")`.
+    """
 
     def __init__(self, sender: CommandSender) -> None:
+        """Initialize the freeze command handler."""
         self._sender = sender
 
     async def set(self, frozen: bool) -> None:
@@ -22,7 +23,14 @@ class Freeze:
         )
 
     async def get(self) -> bool:
-        """Returns True if the screen is currently frozen, and False if not §4.26."""
+        """Return True if the screen is currently frozen, and False if not (§4.26).
+
+        Returns:
+            Whether the screen is frozen.
+
+        Raises:
+            PJLinkUnexpectedValueError: The projector returned an unknown freeze state.
+        """
         response_parameter = await self._sender.query_status(
             "FREZ", PJClass.TWO, not_supported_message="freeze not supported"
         )

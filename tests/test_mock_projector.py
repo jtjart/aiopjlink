@@ -23,7 +23,6 @@ class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
         async with mock_tcp_pjlink() as server:
             server.open_and_send(b"PJLINK 0\r")
 
-            # Expect a POWR status request.
             with self.assertRaises(NoClientMessageError):
                 async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r"):
                     # Never give one.
@@ -71,12 +70,12 @@ class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
             client = server.client()
             self.addAsyncCleanup(client.close)
 
-            # Check that the test framework recieves the expected message.
+            # Check that the test framework receives the expected message.
             async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r"):
                 value = await client._transmit(PJCommand("POWR", "?", aiopjlink2.PJClass.ONE))
                 self.assertEqual(value, "0")
 
-            # Check that the test framework recieves the expected message - 2nd time.
+            # Check that the test framework receives the expected message - 2nd time.
             async with server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r"):
                 value = await client._transmit(PJCommand("POWR", "?", aiopjlink2.PJClass.ONE))
                 self.assertEqual(value, "0")
@@ -90,7 +89,6 @@ class ReflectiveMockTests(unittest.IsolatedAsyncioTestCase):
         """The test framework allows expected responses to be queued."""
         # Open a connection successfully with no auth.
         async with mock_client_server_noauth() as (server, client):
-            # Expect a POWR followed by a CLSS.
             async with (
                 server.when(b"%1POWR ?\r", respond_with=b"%1POWR=0\r"),
                 server.when(b"%1CLSS ?\r", respond_with=b"%1CLSS=2\r"),
