@@ -21,8 +21,6 @@ import socket
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from typing_extensions import override
-
 from ._debug import LOGGER
 from ._protocol import parse_mac_address, split_notification
 from ._udp import MAX_PORT_NUMBER, PJLINK_UDP_PORT, open_endpoint, resolve_address, source_address
@@ -141,8 +139,7 @@ class _NotificationProtocol(asyncio.DatagramProtocol):
             return
         LOGGER.debug("status notification from %s: %s", sender_address, event)
 
-    @override
-    def error_received(self, exc: Exception) -> None:
+    def error_received(self, exc: Exception) -> None:  # ruff: ignore[no-self-use] @override
         # The operating system reporting an earlier datagram as undeliverable (ICMP). Nothing to do about it.
         LOGGER.debug("status notification datagram error: %s", exc)
 

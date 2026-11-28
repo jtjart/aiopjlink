@@ -17,8 +17,6 @@ import socket
 from collections.abc import AsyncGenerator, Sequence
 from typing import Any
 
-from typing_extensions import override
-
 from ._debug import LOGGER
 from ._protocol import SEARCH_REQUEST, parse_search_response
 from ._udp import MAX_PORT_NUMBER, PJLINK_UDP_PORT, open_endpoint, resolve_address, source_address
@@ -66,8 +64,7 @@ class _SearchProtocol(asyncio.DatagramProtocol):
         LOGGER.debug("search response from %s", sender_address)
         self._results_queue.put_nowait(result)
 
-    @override
-    def error_received(self, exc: Exception) -> None:
+    def error_received(self, exc: Exception) -> None:  # ruff: ignore[no-self-use] @override
         LOGGER.debug("search datagram error: %s", exc)
 
 
